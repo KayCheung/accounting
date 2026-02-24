@@ -5,36 +5,35 @@
 -- 会计科目表
 CREATE TABLE t_account_subject (
     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
-    subject_code VARCHAR(50) NOT NULL COMMENT '科目编码',
-    subject_name VARCHAR(100) NOT NULL COMMENT '科目名称',
-    subject_level INT NOT NULL COMMENT '科目级别',
-    subject_path VARCHAR(300) NOT NULL COMMENT '科目路径，如1001.01.001 方便做 like 查询',
-    parent_subject_id BIGINT COMMENT '父科目ID',
-    account_class ENUM('表外科目', '资产类', '负债类', '共同类', '权益类', '成本类', '损益类') NOT NULL COMMENT '账类',
-    nature VARCHAR(50) NOT NULL COMMENT '科目性质，如：非特殊性科目、销账类科目、贷款类科目、现金类科目',
-    direction ENUM('借', '贷') NOT NULL COMMENT '借贷方向',
-    is_leaf TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否末级科目',
-    allow_post TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否允许记账',
-    allow_open_account TINYINT(1) DEFAULT 0 COMMENT '是否允许建明细账户',
-    status ENUM('启用', '停用') DEFAULT '启用' COMMENT '状态',
+    subject_code VARCHAR(32) NOT NULL COMMENT '科目编码（遵循通用科目编码规则，前缀为父科目编码，如101001，101为父科目）',
+    subject_name VARCHAR(64) NOT NULL COMMENT '科目名称',
+    subject_level tinyint(8) NOT NULL COMMENT '科目级别',
+    parent_subject_id BIGINT NOT NULL DEFAULT 0 COMMENT '父科目ID',
+    account_class tinyint(4) NOT NULL COMMENT '账类：1-资产类,2-负债类,3-权益类,4-共同类,5-成本类,6-损益类,0-表外科目',
+    nature tinyint(4) NOT NULL COMMENT '科目性质，如：非特殊性科目、销账类科目、贷款类科目、现金类科目',
+    debit_credit tinyint(1) NOT NULL COMMENT '借贷方向：1-借；2-贷', 
+    is_leaf TINYINT(1) NOT NULL DEFAULT '0' COMMENT '是否末级科目',
+    allow_post TINYINT(1) NOT NULL DEFAULT '0' COMMENT '是否允许记账',
+    allow_open_account TINYINT(1) DEFAULT '0' COMMENT '是否允许建明细账户',
+    status tinyint(1) DEFAULT '1' COMMENT '状态：1-启用，2-停用',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    is_delete tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
-    UNIQUE KEY uk_subject_code (subject_code),
+    is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
+    UNIQUE KEY uk_subject_code (subject_code, is_delete),
     KEY idx_parent_subject_id (parent_subject_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='会计科目表';
 
 -- 会计科目辅助核算项（是t_account_subject的从表）
 CREATE TABLE t_account_subject_auxiliary (
     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
-    subject_code VARCHAR(50) NOT NULL COMMENT '会计科目编码',
+    subject_code VARCHAR(32) NOT NULL COMMENT '会计科目编码',
     auxiliary_type VARCHAR(32) NOT NULL COMMENT '辅助核算项类别',
     required TINYINT(1) NOT NULL DEFAULT 0 COMMENT '必填/可选',
-    default_aux_code VARCHAR(100) COMMENT '默认辅助核算项目',
+    default_aux_code VARCHAR(64) COMMENT '默认辅助核算项目',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    is_delete tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
-    UNIQUE KEY uk_subject_auxiliary (subject_code, auxiliary_type)
+    is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
+    UNIQUE KEY uk_subject_auxiliary (subject_code, auxiliary_type, is_delete)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='会计科目辅助核算项';
 
 -- ========================================
@@ -44,8 +43,8 @@ CREATE TABLE t_account_subject_auxiliary (
 -- 外部客户账户开户模板表
 CREATE TABLE t_account_template (
     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
-    template_name VARCHAR(50) NOT NULL COMMENT '模板名称',
-    business_code VARCHAR(50) NOT NULL COMMENT '业务线编码',
+    template_name VARCHAR(32) NOT NULL COMMENT '模板名称',
+    business_code VARCHAR(32) NOT NULL COMMENT '业务线编码',
     customer_type ENUM('个人', '企业', '其他') NOT NULL COMMENT '客户类型',
     auto_open TINYINT(1) NOT NULL DEFAULT '0' COMMENT '是否支持自动开户：0-否，1-是', 
     status ENUM('启用', '禁用') DEFAULT '启用' COMMENT '状态',
@@ -56,7 +55,7 @@ CREATE TABLE t_account_template (
     account_rule VARCHAR(50) NOT NULL COMMENT '账号生成规则',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    is_delete tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
+    is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
     KEY idx_business_code (business_code,customer_type,status),
     KEY idx_subject_code (subject_code,status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='外部客户账户开户模板表';
@@ -83,7 +82,7 @@ CREATE TABLE t_account (
     version BIGINT NOT NULL DEFAULT 0 COMMENT '版本号（乐观锁）',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    is_delete tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
+    is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
     UNIQUE KEY uk_account_no (account_no),
     KEY idx_owner_id (owner_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='账户表';
@@ -98,7 +97,7 @@ CREATE TABLE t_sub_account (
     version BIGINT NOT NULL DEFAULT 0 COMMENT '版本号（乐观锁）',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    is_delete tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
+    is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
     UNIQUE KEY uk_account_no (account_no,balance_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='子账户表';
 
@@ -121,7 +120,7 @@ CREATE TABLE t_business_record (
     status ENUM('成功', '失败', '处理中') DEFAULT '处理中' COMMENT '状态',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    is_delete tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
+    is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
     UNIQUE KEY uk_trace_no (trace_no,trace_seq),
     KEY idx_trans_time (trans_time, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='业务记账流水表';
@@ -136,7 +135,7 @@ CREATE TABLE t_business_detail (
     amount DECIMAL(18,6) NOT NULL COMMENT '交易金额',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    is_delete tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
+    is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
     KEY idx_transaction_no (trace_no),
     KEY idx_customer_id (customer_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='业务记账流水明细表';
@@ -152,7 +151,7 @@ CREATE TABLE t_transaction (
     accounting_date DATE NOT NULL COMMENT '会计日期',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    is_delete tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
+    is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
     UNIQUE KEY uk_txn_no (txn_no),
     KEY idx_trace_no (trace_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='事务表';
@@ -175,7 +174,7 @@ CREATE TABLE t_voucher_rule (
     status ENUM('启用', '停用') DEFAULT '启用' COMMENT '状态',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    is_delete tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
+    is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
     UNIQUE KEY uk_voucher_rule (business_code,trans_code,pay_channel,voucher_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='记账凭证规则表';
 
@@ -192,7 +191,7 @@ CREATE TABLE t_voucher_rule_detail (
     summary TEXT COMMENT '摘要',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    is_delete tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
+    is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
     UNIQUE KEY uk_voucher_rule_detail (rule_id, line_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='记账凭证规则明细表';
 
@@ -209,7 +208,7 @@ CREATE TABLE t_voucher_rule_auxiliary (
     rule_script longtext NOT NULL COMMENT '规则脚本（可以通过类似SpEL表达式来精确匹配，启动时预加载规则变更时同步更新）',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    is_delete tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
+    is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
     UNIQUE KEY uk_voucher_rule_auxiliary (rule_detail_id,subject_code,aux_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='记账凭证规则辅助核算项表';
 
@@ -234,7 +233,7 @@ CREATE TABLE t_accounting_voucher (
     orig_voucher_no VARCHAR(50) NOT NULL DEFAULT '' COMMENT '原凭证号(红冲/蓝补/调账时，记录被冲销的原凭证号)',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    is_delete tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
+    is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
     UNIQUE KEY uk_voucher_no (voucher_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='记账凭证表';
 
@@ -245,7 +244,7 @@ CREATE TABLE t_voucher_attachment (
     file_path VARCHAR(255) NOT NULL COMMENT '附件地址',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    is_delete tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
+    is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
     KEY idx_voucher_no (voucher_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='记账凭证附件表';
 
@@ -268,7 +267,7 @@ CREATE TABLE t_voucher_entry_detail (
     balance_update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '余额更新时间',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    is_delete tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
+    is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
     KEY idx_txn_id (txn_id),
     KEY idx_entry_id (entry_id),
     KEY idx_voucher_no (voucher_no),
@@ -286,7 +285,7 @@ CREATE TABLE t_voucher_auxiliary_detail (
     amount DECIMAL(18,6) NOT NULL DEFAULT 0 COMMENT '金额',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    is_delete tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
+    is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
     KEY idx_entry_id (entry_id),
     KEY idx_voucher_no (voucher_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='记账凭证辅助核算项目';
@@ -317,7 +316,7 @@ CREATE TABLE t_account_detail (
     summary TEXT COMMENT '摘要',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    is_delete tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
+    is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
     KEY idx_account_no (account_no,accounting_date),
     KEY idx_entry_id (entry_id),
     KEY idx_voucher_no (voucher_no)
@@ -341,7 +340,7 @@ CREATE TABLE t_sub_account_detail (
     summary TEXT COMMENT '摘要',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    is_delete tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
+    is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
     KEY idx_account_no (account_no),
     KEY idx_trace_no (trace_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='子账户明细表';
@@ -365,7 +364,7 @@ CREATE TABLE t_buffer_posting_rule (
     expiration_time DATETIME NOT NULL DEFAULT '2099-12-31 23:59:59' COMMENT '失效时间',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    is_delete tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
+    is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
     KEY idx_trans_code (trans_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='缓冲入账规则表';
 
@@ -392,7 +391,7 @@ CREATE TABLE t_buffer_posting_detail (
     complete_time DATETIME NOT NULL DEFAULT '1970-01-01 00:00:00' COMMENT '完成时间（成功/失败时填充）',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    is_delete tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
+    is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
     KEY idx_entry_id (entry_id),
     KEY idx_voucher_no (voucher_no),
     KEY idx_trace_no (trace_no),
@@ -471,8 +470,57 @@ CREATE TABLE t_dictionary (
     ext_json JSON COMMENT '扩展属性，如：{"color":"#FF0000", "icon":"loan", "rule_script":"..."}',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    is_delete TINYINT NOT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除',
+    is_delete BIGINT NOT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除',
     UNIQUE KEY uk_dict_type_code (dict_type, dict_code),
     KEY idx_dict_type (dict_type, status),
     KEY idx_group_key (group_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='字典表';
+
+
+-- ========================================
+-- 本地消息和消息回执表
+-- ========================================
+-- 本地消息表（用于可靠事件发布 / 事务性发件箱模式）
+CREATE TABLE t_local_message (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    message_id VARCHAR(64) NOT NULL COMMENT '消息ID',
+    topic VARCHAR(100) NOT NULL COMMENT '消息主题/队列名',
+    tag VARCHAR(50) COMMENT '消息标签（可选）',
+    business_key VARCHAR(100) NOT NULL COMMENT '业务唯一键（如订单号、流水号），用于幂等与对账',
+    payload TEXT NOT NULL COMMENT '消息体（JSON格式，支持结构化数据）',
+    status ENUM('待发送', '已发送', '发送失败', '已确认') NOT NULL DEFAULT '待发送' COMMENT '消息状态',
+    retry_count INT NOT NULL DEFAULT 0 COMMENT '已重试次数',
+    max_retry INT NOT NULL DEFAULT 3 COMMENT '最大重试次数',
+    next_retry_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '下次重试时间',
+    send_time DATETIME COMMENT '实际发送时间',
+    create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最后更新时间',
+    is_delete BIGINT NOT NULL DEFAULT 0 COMMENT '逻辑删除标识',
+    -- 唯一约束：确保同一业务事件只生成一条消息
+    UNIQUE KEY uk_message_id (message_id),
+    UNIQUE KEY uk_business_key (business_key),
+    -- 查询索引
+    KEY idx_create_time (create_time, topic, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='本地消息表（事务性发件箱）';
+
+
+-- 消息回执表：记录下游消费者对本地消息的处理结果
+CREATE TABLE t_message_receipt (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    message_id VARCHAR(64) NOT NULL COMMENT '关联 t_local_message.message_id',
+    business_key VARCHAR(100) NOT NULL COMMENT '业务唯一键（冗余，便于查询）',
+    consumer_group VARCHAR(50) NOT NULL COMMENT '消费者组',
+    topic VARCHAR(100) NOT NULL COMMENT '消息主题（冗余）',
+    receipt_status ENUM('成功', '失败', '部分成功') NOT NULL COMMENT '消费者处理结果',
+    error_code VARCHAR(50) COMMENT '错误码（如：INSUFFICIENT_BALANCE）',
+    error_message VARCHAR(255) COMMENT '错误详情（可选）',
+    payload_snapshot TEXT NOT NULL COMMENT '消费者收到的消息快照（可选，用于排查）',
+    received_time DATETIME NOT NULL COMMENT '消费者接收时间（由消费者上报）',
+    processed_time DATETIME NOT NULL COMMENT '消费者处理完成时间',
+    create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '本记录创建时间',
+    update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    is_delete BIGINT NOT NULL DEFAULT 0,
+    UNIQUE KEY uk_message_id_consumer (message_id, consumer_group),
+    KEY idx_business_key (business_key),
+    KEY idx_received_time (received_time, receipt_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='消息回执表（记录消费者处理结果）';

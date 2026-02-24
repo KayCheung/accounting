@@ -1,0 +1,83 @@
+# 账务系统核心主流程
+
+```
+flowchart TB
+ subgraph AccountLayer["账户层"]
+    direction LR
+        Customer["客户"]
+        GLAccount["会计科目"]
+        CIF_TPL["客户账户模板"]
+  end
+ subgraph CIF_ACCT["客户分户账户<br/><br/>总余额：1000.00元（可用余额800元）"]
+    direction TB
+        CIF_CAP["资本金账户800<br/>可用贷记子账户700，冻结贷记子账户 100<br/>可用借记子账户0，冻结借记子账户0"]
+        CIF_INT["贷利息账户200<br/>可用贷记子账户100，冻结贷记子账户100<br/>可用借记子账户0，冻结借记子账户0"]
+  end
+ subgraph GL_ACCT["内部分户账户<br/><br/>资产（31000万）=负债（25万）+所有者权益（30975万）"]
+    direction TB
+        GL_ASSET["资产类<br/>银行存款3千万<br/>应收定金2.7亿<br/>应收利息1千万"]
+        GL_LIAB["负债类<br/>应付短信费20万<br/>应付OCR费2万<br/>应付查票费3万"]
+        GL_EQTY["所有者权益类<br/>实收资本3亿<br/>利息收入1千万<br/>其他成本25万"]
+  end
+ subgraph AcctLayer["账务层"]
+    direction LR
+        CIF_ACCT
+        GL_ACCT
+        ACC_SVC["账务服务"]
+        VCHR_SVC["凭证服务"]
+        TX_SVC["事务管理"]
+        BOOK_RULE["记账规则"]
+        BOOK_SVC["实时/缓冲记账"]
+        BUFFER_RULE["缓冲规则"]
+  end
+ subgraph ServiceLayer["ServiceLayer"]
+    direction TB
+        BIZ["业务系统驱动记账"]
+  end
+ subgraph LedgerLayer["账簿层"]
+    direction LR
+        CIF_LEDGER["客户明细账簿"]
+        JOURNAL["分录流水"]
+        GL_LEDGER["内部明细账簿"]
+  end
+ subgraph GeneralLedgerLayer["总账层"]
+    direction LR
+        CIF_HIST["客户分户日余额（历史）"]
+        TRIAL_BAL["总账试算平衡"]
+        GL_HIST["内部分户日余额（历史）"]
+  end
+    VCHR_SVC --> BOOK_RULE
+    BOOK_SVC --> BUFFER_RULE
+    Customer -- 开户/变更账户 --> CIF_TPL
+    GLAccount -- 开内部户 --> GL_ACCT
+    GLAccount -- 科目层级 --> GLAccount
+    GLAccount -- 基于科目配置 --> CIF_TPL
+    CIF_TPL -- 开客户账户 --> CIF_ACCT
+    BIZ -- 入账/调账 --> ACC_SVC
+    ACC_SVC -- 记账凭证 --> VCHR_SVC
+    VCHR_SVC --> TX_SVC
+    TX_SVC --> BOOK_SVC
+    VCHR_SVC -- 客户单边记账<br/>更新子账户余额 --> CIF_ACCT
+    BOOK_SVC -- 入账 --> JOURNAL
+    JOURNAL -- 客户账分录<br/>明细记账 --> CIF_LEDGER
+    JOURNAL -- 内部户分录<br/>明细记账 --> GL_LEDGER
+    CIF_LEDGER -- 更新余额 --> CIF_ACCT
+    GL_LEDGER -- 更新余额 --> GL_ACCT
+    CIF_LEDGER -. 日切余额保存 .-> CIF_HIST
+    GL_LEDGER -. 日切余额保存 .-> GL_HIST
+    CIF_HIST -. 上日余额 .-> TRIAL_BAL
+    GL_HIST -. 上日余额 .-> TRIAL_BAL
+    JOURNAL -. 日切发生额汇总 .-> TRIAL_BAL
+
+     CIF_TPL:::core
+     CIF_CAP:::core
+     CIF_INT:::core
+     VCHR_SVC:::core
+     CIF_LEDGER:::ledger
+     JOURNAL:::core
+     GL_LEDGER:::ledger
+     TRIAL_BAL:::core
+    classDef core fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef layerLabel fill:#f5f5f5,stroke:#666,stroke-width:1px,font-weight:bold
+    classDef ledger fill:#fff3e0,stroke:#e64a19,stroke-width:1px
+```
