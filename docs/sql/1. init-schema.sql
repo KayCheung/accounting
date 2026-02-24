@@ -1,24 +1,26 @@
+USE `accounting`;
+
 -- ========================================
 -- 会计科目相关表，t_account_subject企业会计科目表，树形结构。t_account_subject_auxiliary为科目默认的辅助核算项，用于记账时自动生成 t_voucher_auxiliary_detail 辅助核算项明细记录。
 -- ========================================
 
 -- 会计科目表
-CREATE TABLE t_account_subject (
+CREATE TABLE IF NOT EXISTS t_account_subject (
     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
     subject_code VARCHAR(32) NOT NULL COMMENT '科目编码（遵循通用科目编码规则，前缀为父科目编码，如101001，101为父科目）',
     subject_name VARCHAR(64) NOT NULL COMMENT '科目名称',
-    subject_level tinyint(8) NOT NULL COMMENT '科目级别',
+    subject_level TINYINT NOT NULL COMMENT '科目级别',
     parent_subject_id BIGINT NOT NULL DEFAULT 0 COMMENT '父科目ID',
-    account_class tinyint(4) NOT NULL COMMENT '账类：1-资产类,2-负债类,3-权益类,4-共同类,5-成本类,6-损益类,0-表外科目',
-    nature tinyint(4) NOT NULL COMMENT '科目性质，如：非特殊性科目、销账类科目、贷款类科目、现金类科目',
-    debit_credit tinyint(1) NOT NULL COMMENT '借贷方向：1-借；2-贷', 
-    is_leaf TINYINT(1) NOT NULL DEFAULT '0' COMMENT '是否末级科目',
-    allow_post TINYINT(1) NOT NULL DEFAULT '0' COMMENT '是否允许记账',
-    allow_open_account TINYINT(1) DEFAULT '0' COMMENT '是否允许建明细账户',
-    status tinyint(1) DEFAULT '1' COMMENT '状态：1-启用，2-停用',
+    account_class TINYINT NOT NULL COMMENT '账类：1-资产类,2-负债类,3-权益类,4-共同类,5-成本类,6-损益类,0-表外科目',
+    nature TINYINT NOT NULL COMMENT '科目性质：1-非特殊性科目,2-销账类科目,3-贷款类科目,4-现金类科目',
+    debit_credit TINYINT NOT NULL COMMENT '借贷方向：1-借,2-贷',
+    is_leaf TINYINT NOT NULL DEFAULT '0' COMMENT '是否末级科目',
+    allow_post TINYINT NOT NULL DEFAULT '0' COMMENT '是否允许记账',
+    allow_open_account TINYINT NOT NULL DEFAULT '0' COMMENT '是否允许建明细账户',
+    status TINYINT NOT NULL DEFAULT '1' COMMENT '状态：1-启用,2-停用',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
+    is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除,不等于0为已删除',
     UNIQUE KEY uk_subject_code (subject_code, is_delete),
     KEY idx_parent_subject_id (parent_subject_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='会计科目表';
@@ -27,9 +29,9 @@ CREATE TABLE t_account_subject (
 CREATE TABLE t_account_subject_auxiliary (
     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
     subject_code VARCHAR(32) NOT NULL COMMENT '会计科目编码',
-    auxiliary_type VARCHAR(32) NOT NULL COMMENT '辅助核算项类别',
-    required TINYINT(1) NOT NULL DEFAULT 0 COMMENT '必填/可选',
-    default_aux_code VARCHAR(64) COMMENT '默认辅助核算项目',
+    auxiliary_type VARCHAR(32) NOT NULL COMMENT '辅助核算项类别(字典CODE)',
+    required TINYINT NOT NULL DEFAULT 0 COMMENT '0-可选,1-必填',
+    default_aux_code VARCHAR(64) NOT NULL DEFAULT '' COMMENT '默认辅助核算项目(字典CODE)',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
@@ -44,15 +46,16 @@ CREATE TABLE t_account_subject_auxiliary (
 CREATE TABLE t_account_template (
     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
     template_name VARCHAR(32) NOT NULL COMMENT '模板名称',
-    business_code VARCHAR(32) NOT NULL COMMENT '业务线编码',
-    customer_type ENUM('个人', '企业', '其他') NOT NULL COMMENT '客户类型',
-    auto_open TINYINT(1) NOT NULL DEFAULT '0' COMMENT '是否支持自动开户：0-否，1-是', 
-    status ENUM('启用', '禁用') DEFAULT '启用' COMMENT '状态',
-    subject_code VARCHAR(50) NOT NULL COMMENT '会计科目编码',
-    account_type VARCHAR(50) NOT NULL COMMENT '账户类型，如：基本户、待结算户、贷款本金账户、贷款利息账户、贷款担保费账户',
-    currency VARCHAR(10) DEFAULT 'CNY' COMMENT '币种',
-    balance_direction ENUM('借', '贷') DEFAULT '借' COMMENT '余额方向',
-    account_rule VARCHAR(50) NOT NULL COMMENT '账号生成规则',
+    business_code VARCHAR(32) NOT NULL COMMENT '业务线编码(字典CODE)',
+    customer_type TINYINT NOT NULL COMMENT '客户类型：1-个人,2-企业,99-其他',
+    auto_open TINYINT NOT NULL DEFAULT '0' COMMENT '是否支持自动开户：0-否,1-是',
+    status TINYINT NOT NULL DEFAULT '1' COMMENT '状态：1-启用,2-停用',
+    subject_code VARCHAR(32) NOT NULL COMMENT '会计科目编码',
+    account_type VARCHAR(32) NOT NULL COMMENT '账户类型(字典CODE)，如：BASIC-基本户,PEND_SET-待结算户,LOAN_PRI-贷款本金账户,LOAN_INT-贷款利息账户,LOAN_GUA-贷款担保费账户',
+    currency VARCHAR(32) NOT NULL DEFAULT 'CNY' COMMENT '币种(字典CODE)，如：CNY-人民币',
+    balance_direction TINYINT NOT NULL COMMENT '余额方向：1-借,2-贷',
+    acct_no_rule VARCHAR(32) NOT NULL COMMENT '账户编号生成规则（如：机构+日期+序号）',
+    acct_name_rule VARCHAR(32) NOT NULL COMMENT '账户名称生成规则（如：客户名-账户类型）',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
@@ -60,45 +63,45 @@ CREATE TABLE t_account_template (
     KEY idx_subject_code (subject_code,status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='外部客户账户开户模板表';
 
-
 -- 账户表
 CREATE TABLE t_account (
     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
-    subject_code VARCHAR(50) NOT NULL COMMENT '会计科目编码',
-    owner_id VARCHAR(50) NOT NULL COMMENT '所有者ID，如果时内部账户，默认为 INNER',
-    owner_type ENUM('内部账户', '个人', '企业', '其他') NOT NULL COMMENT '所有者类型',
-    account_no VARCHAR(50) NOT NULL COMMENT '账户编号',
-    account_name VARCHAR(100) NOT NULL COMMENT '账户名称',
-    account_type VARCHAR(50) NOT NULL COMMENT '账户类型，如：基本户、待结算户、贷款本金账户、贷款利息账户、贷款担保费账户',
-    currency VARCHAR(10) DEFAULT 'CNY' COMMENT '币种',
-    balance_direction ENUM('借', '贷') DEFAULT '借' COMMENT '当前余额方向',
-    opening_balance DECIMAL(18,6) DEFAULT 0.00 COMMENT '期初余额',
-    balance DECIMAL(18,6) DEFAULT 0.00 COMMENT '余额',
-    status ENUM('正常', '冻结', '注销') DEFAULT '正常' COMMENT '状态',
-    risk_status ENUM('正常', '止入', '止出', '止入止出') DEFAULT '正常' COMMENT '风控状态',
-    request_no VARCHAR(100) NOT NULL DEFAULT '' COMMENT '开户请求号',
+    subject_code VARCHAR(32) NOT NULL COMMENT '会计科目编码',
+    owner_id VARCHAR(64) NOT NULL COMMENT '所有者ID，如果时内部账户，默认为 INNER',
+    owner_type TINYINT NOT NULL COMMENT '所有者类型：1-个人,2-企业,99-其他',
+    account_no VARCHAR(32) NOT NULL COMMENT '账户编号',
+    account_name VARCHAR(32) NOT NULL COMMENT '账户名称',
+    account_type VARCHAR(32) NOT NULL COMMENT '账户类型(字典CODE)，如：BASIC-基本户,PEND_SET-待结算户,LOAN_PRI-贷款本金账户,LOAN_INT-贷款利息账户,LOAN_GUA-贷款担保费账户',
+    currency VARCHAR(32) NOT NULL DEFAULT 'CNY' COMMENT '币种(字典CODE)，如：CNY-人民币',
+    balance_direction TINYINT NOT NULL COMMENT '余额方向：1-借,2-贷',
+    opening_balance DECIMAL(18,6) NOT NULL DEFAULT 0.00 COMMENT '期初余额',
+    balance DECIMAL(18,6) NOT NULL DEFAULT 0.00 COMMENT '余额',
+    status TINYINT NOT NULL DEFAULT '1' COMMENT '账户状态：1-正常,2-冻结,3-注销',
+    risk_status TINYINT NOT NULL DEFAULT '1' COMMENT '风控状态：1-正常,2-止入,3-止出,4-止入止出',
+    request_no VARCHAR(32) NOT NULL DEFAULT '' COMMENT '开户请求号',
     open_date DATE NOT NULL COMMENT '开户日期',
-    inactive_date DATE COMMENT '动止日期',    
+    inactive_date DATE NOT NULL DEFAULT '1970-01-01' COMMENT '动支日期',
     version BIGINT NOT NULL DEFAULT 0 COMMENT '版本号（乐观锁）',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
     UNIQUE KEY uk_account_no (account_no),
-    KEY idx_owner_id (owner_id)
+    UNIQUE KEY uk_owner_id (owner_id,subject_code),
+    KEY idx_open_date (open_date,status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='账户表';
 
 -- 子账户表
 CREATE TABLE t_sub_account (
     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
-    account_no VARCHAR(50) NOT NULL COMMENT '账户编号（等于t_account表中的account_no）',
-    balance_type ENUM('可用余额', '冻结余额') NOT NULL COMMENT '余额类型',
-    balance DECIMAL(18,6) DEFAULT 0.00 COMMENT '余额',
-    remark TEXT COMMENT '备注',
+    account_no VARCHAR(32) NOT NULL COMMENT '账户编号（等于t_account表中的account_no）',
+    balance_type TINYINT NOT NULL COMMENT '余额类型：1-可用余额,2-冻结余额',
+    balance_direction TINYINT NOT NULL COMMENT '余额方向：1-借,2-贷',
+    balance DECIMAL(18,6) NOT NULL DEFAULT 0.00 COMMENT '余额',
     version BIGINT NOT NULL DEFAULT 0 COMMENT '版本号（乐观锁）',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
-    UNIQUE KEY uk_account_no (account_no,balance_type)
+    UNIQUE KEY uk_account_no (account_no,balance_type,balance_direction)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='子账户表';
 
 -- ========================================
@@ -108,16 +111,16 @@ CREATE TABLE t_sub_account (
 -- 业务记账流水表
 CREATE TABLE t_business_record (
     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
-    business_code VARCHAR(50) NOT NULL COMMENT '业务线编码',
-    trace_no VARCHAR(50) NOT NULL COMMENT '系统跟踪号',
-    trace_seq TINYINT(4) NOT NULL COMMENT '预留字段，如一个 trace_no 里多次记账，结合trace_no实现幂等',
-    trans_code VARCHAR(50) NOT NULL COMMENT '交易编码',
-    pay_channel VARCHAR(50) NOT NULL COMMENT '支付渠道，如：支付宝, 微信, 银行快捷支付, 其他三方支付机构,内部记账',
-    trans_type ENUM('正常', '调账', '红', '蓝') NOT NULL COMMENT '交易类别',
+    business_code VARCHAR(32) NOT NULL COMMENT '业务线编码(字典CODE)',
+    trace_no VARCHAR(64) NOT NULL COMMENT '系统跟踪号',
+    trace_seq TINYINT NOT NULL DEFAULT 0 COMMENT '预留字段，如一个 trace_no 里多次记账，结合trace_no实现幂等',
+    trans_code VARCHAR(32) NOT NULL COMMENT '交易编码(字典CODE)',
+    pay_channel VARCHAR(32) NOT NULL COMMENT '支付渠道，如：ALIPAY-支付宝,WECHAT-微信(字典CODE)',
+    trans_type TINYINT NOT NULL COMMENT '交易类别：1-正常,2-调账,3-红,4-蓝',
     amount DECIMAL(18,6) NOT NULL COMMENT '交易金额',
     trans_time DATETIME NOT NULL COMMENT '交易时间',
-    summary TEXT COMMENT '摘要',
-    status ENUM('成功', '失败', '处理中') DEFAULT '处理中' COMMENT '状态',
+    summary VARCHAR(64) NOT NULL DEFAULT '' COMMENT '摘要',
+    status TINYINT NOT NULL DEFAULT '1' COMMENT '状态：1-处理中,2-成功,3-失败',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
@@ -128,27 +131,36 @@ CREATE TABLE t_business_record (
 -- 业务记账流水明细表（t_business_record的从表）
 CREATE TABLE t_business_detail (
     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
-    trace_no VARCHAR(50) NOT NULL COMMENT '系统跟踪号',
-    customer_type ENUM('个人', '企业', '其他') NOT NULL COMMENT '客户类型',
-    customer_id VARCHAR(50) NOT NULL COMMENT '客户ID',
-    item_code VARCHAR(50) NOT NULL COMMENT '交易项编码',
+    trace_no VARCHAR(64) NOT NULL COMMENT '系统跟踪号',
+    trace_seq TINYINT NOT NULL DEFAULT 0 COMMENT '预留字段，如一个 trace_no 里多次记账，结合trace_no实现幂等',
+    customer_type TINYINT NOT NULL COMMENT '客户类型：1-个人,2-企业,99-其他',
+    customer_id VARCHAR(64) NOT NULL COMMENT '客户ID',
+    item_code VARCHAR(32 NOT NULL COMMENT '交易项编码(字典CODE)',
     amount DECIMAL(18,6) NOT NULL COMMENT '交易金额',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
-    KEY idx_transaction_no (trace_no),
+    UNIQUE KEY uk_trace_no (trace_no,trace_seq,customer_id,item_code),
     KEY idx_customer_id (customer_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='业务记账流水明细表';
 
 -- 事务表
 CREATE TABLE t_transaction (
     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
-    txn_no VARCHAR(50) NOT NULL COMMENT '事务编号',
-    trace_no VARCHAR(50) NOT NULL COMMENT '系统跟踪号',
-    trans_code VARCHAR(50) NOT NULL COMMENT '交易编码',
-    pay_channel VARCHAR(50) NOT NULL COMMENT '支付渠道，如：支付宝, 微信, 银行快捷支付, 其他三方支付机构,内部记账',
-    trans_status ENUM('未提交', '已提交', '已确认', '已回滚') DEFAULT '未提交' COMMENT '事务状态',
-    accounting_date DATE NOT NULL COMMENT '会计日期',
+    txn_no VARCHAR(32) NOT NULL COMMENT '事务编号',
+    trace_no VARCHAR(64) NOT NULL COMMENT '系统跟踪号',
+    business_code VARCHAR(32) NOT NULL COMMENT '业务线编码(字典CODE)',
+    trans_code VARCHAR(32) NOT NULL COMMENT '交易编码(字典CODE)',
+    total_entry_count INT NOT NULL DEFAULT 0 COMMENT '本次事务总记账明细条数',
+    success_entry_count INT NOT NULL DEFAULT 0 COMMENT '已成功记账的明细条数',
+    pending_entry_count INT NOT NULL DEFAULT 0 COMMENT '处理中/未提交的明细条数',
+    fail_entry_count INT NOT NULL DEFAULT 0 COMMENT '记账失败的明细条数',
+    relate_account_count INT NOT NULL DEFAULT 0 COMMENT '本次事务涉及的账户总数',
+    amount DECIMAL(18,6) NOT NULL DEFAULT 0.00 COMMENT '事务总金额（元）',
+    currency VARCHAR(32) NOT NULL DEFAULT 'CNY' COMMENT '交易币种(字典CODE)，如：CNY-人民币,USD-美元等',
+    status TINYINT NOT NULL DEFAULT '1' COMMENT '事务状态：1-未提交,2-部分提交,3-全部提交,4-部分回滚,5-全部回滚,6-失败',
+    fail_reason VARCHAR(256) DEFAULT '' COMMENT '事务/记账失败原因',
+    finish_time TIMESTAMP NOT NULL DEFAULT '1970-01-01 00:00:00' COMMENT '事务最终完成时间（全部提交/回滚/失败）',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
@@ -186,7 +198,7 @@ CREATE TABLE t_voucher_rule_detail (
     funds_type VARCHAR(50) NOT NULL COMMENT '交易款项类型（如：支付金额、充值金额、本金、利息、罚息、担保费、提前结清费等）',
     subject_code VARCHAR(50) NOT NULL COMMENT '会计科目编码',
     dr_cr_flag ENUM('借', '贷') NOT NULL COMMENT '借贷标识',
-    is_unilateral tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否单边记账',
+    is_unilateral TINYINT NOT NULL DEFAULT 0 COMMENT '是否单边记账',
     rule_script longtext NOT NULL COMMENT '规则脚本（可以通过类似SpEL表达式来精确匹配，启动时预加载规则变更时同步更新）',
     summary TEXT COMMENT '摘要',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -466,7 +478,7 @@ CREATE TABLE t_dictionary (
     sort_order INT DEFAULT 0 COMMENT '排序序号，越小越靠前',
     group_key VARCHAR(50) COMMENT '分组键，用于前端分组展示（如“支付渠道”下分“线上/线下”）',
     status ENUM('启用', '停用') NOT NULL DEFAULT '启用' COMMENT '状态',
-    is_system TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否系统内置：1-是（禁止删除），0-否（可维护）',
+    is_system TINYINT NOT NULL DEFAULT 1 COMMENT '是否系统内置：1-是（禁止删除），0-否（可维护）',
     ext_json JSON COMMENT '扩展属性，如：{"color":"#FF0000", "icon":"loan", "rule_script":"..."}',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
