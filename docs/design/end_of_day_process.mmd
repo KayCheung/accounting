@@ -1,0 +1,85 @@
+%% 日终核算处理流程
+
+
+flowchart TB
+    %% 样式定义
+    classDef startend fill:#f0f0f0,stroke:#333,stroke-width:1px,rx:10
+    classDef process fill:#b0c4de,stroke:#333,stroke-width:1px
+    classDef decision fill:#fffacd,stroke:#333,stroke-width:1px
+    classDef subproc fill:#e6e6fa,stroke:#333,stroke-width:1px,stroke-dasharray:5 5
+
+    %% 日终准备
+    subgraph 日终准备
+        direction TB
+        START[开始]:::startend
+        NOTIFY[通知外围系统日切]:::process
+        COST_ENTRY[当日成本汇总入账]:::process
+        BUFFER_ENTRY[缓冲记账汇总入账]:::process
+        RECON_DATA[对账中心收集对账数据]:::process
+        RECON[对账]:::process
+    end
+
+    %% 日终核算处理流程
+    subgraph 日终核算处理流程
+        direction TB
+        DR_CR_SUM[借贷发生额汇总]:::process
+        DECISION_DR_CR{借贷相等？}:::decision
+        ADJ_ENTRY[登记轧差净额分录]:::process
+        
+        subgraph 明细账汇总
+            direction TB
+            DETAIL_ENTRY_SUM[明细账户分录汇总]:::subproc
+            DETAIL_PREV_BAL[账户上日余额]:::subproc
+            DETAIL_CURR_AMT[账户发生额]:::subproc
+            DETAIL_UPDATE[更新账户期末余额]:::subproc
+        end
+        
+        subgraph 总账汇总
+            direction TB
+            GL_ENTRY_SUM[总账科目分录汇总]:::subproc
+            GL_PREV_BAL[科目上日余额]:::subproc
+            GL_CURR_AMT[科目发生额]:::subproc
+            GL_UPDATE[更新科目期末余额]:::subproc
+        end
+    end
+
+    %% 平衡检查
+    subgraph 平衡检查
+        direction TB
+        GL_BAL_CHECK[总账平衡检查<br/>借方余额=贷方余额]:::process
+        DETAIL_GL_BAL_CHECK[总分平衡检查<br/>总账余额=∑分户余额]:::process
+        SUB_BAL_SAVE[分户余额日切保存]:::process
+        UPDATE_ACCT_DATE[更新会计日期]:::process
+        END[结束]:::startend
+    end
+
+    %% 流程连线
+    START --> NOTIFY
+    NOTIFY --> COST_ENTRY
+    COST_ENTRY --> BUFFER_ENTRY
+    BUFFER_ENTRY --> RECON_DATA
+    RECON_DATA --> RECON
+    RECON --> DR_CR_SUM
+
+    DR_CR_SUM --> DECISION_DR_CR
+    DECISION_DR_CR -->|否| ADJ_ENTRY
+    DECISION_DR_CR -->|是| DETAIL_ENTRY_SUM
+
+    DETAIL_ENTRY_SUM --> DETAIL_PREV_BAL
+    DETAIL_ENTRY_SUM --> DETAIL_CURR_AMT
+    DETAIL_PREV_BAL --> DETAIL_UPDATE
+    DETAIL_CURR_AMT --> DETAIL_UPDATE
+
+    DETAIL_UPDATE --> GL_ENTRY_SUM
+    GL_ENTRY_SUM --> GL_PREV_BAL
+    GL_ENTRY_SUM --> GL_CURR_AMT
+    GL_PREV_BAL --> GL_UPDATE
+    GL_CURR_AMT --> GL_UPDATE
+
+    GL_UPDATE --> GL_BAL_CHECK
+    GL_BAL_CHECK --> DETAIL_GL_BAL_CHECK
+    DETAIL_GL_BAL_CHECK --> SUB_BAL_SAVE
+    SUB_BAL_SAVE --> UPDATE_ACCT_DATE
+    UPDATE_ACCT_DATE --> END
+
+

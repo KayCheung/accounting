@@ -1,6 +1,5 @@
-# 入账流程
+%% 入账流程
 
-```
 flowchart TB
     classDef startend fill:#f9f,stroke:#333,stroke-width:1px
     classDef process fill:#87CEFA,stroke:#333,stroke-width:1px
@@ -49,4 +48,3 @@ flowchart TB
     CIF_ACCT <-->|交易对手余额更新| INTERNAL_ACCT
     BOOK_RULE -....->|后台配置| VOUCHER_CONFIG
     BUFFER_RULE -....->|后台配置| BUFFER_CONFIG
-```
