@@ -438,6 +438,7 @@ CREATE TABLE `t_account_freeze_detail` (
     trace_no VARCHAR(64) NOT NULL COMMENT '系统跟踪号(支付系统或其他外部系统的请求流水号,机制凭证为系统生成)',
     trace_seq TINYINT NOT NULL COMMENT '预留字段，如一个 trace_no 里多次记账，结合trace_no实现幂等',
     trade_time DATETIME NOT NULL COMMENT '交易时间',
+	freeze_amount DECIMAL(18,6) NOT NULL COMMENT '冻结金额',
 	status TINYINT NOT NULL COMMENT '状态：1-冻结,2-已解冻',
 	expire_time DATETIME NOT NULL DEFAULT '2099-12-31 00:00:00' COMMENT '冻结过期时间，2099 表示永不过期',
     summary VARCHAR(64) NOT NULL DEFAULT '' COMMENT '摘要',
@@ -447,7 +448,7 @@ CREATE TABLE `t_account_freeze_detail` (
     is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
 	tenant_id INT NOT NULL DEFAULT '-1' COMMENT '租户ID',
 	UNIQUE KEY uk_voucher_no (voucher_no) USING BTREE,
-	-- 用于账户级冻结查询 & 超时扫描
+	-- 用于超时冻结记录扫描
 	KEY idx_account_expire (expire_time, status),
 	KEY idx_trade_time (`trade_time`,`status`) USING BTREE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='账户资金冻结明细表（以凭证为粒度，账户信息通过分录关联，目的在于处理异常冻结资金）';
