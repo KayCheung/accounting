@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS t_account_subject (
     subject_name VARCHAR(64) NOT NULL COMMENT '科目名称',
     subject_level TINYINT NOT NULL COMMENT '科目级别',
     parent_subject_id BIGINT NOT NULL DEFAULT 0 COMMENT '父科目ID',
-    account_class TINYINT NOT NULL COMMENT '账类：1-资产类,2-负债类,3-权益类,4-共同类,5-成本类,6-损益类,0-表外科目',
+    subject_category TINYINT NOT NULL COMMENT '账类：1-资产类,2-负债类,3-权益类,4-共同类,5-成本类,6-损益类,0-表外科目',
     nature TINYINT NOT NULL COMMENT '科目性质：1-非特殊性科目,2-销账类科目,3-贷款类科目,4-现金类科目',
     debit_credit TINYINT NOT NULL COMMENT '借贷方向：1-借,2-贷',
     is_leaf TINYINT NOT NULL DEFAULT '0' COMMENT '是否末级科目',
