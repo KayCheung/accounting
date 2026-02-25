@@ -230,6 +230,8 @@ CREATE TABLE t_accounting_rule_detail (
 	debit_credit TINYINT NOT NULL COMMENT '借贷方向：1-借,2-贷',
     currency VARCHAR(32) NOT NULL DEFAULT 'CNY' COMMENT '币种(字典CODE)，如：CNY-人民币',
     is_unilateral TINYINT NOT NULL DEFAULT 0 COMMENT '资金单边处理(是否实时更新账户余额)：0-否；1-是',
+    impact_type TINYINT NOT NULL DEFAULT 1 COMMENT '影响类型(仅单边记账有效)：1-总额变动,2-内部划转/冻结',
+    sub_account_op TINYINT NOT NULL DEFAULT 1 COMMENT '子账户操作路径(仅单边记账有效)：1-可用变动, 2-冻结变动, 3-可用转冻结, 4-冻结转可用',
     extend_script longtext NOT NULL COMMENT '扩展脚本（可以通过类似SpEL表达式来精确匹配，启动时预加载规则变更时同步更新）',
     summary VARCHAR(64) NOT NULL DEFAULT '' COMMENT '摘要',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',

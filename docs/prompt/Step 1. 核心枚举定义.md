@@ -1,20 +1,21 @@
-# Task 1: Domain Entities & Enums
-请根据 DDL 生成以下核心枚举和实体类、Mapper接口、CRUD Service类：
-1. **枚举类**：`AccountCategory` (资产/负债等), `DebitCredit` (借/贷), `TransStatus`, `BalanceType` (可用/冻结)。
-2. **实体类**：根据DDL表结构定义，生成对应的实体类，如： `Account` (t_account), `SubAccount`(t_sub_account), `AccountingVoucher`(t_account_voucher), `VoucherEntryDetail`(t_voucher_entry_detail)。
-3. **要求**：
-   - 枚举类需包含对应的 code 和描述，code为String类型。
-   - 使用 Jakarta Persistence（非 javax）
-   - 实体类使用 MyBatis-Plus 注解。
-   - 乐观锁字段（如 version）需用MyBatis-Plus中的 @Version 注解
-   - 枚举字段用MyBatis-Plus中的 @EnumValue，对应的字段类型为String
-   - 时间字段用 LocalDateTime（非 Date）
-   - 主键策略为 AUTO（兼容 MySQL 自增）
-   - 为 `VoucherEntryDetail` 增加 `generateEntryId()` 方法，逻辑为拼接凭证号与行号。
-   - 表与表之间存在关系的，可在实体类中增加关联实体的字段，使用@TableField注解，并标识该字段不存在表中
-   - 为每个实体生成对应的 Mapper 接口和Service类，分别继承MyBatis-Plus提供的顶层Mapper和Service实现类
-   
-   
+# Step 1: Enums Definition
+请根据 DDL 生成以下核心枚举类：
+
+1. **核心枚举生成**：
+   - 根据 DDL 表结构中的字段及描述生成对应的枚举类。
+   - 重点包括：`SubjectCategory` (subject_category), `SubjectNature` (nature), `DebitCredit` (debit_credit), `OwnerType` (owner_type), `ImpactType` (impact_type), `SubAccountOp` (sub_account_op), `BalanceType` (balance_type), `TradeType` (trade_type) 等。
+2. **通用枚举**：
+   - 定义通用状态枚举 `AvailableStatus`：1-待启用, 2-启用, 3-停用。
+3. **技术要求**：
+   - **字段结构**：包含 `Integer code`（或 `String code`）和 `String desc`。
+   - **类型映射**：凡是 DDL 中定义为 TINYINT 或 INT 的字段，枚举 Code 对应 `Integer`；VARCHAR 对应 `String`。
+   - **注解支持**：
+      - 使用 Lombok 的 `@Getter` 和 `@AllArgsConstructor`。
+      - 枚举类的 `code` 字段必须标注 MyBatis-Plus 的 `@EnumValue` 注解。
+   - **逻辑增强**：提供一个静态方法 `ofCode(code)`，用于根据 code 返回对应的枚举对象。
+
+
+
 ```
 AccountSubject
    
@@ -57,4 +58,8 @@ buffer_mode：
     缓冲入账模式：1-异步逐条入账,2-日间批量入账,3-日终批量汇总入账
 t_account_freeze_detail.status：
 	状态：1-冻结,2-已解冻
+impact_type：
+   影响类型：1-总额变动,2-内部划转/冻结
+sub_account_op：
+   子账户操作路径：1-可用变动, 2-冻结变动, 3-可用转冻结, 4-冻结转可用
 ```

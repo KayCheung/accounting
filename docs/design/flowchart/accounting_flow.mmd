@@ -1,24 +1,24 @@
 %% 入账流程
 
 flowchart TB
-    classDef startend fill:#f9f,stroke:#333,stroke-width:1px
-    classDef process fill:#87CEFA,stroke:#333,stroke-width:1px
-    classDef decision fill:#FFB6C1,stroke:#333,stroke-width:1px
-    classDef config fill:#E6E6FA,stroke:#333,stroke-width:1px
+    classDef startend fill:#f9f,stroke:#333,stroke-width:1px,color:black
+    classDef process fill:#87CEFA,stroke:#333,stroke-width:1px,color:black
+    classDef decision fill:#FFB6C1,stroke:#333,stroke-width:1px,color:black
+    classDef config fill:#E6E6FA,stroke:#333,stroke-width:1px,color:black
     START[记账/调账]:::process
     LOG_JOURNAL[登记记账流水]:::process
     BOOK_RULE[记账规则]:::process
     %%DECISION_FREEZE{冻结？}:::decision
-    UNILATERAL_BOOK{单边记账？}:::decision
+    UNILATERAL_BOOK{单边记账?}:::decision
     GEN_VOUCHER[生成记账凭证]:::process
     TX_MANAGE[事务管理]:::process
-    SINGLE_ENTRY[客户子账户单边记账]:::process
-    UPDATE_SUB_BAL[客户冻结/可用<br/>子账户余额更新]:::process
-    SUB_BAL_DETAIL[客户子账户余额明细]:::process
+    SINGLE_ENTRY[账户单边记账]:::process
+    UPDATE_SUB_BAL[账户余额更新]:::process
+    SUB_BAL_DETAIL[记录账户余额明细]:::process
     CIF_LEDGER[客户分户明细账簿]:::startend
     CIF_ACCT[客户分户账户]:::startend
     BUFFER_RULE[缓冲入账规则]:::process
-    DECISION_REAL_TIME{实时入账？}:::decision
+    DECISION_REAL_TIME{实时入账?}:::decision
     BUFFER_ENTRY[缓冲入账明细]:::config
     JOURNAL_ENTRY[分录流水]:::process
     INTERNAL_LEDGER[内部分户明细账簿]:::startend

@@ -3,10 +3,10 @@
 
 flowchart TB
     %% 样式定义
-    classDef startend fill:#f0f0f0,stroke:#333,stroke-width:1px,rx:10
-    classDef process fill:#b0c4de,stroke:#333,stroke-width:1px
-    classDef decision fill:#fffacd,stroke:#333,stroke-width:1px
-    classDef subproc fill:#e6e6fa,stroke:#333,stroke-width:1px,stroke-dasharray:5 5
+    classDef startend fill:#f0f0f0,stroke:#333,stroke-width:1px,rx:10,color:black
+    classDef process fill:#b0c4de,stroke:#333,stroke-width:1px,color:black
+    classDef decision fill:#fffacd,stroke:#333,stroke-width:1px,color:black
+    classDef subproc fill:#e6e6fa,stroke:#333,stroke-width:1px,stroke-dasharray:5 5,color:black
 
     %% 日终准备
     subgraph 日终准备
@@ -23,7 +23,7 @@ flowchart TB
     subgraph 日终核算处理流程
         direction TB
         DR_CR_SUM[借贷发生额汇总]:::process
-        DECISION_DR_CR{借贷相等？}:::decision
+        DECISION_DR_CR{借贷相等?}:::decision
         ADJ_ENTRY[登记轧差净额分录]:::process
         
         subgraph 明细账汇总
