@@ -4,6 +4,7 @@
 1. **异常体系**：
     - 定义业务异常基类 `GenericException`，包含 `errorCode`。
     - 定义业务异常类 `ServiceException`（继承自 GenericException）。
+    - 定义异步重试异常类 `AsyncRetryException`（继承自 GenericException）。
     - 定义账务专项异常 `AccountException`（继承自 GenericException），用于：余额不足、账户冻结、非法账户状态、借贷不平衡等场景。
     - 编写 Spring 统一异常处理器 `GlobalExceptionHandler` (@RestControllerAdvice)。
     - **要求**：捕获 `GenericException` 返回业务错误码；捕获 `IllegalArgumentException`、`BindException`、`ConstraintViolationException`、`DataIntegrityViolationException`等常见异常；捕获 `Exception` 返回系统通用错误。并记录 Error 级别日志。
