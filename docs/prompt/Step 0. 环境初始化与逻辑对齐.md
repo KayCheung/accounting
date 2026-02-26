@@ -57,6 +57,8 @@
    - 所有带有唯一索引的表，索引字段必须包含 `is_delete`。
    - 逻辑删除后的值必须是动态唯一的（如 ID、当前时间戳），严禁固定为 1。
    - 在 MyBatis-Plus 配置中，需明确指定 `logic-delete-value` 和 `logic-not-delete-value`。
+7. **API 文档规范**： 
+   - 使用 Swagger/OpenAPI 3.0 生成 RESTful API 文档，所有 Controller 层接口必须添加 @Operation 注解描述业务功能，DTO 对象必须使用 @Schema 注解定义字段含义，确保 API 文档与代码同步更新。
 
 ## 六、 注释规范
 - **核心算法必注**：余额计算公式、借贷方向切换逻辑必须标注其财务背景。
