@@ -34,23 +34,6 @@
 - **唯一索引冲突解决**：带有唯一索引的表，索引字段必须包含 `is_delete`。
 - **动态删除值**：逻辑删除后的 `is_delete` 值必须是动态唯一的（如时间戳），严禁固定为 1。
 
-## 3. 技术栈约束 (Tech Stack)
-- **核心**：Java 17, Spring Boot 3.x, MyBatis-Plus, Redisson, **Aliyun ONS-Client**, Nacos, XXL-JOB, Sentinel, Skywalking, Swagger, Hutool、Prometheus、Logback、Lombok。
-- **数据库**：MySQL 5.7
-- **测试**：JUnit 5 + AssertJ + Mockito（断言必须使用 AssertJ）。
-
-## 4. 审计与注释要求
-- **Javadoc 要求**：Service 方法必须注明：1.业务含义 2.是否记账 3.异常处理策略。
-- **核心算法必注**：余额计算公式、借贷方向切换逻辑必须标注财务背景。
-- **状态机注释**：所有状态流转必须在代码邻近位置注明触发条件。
-- **TODO 与异常注释**：在 `catch` 块中，除了记录日志，必须注释说明该异常。
-
-
-
-本阶段旨在确立严苛的财务级编码准则。通过“绝对值计算法则”、编程式事务规约、以及“Redisson 分布式锁 + 数据库唯一索引”的多重幂等机制，确保系统在高并发下余额准确、审计链路清晰。同时适配阿里云 ONS 消息服务实现最终一致性。
-
-
-
 ## 3. API 文档与标注规范 (Swagger/OpenAPI 3.0)
 
 ### 3.1 Controller 标注
@@ -60,5 +43,16 @@
 ### 3.2 出入参 DTO 标注
 - **类级别**：必须标注 `@Schema(description = "...")` 定义对象含义。
 - **字段级别**：必须标注 `@Schema(description = "字段含义", example = "示例值")`，确保 API 文档与代码同步更新。
+
+## 4. 技术栈约束 (Tech Stack)
+- **核心**：Java 17, Spring Boot 3.x, MyBatis-Plus, Redisson, **Aliyun ONS-Client**, Nacos, XXL-JOB, Sentinel, Skywalking, Swagger, Hutool、Prometheus、Logback、Lombok。
+- **数据库**：MySQL 5.7
+- **测试**：JUnit 5 + AssertJ + Mockito（断言必须使用 AssertJ）。
+
+## 5. 审计与注释要求
+- **Javadoc 要求**：Service 方法必须注明：1.业务含义 2.是否记账 3.异常处理策略。
+- **核心算法必注**：余额计算公式、借贷方向切换逻辑必须标注财务背景。
+- **状态机注释**：所有状态流转必须在代码邻近位置注明触发条件。
+- **TODO 与异常注释**：在 `catch` 块中，除了记录日志，必须注释说明该异常。
 
 
