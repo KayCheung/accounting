@@ -9,14 +9,14 @@
 ## 核心任务列表
 
 ### Phase 1: 契约、规范与架构 (Contracts & Standards)
-- [ ] **Step 1. Governance & Constraints**：确立开发契约、目录主权、强制规则与禁止行为。
-- [ ] **Step 2. Resource & Alignment**：对齐 DDL、现有资源文件分布及核心逻辑基准。
-- [ ] **Step 3. Architecture & Requirements**：对齐业务架构、功能清单、核心业务流（Mermaid 逻辑解析）。
-- [ ] **Step 4. Technical Stack & Coding Standards**：确立技术栈详细配置、编码风格、金额精度及注释规范。
+- [ ] **Step 1. Governance & Constraints**：确立开发契约
+- [ ] **Step 2. Resource & Alignment**：资源与逻辑对齐
+- [ ] **Step 3. Architecture & Requirements**：对齐业务架构、功能清单、核心业务流
+- [ ] **Step 4. Technical Stack & Coding Standards**：技术栈与编码规范
 
 ### Phase 2: 环境与基础设施 (Environment & Infrastructure)
-- [ ] **Step 5. Project Init**：工程骨架初始化，配置 `pom.xml` 及 Nacos。
-- [ ] **Step 6. Core Infrastructure**：实现统一异常体系、`ApiResponse`、金额校验器、工具类及指标监控埋点。
+- [ ] **Step 5. Project Initialization & API Infrastructure**：工程初始化与 API 基础设施
+- [ ] **Step 6. Middleware Integration & Infrastructure**：中间件集成与基础设施封装
 
 ### Phase 3: 支撑性配置模块 (Supporting Configuration)
 - [ ] **Step 7. API Enums & DTOs**：定义核心枚举与接口契约模型。

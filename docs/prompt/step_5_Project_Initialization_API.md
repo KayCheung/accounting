@@ -27,12 +27,15 @@
 ### 4.1 主启动类
 - **AccountingApplication**: 放置在 `com.kltb.accounting.core` 包下，配置 `@SpringBootApplication`。
 
-### 4.2 基础配置文件 (bootstrap.yml / application.yml)
+### 4.2 基础配置文件 (bootstrap.yml / application.yml / logback-spring.xml)
 - 配置端口 (8080)、应用名称 (`accounting-service`)。
 - **上下文路径**：`server.servlet.context-path: /accounting`。
 - **序列化规约**：
    - Long 转 String（防精度丢失）。
    - 日期格式化：`yyyy-MM-dd HH:mm:ss`，时区 `GMT+8`。
+- 配置 `logback-spring.xml`：
+  - 区分 `local` (Console), `test/prod` (File + RollingPolicy)。
+  - 日志格式包含 `[%X{traceId}]`（需配合拦截器在 MDC 中注入 traceId）。
 - 配置 Swagger/SpringDoc 访问路径。
 
 ### 4.3 异常体系

@@ -199,12 +199,13 @@ CREATE TABLE t_transaction (
 CREATE TABLE t_accounting_rule (
     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
     rule_name VARCHAR(32) NOT NULL COMMENT '规则名称',
-    voucher_type VARCHAR(32) NOT NULL COMMENT '凭证类型(字典CODE)，如：付款凭证、收款凭证、转帐凭证、汇总凭证、结账凭证、提现凭证',
+    voucher_type VARCHAR(32) NOT NULL COMMENT '凭证类型(字典CODE)，如：付款凭证、收款凭证、转帐凭证、汇总凭证、结账凭证、提现凭证、冻结解冻凭证',
     accounting_mode TINYINT NOT NULL DEFAULT '1' COMMENT '记账模式：1-实时,2-异步',
     business_code VARCHAR(32) NOT NULL COMMENT '业务线编码(字典CODE)',
     trading_code VARCHAR(32) NOT NULL COMMENT '交易编码(字典CODE)',
     pay_channel VARCHAR(32) NOT NULL COMMENT '支付渠道(字典CODE)，如：ALIPAY-支付宝,WECHAT-微信',
 	is_open_account TINYINT NOT NULL DEFAULT 0 COMMENT '是否允许自动开户：0-否；1-是',
+    freeze_duration INT NOT NULL DEFAULT 0 COMMENT '冻结时长，单位：秒',
     pre_rule_id BIGINT NOT NULL DEFAULT 0 COMMENT '前置入账规则ID（如提现,前置入账规则必须有提现预冻结）',
     -- rule_script longtext NOT NULL COMMENT '规则脚本（可以通过类似SpEL表达式来精确匹配，启动时预加载规则变更时同步更新）',
     status TINYINT NOT NULL DEFAULT '1' COMMENT '状态：1-待启用；2-启用，3-停用',
@@ -216,7 +217,7 @@ CREATE TABLE t_accounting_rule (
 	update_name varchar(32) NOT NULL DEFAULT '' COMMENT '更新人姓名',
     is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
 	tenant_id INT NOT NULL DEFAULT '-1' COMMENT '租户ID',
-    UNIQUE KEY uk_voucher_rule (business_code,trading_code,pay_channel,is_delete)
+    UNIQUE KEY uk_accounting_rule (business_code,trading_code,pay_channel,is_delete)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='记账规则表';
 
 -- 记账规则明细表
@@ -230,8 +231,8 @@ CREATE TABLE t_accounting_rule_detail (
 	debit_credit TINYINT NOT NULL COMMENT '借贷方向：1-借,2-贷',
     currency VARCHAR(32) NOT NULL DEFAULT 'CNY' COMMENT '币种(字典CODE)，如：CNY-人民币',
     is_unilateral TINYINT NOT NULL DEFAULT 0 COMMENT '资金单边处理(是否实时更新账户余额)：0-否；1-是',
-    impact_type TINYINT NOT NULL DEFAULT 1 COMMENT '影响类型(仅单边记账有效)：1-总额变动,2-内部划转/冻结',
-    sub_account_op TINYINT NOT NULL DEFAULT 1 COMMENT '子账户操作路径(仅单边记账有效)：1-可用变动, 2-冻结变动, 3-可用转冻结, 4-冻结转可用',
+    -- impact_type TINYINT NOT NULL DEFAULT 1 COMMENT '影响类型(仅单边记账有效)：1-总额变动,2-内部划转/冻结',
+    -- sub_account_op TINYINT NOT NULL DEFAULT 1 COMMENT '子账户操作路径(仅单边记账有效)：1-可用变动, 2-冻结变动, 3-可用转冻结, 4-冻结转可用',
     extend_script longtext NOT NULL COMMENT '扩展脚本（可以通过类似SpEL表达式来精确匹配，启动时预加载规则变更时同步更新）',
     summary VARCHAR(64) NOT NULL DEFAULT '' COMMENT '摘要',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -265,7 +266,7 @@ CREATE TABLE t_accounting_rule_auxiliary (
 	update_name varchar(32) NOT NULL DEFAULT '' COMMENT '更新人姓名',
     is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
 	tenant_id INT NOT NULL DEFAULT '-1' COMMENT '租户ID',
-    UNIQUE KEY uk_voucher_rule_auxiliary (rule_detail_id,aux_code,is_delete)
+    UNIQUE KEY uk_accounting_rule_auxiliary (rule_detail_id,aux_code,is_delete)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='记账规则辅助核算项表';
 
 -- 记账凭证表
