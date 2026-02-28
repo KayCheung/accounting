@@ -44,7 +44,15 @@
 - 定义异步重试异常类 `AsyncRetryException`（继承自 GenericException）。
 - 定义账务专项异常 `AccountException`（继承自 GenericException），用于：余额不足、账户冻结、非法账户状态、借贷不平衡等场景。
 
-### 4.4 全局异常处理 (GlobalExceptionHandler)
+### 4.4 Try-Catch 封装规约
+- **未知异常转换**：捕获到非业务异常（如 `SQLException`, `NullPointerException`）时，必须通过 `ServiceException` 或 `AccountException` 进行二次封装抛出。
+- **errorCode 绑定**：抛出异常时必须指定 `ResultCode` 中的枚举项，严禁直接传入魔术数字或硬编码字符串。
+- **日志处理契约**：
+  - **Catch 块职责**：仅负责打印 `error` 级别日志（需携带关键上下文参数，如 `accountNo` 或 `traceNo`），禁止吞掉堆栈。
+  - **自动补充逻辑**：若捕获到的异常未包含 `errorCode`，封装时应默认补充 `ResultCode.SYSTEM_ERROR` 或 `ResultCode.UNKNOWN_ERROR`。
+- **全局拦截**：所有 `GenericException` 及其子类由全局异常处理器（GlobalExceptionHandler）拦截，解析其内部的 `ResultCode` 并包装进 `ApiResponse` 返回前端。
+
+### 4.5 全局异常处理 (GlobalExceptionHandler)
 - 捕获 `MethodArgumentNotValidException` (参数校验)、`IllegalArgumentException`、`BindException`、`ConstraintViolationException`、`DataIntegrityViolationException` 等常见异常。
 - 捕获 `GenericException` (自定义业务异常)。
 - 捕获 `Exception` (兜底系统异常)，统一返回 `ApiResponse`，并通过 log.error 打印异常堆栈，且日志中需包含当前请求的 traceId。
