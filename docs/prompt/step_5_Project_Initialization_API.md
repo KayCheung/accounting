@@ -1,7 +1,7 @@
 # Step 5. Project Initialization & API Infrastructure (工程初始化与 API 基础设施)
 
 ## 1. 任务目标 (Mission)
-按照 `docs/design/项目骨架.md` 初始化物理工程并实现“一键启动”。
+按照 `docs/design/project_structure.md` 初始化物理工程并实现“一键启动”。
 1. **主权隔离**：`accounting-api` 严禁引入任何持久层（MyBatis-Plus/JDBC）或数据库驱动，保持纯净性，仅包含 DTO、Facade 和枚举。
 2. **基建完备**：包含主启动类、基础配置、Web 拦截器及全局异常处理，确保项目可运行。
 3. **标准化输出**：API 标准化封装，集成 Swagger (SpringDoc)，展现可用接口文档。

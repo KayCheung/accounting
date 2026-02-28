@@ -50,5 +50,5 @@
 - **Skywalking SDK**：直接调用 `org.apache.skywalking.apm.toolkit.trace.TraceContext.traceId()`，严禁自研。
 
 ## 7. 下一步行动
-- 完成基建封装后，进入 **Phase 3 (Domain Modeling)**。
-- **Step 7**: 定义 `Account` (账户)、`SubAccount` (分账)、`BusinessRecord` (业务流水) 的领域模型及 DDL 脚本。
+- 完成基建封装后，进入 **Phase 3: 支撑性配置模块 (Supporting Configuration)**。
+- **Step 7**: 基于 `1-init-schema.sql` 生成持久层 PO、Mapper 及轻量化 Service。

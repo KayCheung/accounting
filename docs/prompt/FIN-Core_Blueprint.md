@@ -19,10 +19,9 @@
 - [ ] **Step 6. Middleware Integration & Infrastructure**：中间件集成与基础设施封装
 
 ### Phase 3: 支撑性配置模块 (Supporting Configuration)
-- [ ] **Step 7. API Enums & DTOs**：定义核心枚举与接口契约模型。
-- [ ] **Step 8. Domain Entities & Persistence**：生成持久层 PO、Mapper 及轻量化 Service。
-- [ ] **Step 9. Dict & Metadata Management**：实现字典数据、会计科目管理模块的 CRUD 与层级校验。
-- [ ] **Step 10. Template & Rule Management**：实现账户模板、记账规则（实时/缓冲）管理模块的逻辑校验与持久化。
+- [ ] **Step 7. Domain Modeling & Persistence Layer**：生成持久层 PO、Mapper 及轻量化 Service。
+- [ ] **Step 8. Dict & Metadata Management**：实现字典数据、会计科目管理模块的 CRUD 与层级校验。
+- [ ] **Step 9. Template & Rule Management**：实现账户模板、记账规则（实时/缓冲）管理模块的逻辑校验与持久化。
 
 - [ ] ... (以此类推)
 

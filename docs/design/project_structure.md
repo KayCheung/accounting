@@ -1,4 +1,4 @@
-# 项目骨架
+# 项目结构（Project Structure）
 
 ```text
 accounting/                                                 # 主项目根目录
@@ -144,7 +144,7 @@ accounting/                                                 # 主项目根目录
   │   │   │   ├── system_architecture.mmd
   │   │   │   ├── accounting_flow.mmd
   │   │   │   └── end_of_day_process.mmd
-  │   │   └── 项目骨架.md
+  │   │   └── project_structure.md
   │   └── api/
   ├── scripts/                                               # 脚本文件
   └── README.md

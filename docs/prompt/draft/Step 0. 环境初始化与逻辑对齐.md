@@ -14,7 +14,7 @@
    - **动态路径 (accounting_flow.mmd)**：理解单边记账与全路径记账的区别，确保事务边界在 `TX_MANAGE` 处正确开启。
    - **日终核算 (end_of_day_process.mmd)**：理解总分平衡和借贷平衡的校验逻辑，这决定了生成的 DTO 和 Entity 必须支撑复杂的汇总统计。
 3. **功能范围**：参考 `docs/design/prototypes/`（如有），以明确本次迭代的后端边界。
-4. **项目骨架**：严格遵循 `docs/design/项目骨架.md` 生成相应的代码。
+4. **项目骨架**：严格遵循 `docs/design/project_structure.md` 生成相应的代码。
 
 ## 三、 核心逻辑基准 (Logic Baseline)
 1. **余额计算**：禁止在 SQL 中使用 `balance = balance + ?`。必须在 Java 代码层执行。
