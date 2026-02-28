@@ -14,10 +14,13 @@
 - **比较规约**：必须使用 `compareTo() == 0`，严禁使用 `.equals()`。
 
 ## 2. 核心规约 (Mandatory Standards)
-### 2.1 编码风格
+### 2.1 编码风格 (遵循阿里巴巴编码规范)
 - **链式调用**：POJO/DTO/Entity 强制使用 `@Accessors(chain = true)`。
 - **严禁魔法值**：状态、类型、方向强制使用枚举，MyBatis-Plus 映射使用 `@EnumValue`，Jackson 序列化使用 `@JsonValue`。
 - **日期规约**：API 层 LocalDate/LocalDateTime 强制标注 `@JsonFormat(pattern = "...", timezone = "GMT+8")`。
+- **POJO 命名规约**：
+  - 布尔类型字段在 PO 类中**禁止添加 `is` 前缀**（如：数据库 `is_leaf` 对应 Java 字段为 `Boolean leaf`）。
+  - 包装类使用：所有 POJO 属性必须使用包装类（`Integer`, `Long` 等），禁止使用基本数据类型。
 
 ### 2.2 事务与一致性
 - **编程式事务**：严禁使用 `@Transactional`，必须显式使用 `TransactionTemplate`。
