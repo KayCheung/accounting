@@ -1,4 +1,4 @@
-# Step 8. Configuration Module - Dict & Subject (配置管理模块实现)
+# Step 4. Configuration Module - Dict & Subject (配置管理模块实现)
 
 ## 1. 任务目标
 实现账务系统的静态数据底座，重点在于元数据的完整性与会计科目的逻辑严密性：
@@ -131,5 +131,5 @@
 - [ ] 科目变更保护逻辑是否正确实现（被引用后禁止修改核心属性）？
 
 ## 8. 下一步行动
-- **Step 9: Account Template & Opening (开户模板与自动开户)**
+- **Step 5: Account Template & Opening (开户模板与自动开户)**
 - **内容**：实现 `AccountTemplate` 配置，并开发基于模板的一键开立多子账户（资产、负债等）的领域服务。

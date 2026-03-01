@@ -1,4 +1,4 @@
-# Step 5. Project Initialization & API Infrastructure (工程初始化与 API 基础设施)
+# Step 1. Project Initialization & API (工程初始化与 API 基础设施)
 
 ## 1. 任务目标 (Mission)
 按照 `docs/design/project_structure.md` 初始化物理工程并实现“一键启动”。
@@ -58,4 +58,4 @@
 - 捕获 `Exception` (兜底系统异常)，统一返回 `ApiResponse`，并通过 log.error 打印异常堆栈，且日志中需包含当前请求的 traceId。
 
 ## 5. 下一步行动
-- 进入 **Step 6** 接入中间件环境配置（Nacos, Redisson 封装, ONS 初始化）。
+- 进入 **Step 2** 接入中间件环境配置（Nacos, Redisson 封装, ONS 初始化）。

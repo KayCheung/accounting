@@ -1,4 +1,4 @@
-# Step 6. Middleware Integration & Infrastructure (中间件集成与基础设施封装)
+# Step 2. Middleware Integration & Infrastructure (中间件集成与基础设施封装)
 
 ## 1. 任务目标 (Mission)
 本阶段旨在完成基建底座的“多维上下文感知”与“高可靠”封装。
@@ -51,4 +51,4 @@
 
 ## 7. 下一步行动
 - 完成基建封装后，进入 **Phase 3: 支撑性配置模块 (Supporting Configuration)**。
-- **Step 7**: 基于 `1-init-schema.sql` 生成持久层 PO、Mapper 及轻量化 Service。
+- **Step 3**: 基于 `1-init-schema.sql` 生成持久层 PO、Mapper 及轻量化 Service。
