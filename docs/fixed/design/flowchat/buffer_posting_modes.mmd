@@ -1,0 +1,120 @@
+%% 缓冲记账三种模式流程图
+
+flowchart TB
+    classDef mode fill:#e1f5fe,stroke:#01579b,stroke-width:2px,color:black
+    classDef process fill:#fff3e0,stroke:#f57c00,stroke-width:1px,color:black
+    classDef decision fill:#fce4ec,stroke:#c2185b,stroke-width:1px,color:black
+    classDef data fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px,color:black
+    classDef success fill:#e8f5e9,stroke:#388e3c,stroke-width:1px,color:black
+    classDef error fill:#ffebee,stroke:#d32f2f,stroke-width:1px,color:black
+
+    START([缓冲规则匹配成功]):::mode
+    
+    %% 缓冲规则匹配与写入
+    subgraph MATCH["缓冲规则匹配与写入"]
+        direction TB
+        M1[凭证生成阶段<br/>匹配缓冲规则]:::process
+        M2[生成凭证和分录<br/>status=1 未过账]:::data
+        M3[写入 t_buffer_posting_detail<br/>status=1 待入账]:::data
+        M4[不更新账户余额<br/>不生成 t_account_detail]:::process
+    end
+
+    %% 模式 1：逐条缓冲
+    subgraph MODE1["模式 1：逐条缓冲 (buffer_mode=1)"]
+        direction TB
+        M1_TRIGGER[实时触发<br/>每条缓冲明细独立处理]:::mode
+        M1_SCAN[扫描 t_buffer_posting_detail<br/>status=1 待入账]:::process
+        M1_LOCK[按 account_no<br/>加悲观锁或乐观锁]:::process
+        M1_UPDATE[更新账户余额<br/>t_account + t_sub_account]:::data
+        M1_DETAIL[生成账户明细<br/>t_account_detail + t_sub_account_detail<br/>含 Pre/Post 余额]:::data
+        M1_SUCCESS[更新缓冲明细<br/>status=3 入账成功]:::success
+        M1_SCENE[适用场景：<br/>准实时入账<br/>容忍秒级延迟]:::mode
+    end
+
+    %% 模式 2：日间批量
+    subgraph MODE2["模式 2：日间批量 (buffer_mode=2)"]
+        direction TB
+        M2_TRIGGER[定时触发<br/>如每 5 分钟]:::mode
+        M2_SCAN[扫描 t_buffer_posting_detail<br/>status=1 待入账<br/>按 account_no 分组]:::process
+        M2_SUM[按账户汇总借贷发生额<br/>SUM(CASE WHEN debit_credit=1<br/>THEN amount ELSE 0 END)]:::process
+        M2_UPDATE[一次性更新账户余额<br/>按汇总金额更新]:::data
+        M2_RUNNING[Running Balance 计算]:::process
+        M2_DETAIL[逐条生成账户明细<br/>每条缓冲明细对应一条明细<br/>通过 running balance 计算 Pre/Post]:::data
+        M2_SUCCESS[更新所有缓冲明细<br/>status=3 入账成功]:::success
+        M2_SCENE[适用场景：<br/>高频小额交易<br/>减少账户锁竞争]:::mode
+    end
+
+    %% 模式 3：日终批量
+    subgraph MODE3["模式 3：日终批量 (buffer_mode=3)"]
+        direction TB
+        M3_TRIGGER[日终触发<br/>日切流程中的存量清理阶段]:::mode
+        M3_PROCESS[处理逻辑与模式 2 相同<br/>按账户汇总更新余额<br/>逐条生成明细]:::process
+        M3_SCENE[适用场景：<br/>对实时性要求最低<br/>如内部核算账户]:::mode
+    end
+
+    %% 锁升级策略
+    subgraph LOCK_STRATEGY["锁升级策略"]
+        direction TB
+        L1[默认乐观锁<br/>使用 version 字段]:::process
+        L2{更新成功?}:::decision
+        L3[失败重试<br/>最多 3 次]:::process
+        L4{重试成功?}:::decision
+        L5[升级悲观锁<br/>SELECT FOR UPDATE]:::process
+        L6{更新成功?}:::decision
+        L7[更新 status=4 入账失败<br/>记录失败原因<br/>触发告警]:::error
+        L8[入账成功]:::success
+    end
+
+    %% Running Balance 计算
+    subgraph RUNNING["Running Balance 计算逻辑"]
+        direction TB
+        R1[查询账户当前余额<br/>作为起始余额 begin_balance]:::process
+        R2[按时间顺序排序缓冲明细<br/>ORDER BY create_time ASC]:::process
+        R3[逐条计算：<br/>第 1 条：pre = begin, post = begin ± amt_1<br/>第 2 条：pre = post_1, post = post_1 ± amt_2<br/>第 N 条：pre = post_(N-1), post = post_(N-1) ± amt_N]:::process
+        R4[校验：post_N == 汇总更新后的账户余额]:::process
+    end
+
+    END([缓冲记账完成]):::mode
+
+    %% 流程连线
+    START --> M1
+    M1 --> M2
+    M2 --> M3
+    M3 --> M4
+    M4 --> M1_TRIGGER
+    M4 --> M2_TRIGGER
+    M4 --> M3_TRIGGER
+
+    M1_TRIGGER --> M1_SCAN
+    M1_SCAN --> M1_LOCK
+    M1_LOCK --> L1
+    L1 --> L2
+    L2 -->|否| L3
+    L2 -->|是| M1_UPDATE
+    L3 --> L4
+    L4 -->|否| L5
+    L4 -->|是| M1_UPDATE
+    L5 --> L6
+    L6 -->|否| L7
+    L6 -->|是| M1_UPDATE
+    M1_UPDATE --> M1_DETAIL
+    M1_DETAIL --> M1_SUCCESS
+    M1_SUCCESS --> M1_SCENE
+    M1_SCENE --> END
+
+    M2_TRIGGER --> M2_SCAN
+    M2_SCAN --> M2_SUM
+    M2_SUM --> M2_UPDATE
+    M2_UPDATE --> M2_RUNNING
+    M2_RUNNING --> R1
+    R1 --> R2
+    R2 --> R3
+    R3 --> R4
+    R4 --> M2_DETAIL
+    M2_DETAIL --> M2_SUCCESS
+    M2_SUCCESS --> M2_SCENE
+    M2_SCENE --> END
+
+    M3_TRIGGER --> M3_PROCESS
+    M3_PROCESS --> M3_SCENE
+    M3_SCENE --> END

@@ -1,0 +1,134 @@
+%% 逻辑日切五阶段流程图
+
+flowchart TB
+    classDef phase fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:black
+    classDef process fill:#fff3e0,stroke:#f57c00,stroke-width:1px,color:black
+    classDef decision fill:#fce4ec,stroke:#c2185b,stroke-width:1px,color:black
+    classDef data fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px,color:black
+    classDef success fill:#e8f5e9,stroke:#388e3c,stroke-width:1px,color:black
+    classDef error fill:#ffebee,stroke:#d32f2f,stroke-width:1px,color:black
+
+    START([开始日切流程]):::phase
+
+    %% ========== 阶段 1：瞬间切日 ==========
+    subgraph PHASE1["阶段 1：瞬间切日"]
+        direction TB
+        P1_UPDATE[更新全局会计日期<br/>从 T 日切换到 T+1 日]:::process
+        P1_CONFIG[更新配置表或缓存<br/>current_accounting_date = T+1]:::data
+        P1_EFFECT[所有新请求<br/>均写入 T+1 会计日]:::success
+    end
+
+    %% ========== 阶段 2：存量清理 ==========
+    subgraph PHASE2["阶段 2：存量清理（必须完成）"]
+        direction TB
+        P2_TARGET[目标：处理所有 T 日<br/>未完成的业务]:::phase
+        P2_BUFFER[扫描 t_buffer_posting_detail<br/>accounting_date=T<br/>status=1 待入账]:::process
+        P2_TX[扫描 t_transaction<br/>accounting_date=T<br/>status=PROCESSING]:::process
+        P2_EXEC[强制执行缓冲记账<br/>按模式 3 日终批量处理]:::process
+        P2_CHECK{所有 T 日业务<br/>都已过账或标记失败?}:::decision
+        P2_ALERT[触发告警<br/>人工介入]:::error
+        P2_DONE[存量清理完成]:::success
+    end
+
+    %% ========== 阶段 3：余额快照 ==========
+    subgraph PHASE3["阶段 3：余额快照"]
+        direction TB
+        P3_PRECOND[前置条件：<br/>存量清理完成]:::phase
+        P3_SAVE[保存 T 日所有账户余额快照<br/>至 t_account_balance_snapshot]:::process
+        P3_TYPE[记录快照类型<br/>snapshot_type=1 日快照]:::data
+        P3_DATE[记录快照日期<br/>snapshot_date=T<br/>snapshot_time=当前时间]:::data
+        P3_SOURCE[数据来源：<br/>t_account + t_sub_account<br/>当前余额]:::data
+    end
+
+    %% ========== 阶段 4：试算平衡 ==========
+    subgraph PHASE4["阶段 4：试算平衡（存量清理后执行）"]
+        direction TB
+        P4_PRECOND[前置条件：<br/>存量清理完成<br/>余额快照已生成]:::phase
+        
+        subgraph P4_GEN["生成账户日余额数据"]
+            direction TB
+            P4_GEN_SQL[从 t_account_detail 汇总<br/>生成 t_account_balance]:::process
+            P4_GEN_DATA[包含：<br/>期初余额 begin_balance<br/>借方发生额 debit_amount<br/>贷方发生额 credit_amount<br/>期末余额 end_balance]:::data
+        end
+        
+        subgraph P4_CHECK1["借贷平衡校验"]
+            direction TB
+            P4_CHECK1_SQL[SELECT SUM(debit_amount),<br/>SUM(credit_amount)<br/>FROM t_account_balance<br/>WHERE accounting_date = T]:::process
+            P4_CHECK1_JUDGE{ΣDebit == ΣCredit?}:::decision
+            P4_CHECK1_FAIL[借贷不平衡<br/>触发告警]:::error
+        end
+        
+        subgraph P4_CHECK2["总分核对"]
+            direction TB
+            P4_CHECK2_1[核对 1：<br/>科目总账 vs 分户余额合计]:::process
+            P4_CHECK2_2[核对 2：<br/>账户余额 vs 流水明细]:::process
+            P4_CHECK2_JUDGE{核对一致?}:::decision
+            P4_CHECK2_FAIL[总分不符<br/>触发告警]:::error
+        end
+        
+        subgraph P4_FAIL["校验失败处理"]
+            direction TB
+            P4_FAIL_RECORD[记录校验失败详情<br/>失败类型、差异金额、涉及账户]:::data
+            P4_FAIL_ALERT[触发告警<br/>邮件、短信、监控平台]:::error
+            P4_FAIL_BLOCK[阻止日切归档<br/>等待人工处理]:::error
+            P4_FAIL_FIX[人工排查并修正数据]:::process
+            P4_FAIL_RETRY[重新执行试算平衡]:::process
+        end
+    end
+
+    %% ========== 阶段 5：归档 ==========
+    subgraph PHASE5["阶段 5：归档"]
+        direction TB
+        P5_MARK[标记 T 日账务关闭<br/>更新日切状态表]:::data
+        P5_TIME[记录日切完成时间]:::data
+        P5_REPORT[生成日切报告（可选）]:::data
+        P5_DONE[系统正常运行在 T+1 会计日]:::success
+    end
+
+    END([日切完成]):::phase
+
+    %% 流程连线
+    START --> P1_UPDATE
+    P1_UPDATE --> P1_CONFIG
+    P1_CONFIG --> P1_EFFECT
+    P1_EFFECT --> P2_TARGET
+
+    P2_TARGET --> P2_BUFFER
+    P2_TARGET --> P2_TX
+    P2_BUFFER --> P2_EXEC
+    P2_TX --> P2_EXEC
+    P2_EXEC --> P2_CHECK
+    P2_CHECK -->|否| P2_ALERT
+    P2_CHECK -->|是| P2_DONE
+
+    P2_DONE --> P3_PRECOND
+    P3_PRECOND --> P3_SAVE
+    P3_SAVE --> P3_TYPE
+    P3_TYPE --> P3_DATE
+    P3_DATE --> P3_SOURCE
+
+    P3_SOURCE --> P4_PRECOND
+    P4_PRECOND --> P4_GEN_SQL
+    P4_GEN_SQL --> P4_GEN_DATA
+    P4_GEN_DATA --> P4_CHECK1_SQL
+    P4_CHECK1_SQL --> P4_CHECK1_JUDGE
+    P4_CHECK1_JUDGE -->|否| P4_CHECK1_FAIL
+    P4_CHECK1_JUDGE -->|是| P4_CHECK2_1
+    P4_CHECK1_FAIL --> P4_FAIL_RECORD
+    
+    P4_CHECK2_1 --> P4_CHECK2_2
+    P4_CHECK2_2 --> P4_CHECK2_JUDGE
+    P4_CHECK2_JUDGE -->|否| P4_CHECK2_FAIL
+    P4_CHECK2_JUDGE -->|是| P5_MARK
+    P4_CHECK2_FAIL --> P4_FAIL_RECORD
+    
+    P4_FAIL_RECORD --> P4_FAIL_ALERT
+    P4_FAIL_ALERT --> P4_FAIL_BLOCK
+    P4_FAIL_BLOCK --> P4_FAIL_FIX
+    P4_FAIL_FIX --> P4_FAIL_RETRY
+    P4_FAIL_RETRY --> P4_GEN_SQL
+
+    P5_MARK --> P5_TIME
+    P5_TIME --> P5_REPORT
+    P5_REPORT --> P5_DONE
+    P5_DONE --> END

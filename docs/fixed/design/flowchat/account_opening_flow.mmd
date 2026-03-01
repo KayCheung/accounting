@@ -1,0 +1,107 @@
+%% 账户开户流程图
+
+flowchart TB
+    classDef start fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:black
+    classDef process fill:#fff3e0,stroke:#f57c00,stroke-width:1px,color:black
+    classDef decision fill:#fce4ec,stroke:#c2185b,stroke-width:1px,color:black
+    classDef data fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px,color:black
+    classDef success fill:#e8f5e9,stroke:#388e3c,stroke-width:1px,color:black
+    classDef error fill:#ffebee,stroke:#d32f2f,stroke-width:1px,color:black
+
+    START([开户请求]):::start
+
+    %% ========== 外部客户账户开户 ==========
+    subgraph CUSTOMER["外部客户账户开户（基于模板）"]
+        direction TB
+        C1[接收开户请求<br/>customer_id + business_code<br/>+ customer_type]:::process
+        C2[查询开户模板<br/>t_account_template<br/>匹配 business_code + customer_type]:::process
+        C3{模板存在<br/>且 status=2 启用?}:::decision
+        C4[拒绝开户<br/>模板不存在或未启用]:::error
+        C5[生成账户编号<br/>根据 acct_no_rule<br/>如：机构+日期+序号]:::process
+        C6[生成账户名称<br/>根据 acct_name_rule<br/>如：客户名-账户类型]:::process
+        C7[创建主账户<br/>t_account<br/>挂载到 subject_code]:::data
+        C8[自动创建子账户<br/>t_sub_account]:::process
+        C9[创建可用子账户<br/>balance_type=1<br/>balance_direction 继承主账户]:::data
+        C10[创建冻结子账户<br/>balance_type=2<br/>balance_direction 继承主账户]:::data
+        C11[初始化余额<br/>opening_balance<br/>balance = 0]:::data
+    end
+
+    %% ========== 内部账户开户 ==========
+    subgraph INTERNAL["内部账户开户（基于科目配置）"]
+        direction TB
+        I1[系统初始化或科目配置变更]:::process
+        I2[扫描会计科目<br/>t_account_subject<br/>allow_open_account=1]:::process
+        I3{是否末级科目<br/>is_leaf=1?}:::decision
+        I4[跳过非末级科目]:::process
+        I5[检查内部账户是否已存在<br/>owner_id=INNER<br/>+ subject_code]:::process
+        I6{账户已存在?}:::decision
+        I7[跳过已存在账户]:::process
+        I8[生成内部账户编号<br/>规则：INNER + subject_code<br/>+ 序号]:::process
+        I9[创建内部主账户<br/>t_account<br/>owner_id=INNER<br/>owner_type=99 其他]:::data
+        I10[自动创建子账户<br/>t_sub_account<br/>可用 + 冻结]:::data
+    end
+
+    %% ========== 账户编号生成规则 ==========
+    subgraph RULE["账户编号生成规则"]
+        direction TB
+        R1[外部账户编号规则示例：<br/>机构码 + 日期 + 序号<br/>如：001 + 20260301 + 00001<br/>= 00120260301000001]:::data
+        R2[内部账户编号规则示例：<br/>INNER + 科目编码 + 序号<br/>如：INNER + 1001 + 001<br/>= INNER1001001]:::data
+        R3[账户名称规则示例：<br/>客户名 + 账户类型<br/>如：张三-基本户<br/>或：李四-贷款本金账户]:::data
+    end
+
+    %% ========== 开户校验 ==========
+    subgraph VALIDATION["开户校验"]
+        direction TB
+        V1[校验科目是否允许开户<br/>allow_open_account=1]:::process
+        V2[校验科目是否末级<br/>is_leaf=1]:::process
+        V3[校验账户是否重复<br/>owner_id + subject_code<br/>唯一性检查]:::process
+        V4{校验通过?}:::decision
+        V5[拒绝开户<br/>返回校验失败原因]:::error
+    end
+
+    %% ========== 开户成功 ==========
+    subgraph SUCCESS["开户成功"]
+        direction TB
+        S1[返回账户信息<br/>account_no<br/>account_name<br/>subject_code]:::success
+        S2[记录开户日志<br/>open_date<br/>request_no]:::data
+        S3[触发开户事件<br/>可选：发送 MQ 通知]:::process
+    end
+
+    END([开户完成]):::success
+
+    %% 流程连线 - 外部账户
+    START --> C1
+    C1 --> C2
+    C2 --> C3
+    C3 -->|否| C4
+    C3 -->|是| V1
+    V1 --> V2
+    V2 --> V3
+    V3 --> V4
+    V4 -->|否| V5
+    V4 -->|是| C5
+    C5 --> C6
+    C6 --> C7
+    C7 --> C8
+    C8 --> C9
+    C9 --> C10
+    C10 --> C11
+    C11 --> S1
+
+    %% 流程连线 - 内部账户
+    START --> I1
+    I1 --> I2
+    I2 --> I3
+    I3 -->|否| I4
+    I3 -->|是| I5
+    I5 --> I6
+    I6 -->|是| I7
+    I6 -->|否| I8
+    I8 --> I9
+    I9 --> I10
+    I10 --> S1
+
+    %% 流程连线 - 成功
+    S1 --> S2
+    S2 --> S3
+    S3 --> END

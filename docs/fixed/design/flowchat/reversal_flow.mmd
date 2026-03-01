@@ -1,0 +1,85 @@
+%% 红冲流程图
+
+flowchart TB
+    classDef start fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:black
+    classDef process fill:#fff3e0,stroke:#f57c00,stroke-width:1px,color:black
+    classDef decision fill:#fce4ec,stroke:#c2185b,stroke-width:1px,color:black
+    classDef data fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px,color:black
+    classDef success fill:#e8f5e9,stroke:#388e3c,stroke-width:1px,color:black
+    classDef error fill:#ffebee,stroke:#d32f2f,stroke-width:1px,color:black
+
+    START([发起红冲请求<br/>提供原凭证号]):::start
+
+    %% ========== 前置校验 ==========
+    subgraph VALIDATION["前置校验"]
+        direction TB
+        V1[查询原凭证<br/>orig_voucher_no]:::process
+        V2{原凭证状态<br/>== 3 已过账?}:::decision
+        V3[拒绝红冲<br/>原凭证未过账]:::error
+        V4[查询原凭证的所有分录]:::process
+        V5{所有分录<br/>status == 2 已过账?}:::decision
+        V6[拒绝红冲<br/>分录未全部过账]:::error
+        V7[查询是否已存在红冲凭证<br/>orig_voucher_no = 原凭证号]:::process
+        V8{已存在<br/>红冲凭证?}:::decision
+        V9[拒绝红冲<br/>重复红冲]:::error
+    end
+
+    %% ========== 生成红冲凭证 ==========
+    subgraph GENERATE["生成红冲凭证"]
+        direction TB
+        G1[生成新凭证号<br/>voucher_no]:::process
+        G2[设置 trade_type=3 红字<br/>设置 orig_voucher_no<br/>复制其他字段]:::data
+        G3[生成红冲分录<br/>方向对调]:::process
+        G4[原凭证：借 A 贷 B<br/>红冲凭证：借 B 贷 A<br/>金额保持正数]:::data
+        G5[复制辅助核算项<br/>调整 change_direction]:::data
+    end
+
+    %% ========== 执行红冲过账 ==========
+    subgraph POSTING["执行红冲过账"]
+        direction TB
+        P1[按标准流程过账<br/>阶段四：过账更新]:::process
+        P2[按红冲分录的借贷方向<br/>更新账户余额]:::data
+        P3[生成账户明细<br/>t_account_detail<br/>含 Pre/Post 余额]:::data
+        P4[更新原凭证状态<br/>status=4 已冲销]:::data
+        P5[记录红冲时间和操作人]:::data
+    end
+
+    %% ========== 红冲后的科目总账统计 ==========
+    subgraph STATISTICS["红冲后的科目总账统计"]
+        direction TB
+        S1[原凭证：<br/>借方发生额 +100<br/>贷方发生额 +100]:::data
+        S2[红冲凭证：<br/>借方发生额 +100 内部账户<br/>贷方发生额 +100 客户账户]:::data
+        S3[科目总账统计：<br/>借贷发生额都增加<br/>真实反映业务活动]:::success
+        S4[余额正确：<br/>原凭证：客户账户 +100<br/>红冲凭证：客户账户 -100<br/>最终余额：0]:::success
+    end
+
+    END([红冲完成]):::success
+
+    %% 流程连线
+    START --> V1
+    V1 --> V2
+    V2 -->|否| V3
+    V2 -->|是| V4
+    V4 --> V5
+    V5 -->|否| V6
+    V5 -->|是| V7
+    V7 --> V8
+    V8 -->|是| V9
+    V8 -->|否| G1
+
+    G1 --> G2
+    G2 --> G3
+    G3 --> G4
+    G4 --> G5
+
+    G5 --> P1
+    P1 --> P2
+    P2 --> P3
+    P3 --> P4
+    P4 --> P5
+
+    P5 --> S1
+    S1 --> S2
+    S2 --> S3
+    S3 --> S4
+    S4 --> END

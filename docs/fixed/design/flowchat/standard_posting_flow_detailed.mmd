@@ -1,0 +1,98 @@
+%% 标准入账全流程详细图（四阶段）
+
+flowchart TB
+    classDef phase fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:black
+    classDef process fill:#fff3e0,stroke:#f57c00,stroke-width:1px,color:black
+    classDef decision fill:#fce4ec,stroke:#c2185b,stroke-width:1px,color:black
+    classDef data fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px,color:black
+    classDef success fill:#e8f5e9,stroke:#388e3c,stroke-width:1px,color:black
+    classDef error fill:#ffebee,stroke:#d32f2f,stroke-width:1px,color:black
+
+    START([业务系统发起记账请求]):::phase
+    
+    %% ========== 阶段一：记账流水 ==========
+    subgraph PHASE1["阶段一：记账流水 (Journaling)"]
+        direction TB
+        P1_CHECK{幂等校验<br/>trace_no+trace_seq<br/>是否存在?}:::decision
+        P1_RETURN[幂等返回<br/>已存在的记账结果]:::success
+        P1_PERSIST[持久化请求<br/>t_business_record<br/>t_business_detail]:::process
+        P1_DATE[确定会计日期<br/>记录到 accounting_date]:::process
+    end
+
+    %% ========== 阶段二：凭证生成 ==========
+    subgraph PHASE2["阶段二：凭证生成 (Vouchering)"]
+        direction TB
+        P2_MATCH[规则匹配<br/>business_code+trading_code<br/>+pay_channel]:::process
+        P2_CALC[SpEL 脚本计算<br/>匹配分录模板<br/>funds_type]:::process
+        P2_AUX[辅助核算项分摊<br/>按比例/固定金额<br/>最后一个用差额]:::process
+        P2_BALANCE{借贷平衡校验<br/>ΣDebit == ΣCredit?}:::decision
+        P2_ERROR[抛出异常<br/>借贷不平衡]:::error
+        P2_BUFFER{匹配缓冲规则?}:::decision
+        P2_BUFFER_YES[生成凭证和分录<br/>status=1 未过账<br/>写入 t_buffer_posting_detail]:::process
+        P2_BUFFER_NO[继续正常记账流程]:::process
+        P2_VOUCHER[生成凭证<br/>t_accounting_voucher<br/>txn_no 为空]:::data
+    end
+
+    %% ========== 阶段三：事务处理 ==========
+    subgraph PHASE3["阶段三：事务处理 (Transaction Management)"]
+        direction TB
+        P3_CHECK{事务记录<br/>是否存在?}:::decision
+        P3_CREATE[创建事务<br/>t_transaction<br/>status=PROCESSING]:::process
+        P3_LINK[回填凭证 txn_no]:::process
+        P3_TX[开启编程式事务<br/>TransactionTemplate]:::process
+    end
+
+    %% ========== 阶段四：过账更新 ==========
+    subgraph PHASE4["阶段四：过账更新 (Posting)"]
+        direction TB
+        P4_LOOP[遍历分录]:::process
+        P4_UNILATERAL{is_unilateral<br/>== 1?}:::decision
+        P4_MQ[发送 MQ<br/>异步处理]:::process
+        P4_LOCK[按 account_no 升序<br/>SELECT FOR UPDATE]:::process
+        P4_CALC[余额计算<br/>同向相加/反向相减<br/>前置校验余额充足]:::process
+        P4_CHECK{余额充足?}:::decision
+        P4_INSUFFICIENT[抛出异常<br/>INSUFFICIENT_BALANCE]:::error
+        P4_UPDATE[更新账户余额<br/>t_account<br/>t_sub_account]:::data
+        P4_DETAIL[记录账户明细<br/>t_account_detail<br/>t_sub_account_detail<br/>含 Pre/Post 余额快照]:::data
+        P4_TX_SUCCESS[更新事务状态<br/>status=SUCCESS]:::success
+        P4_COMMIT[提交事务]:::success
+    end
+
+    END([记账完成]):::phase
+
+    %% 流程连线
+    START --> P1_CHECK
+    P1_CHECK -->|是| P1_RETURN
+    P1_CHECK -->|否| P1_PERSIST
+    P1_PERSIST --> P1_DATE
+    P1_DATE --> P2_MATCH
+    
+    P2_MATCH --> P2_CALC
+    P2_CALC --> P2_AUX
+    P2_AUX --> P2_BALANCE
+    P2_BALANCE -->|否| P2_ERROR
+    P2_BALANCE -->|是| P2_BUFFER
+    P2_BUFFER -->|是| P2_BUFFER_YES
+    P2_BUFFER -->|否| P2_BUFFER_NO
+    P2_BUFFER_YES --> END
+    P2_BUFFER_NO --> P2_VOUCHER
+    
+    P2_VOUCHER --> P3_CHECK
+    P3_CHECK -->|否| P3_CREATE
+    P3_CHECK -->|是| P3_LINK
+    P3_CREATE --> P3_LINK
+    P3_LINK --> P3_TX
+    
+    P3_TX --> P4_LOOP
+    P4_LOOP --> P4_UNILATERAL
+    P4_UNILATERAL -->|否| P4_MQ
+    P4_UNILATERAL -->|是| P4_LOCK
+    P4_MQ --> P4_TX_SUCCESS
+    P4_LOCK --> P4_CALC
+    P4_CALC --> P4_CHECK
+    P4_CHECK -->|否| P4_INSUFFICIENT
+    P4_CHECK -->|是| P4_UPDATE
+    P4_UPDATE --> P4_DETAIL
+    P4_DETAIL --> P4_TX_SUCCESS
+    P4_TX_SUCCESS --> P4_COMMIT
+    P4_COMMIT --> END
