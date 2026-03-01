@@ -1,0 +1,94 @@
+%% 期末结转流程图
+
+flowchart TB
+    classDef trigger fill:#ffebee,stroke:#d32f2f,stroke-width:2px,color:black
+    classDef process fill:#fff3e0,stroke:#f57c00,stroke-width:1px,color:black
+    classDef decision fill:#fce4ec,stroke:#c2185b,stroke-width:1px,color:black
+    classDef data fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px,color:black
+    classDef success fill:#e8f5e9,stroke:#388e3c,stroke-width:1px,color:black
+    classDef error fill:#ffebee,stroke:#d32f2f,stroke-width:2px,color:black
+
+    START([触发期末结转]):::trigger
+    
+    %% 前置校验
+    subgraph PRE_CHECK["前置校验"]
+        direction TB
+        PC1{当前会计期间<br/>是否已关账?}:::decision
+        PC2[抛出异常<br/>PERIOD_NOT_CLOSED]:::error
+        PC3{是否已执行<br/>期末结转?}:::decision
+        PC4[抛出异常<br/>TRANSFER_ALREADY_EXECUTED]:::error
+        PC5[校验通过<br/>开始执行结转]:::success
+    end
+    
+    %% 加载结转规则
+    subgraph LOAD_RULES["加载结转规则"]
+        direction TB
+        L1[查询启用的结转规则<br/>status=1]:::process
+        L2[按执行顺序排序<br/>ORDER BY execute_order ASC]:::process
+        L3{是否有<br/>可执行规则?}:::decision
+        L4[无可执行规则<br/>结转完成]:::success
+    end
+    
+    %% 执行结转
+    subgraph EXECUTE["执行结转（遍历规则）"]
+        direction TB
+        E1[获取当前规则<br/>rule_code, transfer_type]:::process
+        E2[查询源科目余额<br/>支持通配符匹配<br/>如：6* 匹配所有6开头科目]:::process
+        E3{源科目<br/>是否有余额?}:::decision
+        E4[跳过当前规则<br/>继续下一个]:::process
+        E5[计算结转金额<br/>根据 transfer_direction 确定借贷方向]:::process
+        E6[生成结转凭证<br/>借：源科目 贷：目标科目<br/>或 借：目标科目 贷：源科目]:::data
+        E7[执行标准入账流程<br/>更新源科目和目标科目余额]:::process
+        E8{入账<br/>是否成功?}:::decision
+        E9[记录结转成功<br/>t_period_end_transfer_record<br/>status=2]:::success
+        E10[记录结转失败<br/>status=3<br/>记录失败原因]:::error
+    end
+    
+    %% 结转后处理
+    subgraph POST["结转后处理"]
+        direction TB
+        P1[检查所有规则执行结果]:::process
+        P2{是否全部<br/>执行成功?}:::decision
+        P3[标记期末结转完成<br/>更新会计期间状态]:::success
+        P4[部分规则失败<br/>触发告警<br/>人工介入]:::error
+    end
+    
+    END([期末结转完成]):::trigger
+    
+    %% 流程连线
+    START --> PC1
+    PC1 -->|否| PC2
+    PC1 -->|是| PC3
+    PC2 --> END
+    PC3 -->|是| PC4
+    PC3 -->|否| PC5
+    PC4 --> END
+    
+    PC5 --> L1
+    L1 --> L2
+    L2 --> L3
+    L3 -->|否| L4
+    L3 -->|是| E1
+    L4 --> END
+    
+    E1 --> E2
+    E2 --> E3
+    E3 -->|否| E4
+    E3 -->|是| E5
+    E5 --> E6
+    E6 --> E7
+    E7 --> E8
+    E8 -->|是| E9
+    E8 -->|否| E10
+    
+    E4 -.继续下一个规则.-> E1
+    E9 -.继续下一个规则.-> E1
+    E10 -.继续下一个规则.-> E1
+    
+    E1 -.所有规则执行完毕.-> P1
+    P1 --> P2
+    P2 -->|是| P3
+    P2 -->|否| P4
+    P3 --> END
+    P4 --> END
+

@@ -1,0 +1,82 @@
+%% 记账自动开户流程图
+
+flowchart TB
+    classDef trigger fill:#ffebee,stroke:#d32f2f,stroke-width:2px,color:black
+    classDef process fill:#fff3e0,stroke:#f57c00,stroke-width:1px,color:black
+    classDef decision fill:#fce4ec,stroke:#c2185b,stroke-width:1px,color:black
+    classDef data fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px,color:black
+    classDef success fill:#e8f5e9,stroke:#388e3c,stroke-width:1px,color:black
+    classDef error fill:#ffebee,stroke:#d32f2f,stroke-width:1px,color:black
+
+    START([记账流程开始]):::trigger
+    
+    %% 账户检查阶段
+    subgraph CHECK["账户存在性检查"]
+        direction TB
+        C1[解析记账规则<br/>获取涉及的账户列表]:::process
+        C2{遍历账户<br/>检查账户是否存在?}:::decision
+        C3[账户存在<br/>继续下一个账户]:::success
+        C4[账户不存在<br/>触发自动开户流程]:::trigger
+    end
+    
+    %% 自动开户流程
+    subgraph AUTO_OPEN["自动开户流程"]
+        direction TB
+        A1[根据账户信息匹配开户模板<br/>business_code + customer_type + subject_code]:::process
+        A2{开户模板<br/>是否存在?}:::decision
+        A3{模板是否支持<br/>自动开户?<br/>auto_open=1}:::decision
+        A4[执行自动开户<br/>创建 t_account 和 t_sub_account]:::process
+        A5{开户<br/>是否成功?}:::decision
+        A6[开户成功<br/>记录开户日志]:::success
+        A7[开户失败<br/>记录失败原因]:::error
+        A8[模板不存在<br/>记账失败]:::error
+        A9[模板不支持自动开户<br/>记账失败]:::error
+    end
+    
+    %% 记账流程
+    subgraph POSTING["继续记账流程"]
+        direction TB
+        P1[所有账户准备就绪<br/>继续标准入账流程]:::success
+        P2[进入凭证生成阶段]:::process
+    end
+    
+    %% 异常处理
+    subgraph ERROR["异常处理"]
+        direction TB
+        E1[记录异常日志<br/>包含失败原因和账户信息]:::error
+        E2[更新业务流水状态<br/>status=FAILED]:::data
+        E3[向上层抛出异常<br/>ACCOUNT_NOT_FOUND 或 AUTO_OPEN_FAILED]:::error
+    end
+    
+    END([记账流程结束]):::trigger
+    
+    %% 流程连线
+    START --> C1
+    C1 --> C2
+    C2 -->|存在| C3
+    C2 -->|不存在| C4
+    C3 --> C2
+    
+    C4 --> A1
+    A1 --> A2
+    A2 -->|否| A8
+    A2 -->|是| A3
+    A3 -->|否| A9
+    A3 -->|是| A4
+    A4 --> A5
+    A5 -->|是| A6
+    A5 -->|否| A7
+    
+    A6 --> C2
+    A7 --> E1
+    A8 --> E1
+    A9 --> E1
+    
+    E1 --> E2
+    E2 --> E3
+    E3 --> END
+    
+    C3 -.所有账户检查完毕.-> P1
+    P1 --> P2
+    P2 --> END
+

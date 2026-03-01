@@ -27,6 +27,8 @@ inclusion: always
 - **`docs/fixed/design/flowchart/freeze_unfreeze_flow.mmd`**：冻结/解冻流程图，包含冻结逻辑、解冻逻辑、超时自动解冻
 - **`docs/fixed/design/flowchart/account_opening_flow.mmd`**：账户开户流程图，包含外部客户账户开户、内部账户开户、子账户自动创建
 - **`docs/fixed/design/flowchart/transaction_rollback_flow.mmd`**：事务回滚流程图，包含回滚触发场景、回滚处理流程、回滚后数据状态、部分成功回滚、重试机制
+- **`docs/fixed/design/flowchart/auto_account_opening_flow.mmd`**：记账自动开户流程图，包含账户存在性检查、匹配开户模板、执行自动开户
+- **`docs/fixed/design/flowchart/period_end_transfer_flow.mmd`**：期末结转流程图，包含前置校验、加载结转规则、执行结转、结转后处理
 
 ## 核心对齐清单
 
@@ -45,7 +47,7 @@ inclusion: always
 
 ### 业务模型映射
 
-核心五要素映射关系：
+核心要素映射关系：
 
 | 业务概念 | 物理表 | Java Entity | 说明 |
 |---------|--------|-------------|------|
@@ -53,8 +55,12 @@ inclusion: always
 | 账户 (Account) | `t_account` | Account | 总账/分户余额表 |
 | 子账户 (SubAccount) | `t_sub_account` | SubAccount | 可用/冻结余额子账户 |
 | 明细 (AccountDetail) | `t_account_detail` | AccountDetail | 分户明细账簿表 |
+| 子账户明细 (SubAccountDetail) | `t_sub_account_detail` | SubAccountDetail | 子账户明细账簿表（用于冻结/解冻审计） |
 | 凭证 (Voucher) | `t_accounting_voucher` | AccountingVoucher | 记账凭证表 |
 | 分录 (Entry) | `t_accounting_voucher_entry` | VoucherEntry | 凭证分录明细表 |
+| 本地消息 (LocalMessage) | `t_local_message` | LocalMessage | 本地消息表（保证 MQ 消息发送的可靠性） |
+| 期末结转规则 (PeriodEndTransferRule) | `t_period_end_transfer_rule` | PeriodEndTransferRule | 期末结转规则表 |
+| 期末结转记录 (PeriodEndTransferRecord) | `t_period_end_transfer_record` | PeriodEndTransferRecord | 期末结转记录表 |
 
 ### 逻辑删除方案
 - 统一使用 `is_delete` 字段（`BIGINT` 类型）
