@@ -27,10 +27,12 @@ flowchart TB
         P2_AUX[辅助核算项分摊<br/>按比例/固定金额<br/>最后一个用差额]:::process
         P2_BALANCE{借贷平衡校验<br/>ΣDebit == ΣCredit?}:::decision
         P2_ERROR[抛出异常<br/>借贷不平衡]:::error
-        P2_BUFFER{匹配缓冲规则?}:::decision
-        P2_BUFFER_YES[生成凭证和分录<br/>status=1 未过账<br/>写入 t_buffer_posting_detail]:::process
-        P2_BUFFER_NO[继续正常记账流程]:::process
         P2_VOUCHER[生成凭证<br/>t_accounting_voucher<br/>txn_no 为空]:::data
+        P2_ENTRY[生成分录<br/>t_accounting_voucher_entry]:::data
+        P2_BUFFER_LOOP[遍历分录<br/>逐条匹配缓冲规则]:::process
+        P2_BUFFER{该分录匹配<br/>缓冲规则?}:::decision
+        P2_BUFFER_YES[标记该分录<br/>写入 t_buffer_posting_detail<br/>status=1 待入账]:::process
+        P2_BUFFER_NO[标记该分录<br/>正常记账流程]:::process
     end
 
     %% ========== 阶段三：事务处理 ==========
@@ -52,10 +54,34 @@ flowchart TB
         P4_CALC[余额计算<br/>同向相加/反向相减<br/>前置校验余额充足]:::process
         P4_CHECK{余额充足?}:::decision
         P4_INSUFFICIENT[抛出异常<br/>INSUFFICIENT_BALANCE]:::error
+        P4_ROLLBACK[事务回滚<br/>更新 t_transaction<br/>status=FAILED]:::error
         P4_UPDATE[更新账户余额<br/>t_account<br/>t_sub_account]:::data
         P4_DETAIL[记录账户明细<br/>t_account_detail<br/>t_sub_account_detail<br/>含 Pre/Post 余额快照]:::data
+        P4_ENTRY_STATUS[更新分录状态<br/>status=2 已过账]:::data
+        P4_CHECK_VOUCHER{检查凭证<br/>所有分录都已过账?}:::decision
+        P4_VOUCHER_STATUS[更新凭证状态<br/>status=3 已过账]:::data
         P4_TX_SUCCESS[更新事务状态<br/>status=SUCCESS]:::success
         P4_COMMIT[提交事务]:::success
+    end
+    
+    %% ========== MQ 异步处理流程 ==========
+    subgraph MQ_ASYNC["MQ 异步处理流程 (Async Posting)"]
+        direction TB
+        MQ_CONSUME[MQ 消费端<br/>接收分录消息]:::process
+        MQ_TX[开启新事务<br/>TransactionTemplate]:::process
+        MQ_LOCK[按 account_no 升序<br/>SELECT FOR UPDATE]:::process
+        MQ_CALC[余额计算<br/>同向相加/反向相减<br/>前置校验余额充足]:::process
+        MQ_CHECK{余额充足?}:::decision
+        MQ_INSUFFICIENT[余额不足<br/>触发回滚流程]:::error
+        MQ_UPDATE[更新账户余额<br/>t_account<br/>t_sub_account]:::data
+        MQ_DETAIL[记录账户明细<br/>t_account_detail<br/>t_sub_account_detail<br/>含 Pre/Post 余额快照]:::data
+        MQ_ENTRY_STATUS[更新分录状态<br/>status=2 已过账]:::data
+        MQ_CHECK_VOUCHER{检查凭证<br/>所有分录都已过账?}:::decision
+        MQ_VOUCHER_STATUS[更新凭证状态<br/>status=3 已过账]:::data
+        MQ_COMMIT[提交事务]:::success
+        MQ_RETRY{重试次数<br/>< 3?}:::decision
+        MQ_REQUEUE[重新入队<br/>延迟重试]:::process
+        MQ_FAIL[标记失败<br/>触发告警]:::error
     end
 
     END([记账完成]):::phase
@@ -71,13 +97,14 @@ flowchart TB
     P2_CALC --> P2_AUX
     P2_AUX --> P2_BALANCE
     P2_BALANCE -->|否| P2_ERROR
-    P2_BALANCE -->|是| P2_BUFFER
+    P2_BALANCE -->|是| P2_VOUCHER
+    P2_VOUCHER --> P2_ENTRY
+    P2_ENTRY --> P2_BUFFER_LOOP
+    P2_BUFFER_LOOP --> P2_BUFFER
     P2_BUFFER -->|是| P2_BUFFER_YES
     P2_BUFFER -->|否| P2_BUFFER_NO
-    P2_BUFFER_YES --> END
-    P2_BUFFER_NO --> P2_VOUCHER
-    
-    P2_VOUCHER --> P3_CHECK
+    P2_BUFFER_YES --> P3_CHECK
+    P2_BUFFER_NO --> P3_CHECK
     P3_CHECK -->|否| P3_CREATE
     P3_CHECK -->|是| P3_LINK
     P3_CREATE --> P3_LINK
@@ -85,14 +112,46 @@ flowchart TB
     
     P3_TX --> P4_LOOP
     P4_LOOP --> P4_UNILATERAL
-    P4_UNILATERAL -->|否| P4_MQ
-    P4_UNILATERAL -->|是| P4_LOCK
+    P4_UNILATERAL -->|否 异步| P4_MQ
+    P4_UNILATERAL -->|是 实时| P4_LOCK
     P4_MQ --> P4_TX_SUCCESS
     P4_LOCK --> P4_CALC
     P4_CALC --> P4_CHECK
     P4_CHECK -->|否| P4_INSUFFICIENT
+    P4_INSUFFICIENT --> P4_ROLLBACK
+    P4_ROLLBACK --> END
     P4_CHECK -->|是| P4_UPDATE
     P4_UPDATE --> P4_DETAIL
-    P4_DETAIL --> P4_TX_SUCCESS
+    P4_DETAIL --> P4_ENTRY_STATUS
+    P4_ENTRY_STATUS --> P4_CHECK_VOUCHER
+    P4_CHECK_VOUCHER -->|是| P4_VOUCHER_STATUS
+    P4_CHECK_VOUCHER -->|否| P4_TX_SUCCESS
+    P4_VOUCHER_STATUS --> P4_TX_SUCCESS
     P4_TX_SUCCESS --> P4_COMMIT
     P4_COMMIT --> END
+    
+    %% MQ 异步处理流程连线
+    P4_MQ -.异步消息.-> MQ_CONSUME
+    MQ_CONSUME --> MQ_TX
+    MQ_TX --> MQ_LOCK
+    MQ_LOCK --> MQ_CALC
+    MQ_CALC --> MQ_CHECK
+    MQ_CHECK -->|否| MQ_INSUFFICIENT
+    MQ_CHECK -->|是| MQ_UPDATE
+    MQ_UPDATE --> MQ_DETAIL
+    MQ_DETAIL --> MQ_ENTRY_STATUS
+    MQ_ENTRY_STATUS --> MQ_CHECK_VOUCHER
+    MQ_CHECK_VOUCHER -->|是| MQ_VOUCHER_STATUS
+    MQ_CHECK_VOUCHER -->|否| MQ_COMMIT
+    MQ_VOUCHER_STATUS --> MQ_COMMIT
+    MQ_COMMIT --> END
+    
+    %% MQ 异常处理连线
+    MQ_INSUFFICIENT --> MQ_RETRY
+    MQ_RETRY -->|是| MQ_REQUEUE
+    MQ_RETRY -->|否| MQ_FAIL
+    MQ_REQUEUE -.延迟重试.-> MQ_CONSUME
+    MQ_FAIL -.触发回滚.-> SPECIAL_ROLLBACK
+    
+    %% 异步分录失败回滚说明
+    SPECIAL_ROLLBACK[参考事务回滚流程图<br/>异步分录失败回滚场景]:::error

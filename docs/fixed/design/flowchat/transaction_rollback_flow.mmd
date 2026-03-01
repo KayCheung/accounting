@@ -1,0 +1,114 @@
+%% 事务回滚流程图
+
+flowchart TB
+    classDef trigger fill:#ffebee,stroke:#d32f2f,stroke-width:2px,color:black
+    classDef process fill:#fff3e0,stroke:#f57c00,stroke-width:1px,color:black
+    classDef decision fill:#fce4ec,stroke:#c2185b,stroke-width:1px,color:black
+    classDef data fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px,color:black
+    classDef rollback fill:#ffebee,stroke:#d32f2f,stroke-width:2px,color:black
+    classDef endNode fill:#e0e0e0,stroke:#616161,stroke-width:1px,color:black
+
+    START([触发回滚场景]):::trigger
+    
+    %% 回滚触发场景
+    subgraph TRIGGERS["回滚触发场景"]
+        direction TB
+        T1[场景 1：余额不足<br/>INSUFFICIENT_BALANCE]:::trigger
+        T2[场景 2：借贷不平衡<br/>凭证生成阶段校验失败]:::trigger
+        T3[场景 3：账户状态异常<br/>账户冻结/注销/止付]:::trigger
+        T4[场景 4：系统异常<br/>数据库异常/网络超时]:::trigger
+        T5[场景 5：业务规则校验失败<br/>风控拦截/额度超限]:::trigger
+    end
+
+    %% 回滚处理流程
+    subgraph ROLLBACK["事务回滚处理流程"]
+        direction TB
+        R1[捕获异常<br/>记录异常类型和详细信息]:::process
+        R2[TransactionTemplate<br/>自动回滚事务]:::rollback
+        R3{是否已创建<br/>t_transaction?}:::decision
+        R4[更新 t_transaction<br/>status=FAILED<br/>记录失败原因和时间]:::data
+        R5[记录回滚日志<br/>包含异常堆栈]:::process
+        R6{是否需要<br/>补偿处理?}:::decision
+        R7[执行补偿逻辑<br/>如：解冻资金、释放锁]:::process
+        R8[触发告警<br/>邮件/短信/监控平台]:::process
+    end
+
+    %% 回滚后状态
+    subgraph AFTER_ROLLBACK["回滚后数据状态"]
+        direction TB
+        A1[t_business_record<br/>status=FAILED]:::data
+        A2[t_transaction<br/>status=FAILED<br/>含失败原因]:::data
+        A3[t_accounting_voucher<br/>不存在或status=1未过账]:::data
+        A4[t_account<br/>余额未变动]:::data
+        A5[t_account_detail<br/>无新增记录]:::data
+    end
+
+    %% 特殊场景处理
+    subgraph SPECIAL["特殊场景：异步分录失败回滚"]
+        direction TB
+        S1[场景：单边记账<br/>实时分录已提交成功<br/>异步分录 MQ 消费失败]:::trigger
+        S2[查询凭证的所有分录状态<br/>找出已过账的分录<br/>status=2]:::process
+        S3[对已过账分录执行反向操作：<br/>1. 更新分录 status=3 过账失败<br/>2. 反向更新账户余额 加变减,减变加<br/>3. 记录反向明细到 t_account_detail<br/>含 Pre/Post 余额,summary 标注回滚]:::process
+        S4[更新凭证 status=4 过账失败<br/>记录失败原因]:::data
+        S5[更新事务 status=FAILED<br/>记录失败原因]:::data
+        S6[优点：<br/>1. 不生成新凭证,避免借贷不平衡<br/>2. 通过状态管理控制流程<br/>3. 通过明细表保留审计追溯<br/>4. 允许单边记账跨事务]:::success
+    end
+
+    %% 重试机制
+    subgraph RETRY["重试机制（可选）"]
+        direction TB
+        RT1{异常类型<br/>是否可重试?}:::decision
+        RT2[临时性异常<br/>如：网络超时、锁冲突]:::process
+        RT3[永久性异常<br/>如：余额不足、业务规则]:::process
+        RT4[延迟重试<br/>最多3次<br/>指数退避]:::process
+        RT5[放弃重试<br/>标记失败]:::rollback
+    end
+
+    END([回滚完成<br/>向上层抛出异常]):::endNode
+
+    %% 流程连线
+    START --> T1
+    START --> T2
+    START --> T3
+    START --> T4
+    START --> T5
+
+    T1 --> R1
+    T2 --> R1
+    T3 --> R1
+    T4 --> R1
+    T5 --> R1
+
+    R1 --> R2
+    R2 --> R3
+    R3 -->|是| R4
+    R3 -->|否| R5
+    R4 --> R5
+    R5 --> R6
+    R6 -->|是| R7
+    R6 -->|否| R8
+    R7 --> R8
+
+    R8 --> RT1
+    RT1 -->|可重试| RT2
+    RT1 -->|不可重试| RT3
+    RT2 --> RT4
+    RT3 --> RT5
+    RT4 -->|重试成功| END
+    RT4 -->|重试失败| RT5
+    RT5 --> A1
+
+    A1 --> A2
+    A2 --> A3
+    A3 --> A4
+    A4 --> A5
+    A5 --> END
+
+    %% 特殊场景连线
+    R6 -.异步分录失败场景.-> S1
+    S1 --> S2
+    S2 --> S3
+    S3 --> S4
+    S4 --> S5
+    S5 --> S6
+    S6 --> END

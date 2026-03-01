@@ -23,6 +23,10 @@ inclusion: always
 - **实现机制**：通过 `t_accounting_rule_detail.is_unilateral` 字段标识
   - `is_unilateral=1`：该分录实时处理，直接更新账户余额
   - `is_unilateral=0`：该分录发送 MQ 异步处理
+- **状态管理**：
+  - 凭证状态：只有所有分录都过账成功（status=2）时，凭证才更新为 status=3（已过账）
+  - 分录状态：1-未过账，2-已过账，3-过账失败
+  - 如果任何分录失败，凭证保持 status=2（过账中）或更新为 status=4（过账失败）
 - **注意事项**：删除 `t_accounting_rule.accounting_mode` 字段，统一通过分录级别的 `is_unilateral` 判断
 
 ### 核心模型层级
@@ -42,11 +46,19 @@ inclusion: always
 - **结构**：`AccountingVoucher` (凭证) → `VoucherEntry` (借贷分录) → `Auxiliary` (辅助核算明细)
 - **逻辑**：由记账规则驱动，凭证必须满足借贷平衡
 - **先证后账**：凭证在入库或进入缓冲池前必须已完成借贷平衡校验并持久化
+- **分录作用**：
+  - 记录凭证的借贷分录，确保借贷平衡（ΣDebit == ΣCredit）
+  - 用于会计报表生成（利润表、资产负债表）
+  - 用于科目总账统计（按科目汇总借贷发生额）
+  - 不记录余额变动（Pre/Post Balance），余额变动由账户明细记录
 
 #### 3. 明细账簿层
 - **结构**：`AccountDetail` (余额变动明细)
 - **逻辑**：记录单个账户资金变动的轨迹，包含变动前后的余额快照（Pre/Post Balance），用于日终核对与审计对账
-- **区别**：`t_accounting_voucher_entry` 关注交易平衡，`t_account_detail` 关注账户变动轨迹
+- **区别**：
+  - `t_accounting_voucher_entry`（分录明细）：关注交易平衡，用于会计报表和科目总账
+  - `t_account_detail`（账户明细）：关注账户变动轨迹，用于日终试算平衡和审计对账
+  - 一条分录对应一条账户明细，但数据用途不同
 
 ## 功能清单
 
@@ -104,16 +116,48 @@ inclusion: always
 
 #### 阶段四：过账更新 (Posting)
 1. **单边记账判断**：遍历分录，根据 `is_unilateral` 字段判断
-   - `is_unilateral=1`：实时处理，执行步骤 2-4
-   - `is_unilateral=0`：发送 MQ 异步处理，跳过步骤 2-4
+   - `is_unilateral=1`：实时处理，执行步骤 2-5
+   - `is_unilateral=0`：发送 MQ 异步处理，跳过步骤 2-5
 2. **锁控制**：按 `account_no` 升序执行 `SELECT FOR UPDATE`
 3. **余额计算**：`newBalance = balance ± amount`（绝对值法则）
    - 同向相加：`newBalance = oldBalance + amount`
    - 反向相减：必须前置校验 `oldBalance >= amount`，否则抛出 `ServiceException(ResultCode.INSUFFICIENT_BALANCE)`
-4. **变动与记录**：
+4. **余额不足处理**：
+   - 捕获 `INSUFFICIENT_BALANCE` 异常
+   - 执行事务回滚（`TransactionTemplate` 自动回滚）
+   - 更新 `t_transaction` 状态为 `FAILED`
+   - 记录失败原因和时间
+   - 向上层抛出异常，终止流程
+   - **注意**：事务内的所有变更都会回滚，不需要生成红冲凭证
+5. **变动与记录**（余额充足时）：
    - 更新 `t_account` 并记录 `t_account_detail`（含 Pre/Post 余额快照）
    - 更新 `t_sub_account` 并记录 `t_sub_account_detail`（含 Pre/Post 余额快照）
-5. **事务收尾**：更新 `t_transaction` 为 `SUCCESS`，提交事务
+   - 更新分录状态为 status=2（已过账）
+6. **凭证状态更新**：
+   - 检查凭证的所有分录是否都已过账（status=2）
+   - 如果是，更新凭证 status=3（已过账）
+   - 如果否，凭证保持 status=2（过账中），等待异步分录完成
+7. **事务收尾**：更新 `t_transaction` 为 `SUCCESS`，提交事务
+
+#### 异步分录失败的回滚处理
+**场景**：单边记账中，实时分录已提交成功，但异步分录（MQ 消费）失败
+- **关键理解**：
+  - 凭证和分录都有状态管理
+  - 只有所有分录都过账成功，凭证才更新为"已过账"
+  - 异步分录失败时，凭证状态为"过账中"或"过账失败"
+- **回滚处理**（不生成新凭证）：
+  1. 查询凭证的所有分录状态，找出已过账的分录（status=2）
+  2. 对已过账的分录执行反向操作：
+     - 更新分录 status=3（过账失败）
+     - 反向更新账户余额（加变减，减变加）
+     - 记录反向明细到 `t_account_detail`（含 Pre/Post 余额，summary 标注"异步分录失败回滚"）
+  3. 更新凭证 status=4（过账失败），记录失败原因
+  4. 更新事务 status=FAILED，记录失败原因
+- **优点**：
+  - 不生成新凭证，避免借贷不平衡问题
+  - 通过状态管理控制流程
+  - 通过明细表记录反向操作，保留审计追溯
+  - 允许单边记账跨事务，保留性能优势
 
 ### 缓冲记账完整流程
 

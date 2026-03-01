@@ -36,7 +36,7 @@ flowchart TB
         direction TB
         M2_TRIGGER[定时触发<br/>如每 5 分钟]:::mode
         M2_SCAN[扫描 t_buffer_posting_detail<br/>status=1 待入账<br/>按 account_no 分组]:::process
-        M2_SUM[按账户汇总借贷发生额<br/>SUM(CASE WHEN debit_credit=1<br/>THEN amount ELSE 0 END)]:::process
+        M2_SUM[按账户汇总借贷发生额<br/>SUM CASE WHEN debit_credit=1<br/>THEN amount ELSE 0 END]:::process
         M2_UPDATE[一次性更新账户余额<br/>按汇总金额更新]:::data
         M2_RUNNING[Running Balance 计算]:::process
         M2_DETAIL[逐条生成账户明细<br/>每条缓冲明细对应一条明细<br/>通过 running balance 计算 Pre/Post]:::data
@@ -70,7 +70,7 @@ flowchart TB
         direction TB
         R1[查询账户当前余额<br/>作为起始余额 begin_balance]:::process
         R2[按时间顺序排序缓冲明细<br/>ORDER BY create_time ASC]:::process
-        R3[逐条计算：<br/>第 1 条：pre = begin, post = begin ± amt_1<br/>第 2 条：pre = post_1, post = post_1 ± amt_2<br/>第 N 条：pre = post_(N-1), post = post_(N-1) ± amt_N]:::process
+        R3[逐条计算：<br/>第 1 条：pre = begin, post = begin ± amt_1<br/>第 2 条：pre = post_1, post = post_1 ± amt_2<br/>第 N 条：pre = post_N-1, post = post_N-1 ± amt_N]:::process
         R4[校验：post_N == 汇总更新后的账户余额]:::process
     end
 

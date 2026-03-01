@@ -26,6 +26,7 @@ inclusion: always
 - **`docs/fixed/design/flowchart/eod_five_phases.mmd`**：逻辑日切五阶段流程图，包含瞬间切日、存量清理、余额快照、试算平衡、归档
 - **`docs/fixed/design/flowchart/freeze_unfreeze_flow.mmd`**：冻结/解冻流程图，包含冻结逻辑、解冻逻辑、超时自动解冻
 - **`docs/fixed/design/flowchart/account_opening_flow.mmd`**：账户开户流程图，包含外部客户账户开户、内部账户开户、子账户自动创建
+- **`docs/fixed/design/flowchart/transaction_rollback_flow.mmd`**：事务回滚流程图，包含回滚触发场景、回滚处理流程、回滚后数据状态、部分成功回滚、重试机制
 
 ## 核心对齐清单
 

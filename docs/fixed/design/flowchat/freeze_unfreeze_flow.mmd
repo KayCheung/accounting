@@ -11,27 +11,26 @@ flowchart TB
     START([发起冻结/解冻请求]):::start
 
     %% ========== 冻结流程 ==========
-    subgraph FREEZE["冻结流程"]
+    subgraph FREEZE["冻结流程（不生成凭证）"]
         direction TB
-        F1[匹配记账规则<br/>voucher_type=冻结凭证]:::process
-        F2[生成冻结凭证<br/>t_accounting_voucher]:::data
-        F3[主账户余额不变<br/>t_account.balance 保持不变]:::data
-        F4[可用子账户余额减少<br/>t_sub_account<br/>balance_type=1 可用余额<br/>balance -= freeze_amount]:::data
-        F5[冻结子账户余额增加<br/>t_sub_account<br/>balance_type=2 冻结余额<br/>balance += freeze_amount]:::data
-        F6[记录子账户明细<br/>t_sub_account_detail<br/>含 Pre/Post 余额]:::data
-        F7[创建冻结记录<br/>t_account_freeze_detail<br/>status=1 冻结]:::data
-        F8[设置冻结有效期<br/>根据 freeze_duration<br/>expire_time = now + duration]:::data
+        F1[接收冻结请求<br/>account_no + freeze_amount]:::process
+        F2[主账户余额不变<br/>t_account.balance 保持不变]:::data
+        F3[可用子账户余额减少<br/>t_sub_account<br/>balance_type=1 可用余额<br/>balance -= freeze_amount]:::data
+        F4[冻结子账户余额增加<br/>t_sub_account<br/>balance_type=2 冻结余额<br/>balance += freeze_amount]:::data
+        F5[记录子账户明细<br/>t_sub_account_detail<br/>含 Pre/Post 余额<br/>不生成凭证和分录]:::data
+        F6[创建冻结记录<br/>t_account_freeze_detail<br/>status=1 冻结<br/>记录 freeze_id]:::data
+        F7[设置冻结有效期<br/>根据业务规则<br/>expire_time = now + duration]:::data
     end
 
     %% ========== 解冻流程 ==========
-    subgraph UNFREEZE["解冻流程"]
+    subgraph UNFREEZE["解冻流程（基于原冻结记录）"]
         direction TB
-        U1[匹配记账规则<br/>voucher_type=解冻凭证]:::process
-        U2[生成解冻凭证<br/>t_accounting_voucher]:::data
+        U1[接收解冻请求<br/>freeze_id 或 account_no]:::process
+        U2[查询冻结记录<br/>t_account_freeze_detail<br/>status=1 冻结]:::process
         U3[主账户余额不变<br/>t_account.balance 保持不变]:::data
         U4[冻结子账户余额减少<br/>t_sub_account<br/>balance_type=2 冻结余额<br/>balance -= unfreeze_amount]:::data
         U5[可用子账户余额增加<br/>t_sub_account<br/>balance_type=1 可用余额<br/>balance += unfreeze_amount]:::data
-        U6[记录子账户明细<br/>t_sub_account_detail<br/>含 Pre/Post 余额]:::data
+        U6[记录子账户明细<br/>t_sub_account_detail<br/>含 Pre/Post 余额<br/>不生成凭证和分录]:::data
         U7[更新冻结记录<br/>t_account_freeze_detail<br/>status=2 已解冻]:::data
     end
 
@@ -75,8 +74,7 @@ flowchart TB
     F4 --> F5
     F5 --> F6
     F6 --> F7
-    F7 --> F8
-    F8 --> END
+    F7 --> END
 
     U1 --> U2
     U2 --> U3

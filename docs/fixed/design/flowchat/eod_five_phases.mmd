@@ -37,23 +37,23 @@ flowchart TB
         P3_SAVE[保存 T 日所有账户余额快照<br/>至 t_account_balance_snapshot]:::process
         P3_TYPE[记录快照类型<br/>snapshot_type=1 日快照]:::data
         P3_DATE[记录快照日期<br/>snapshot_date=T<br/>snapshot_time=当前时间]:::data
-        P3_SOURCE[数据来源：<br/>t_account + t_sub_account<br/>当前余额]:::data
+        P3_SOURCE[数据来源：<br/>t_account + t_sub_account<br/>存量清理完成后的最终余额]:::data
     end
 
     %% ========== 阶段 4：试算平衡 ==========
     subgraph PHASE4["阶段 4：试算平衡（存量清理后执行）"]
         direction TB
-        P4_PRECOND[前置条件：<br/>存量清理完成<br/>余额快照已生成]:::phase
+        P4_PRECOND[前置条件<br/>存量清理完成<br/>余额快照已生成]:::phase
         
         subgraph P4_GEN["生成账户日余额数据"]
             direction TB
-            P4_GEN_SQL[从 t_account_detail 汇总<br/>生成 t_account_balance]:::process
-            P4_GEN_DATA[包含：<br/>期初余额 begin_balance<br/>借方发生额 debit_amount<br/>贷方发生额 credit_amount<br/>期末余额 end_balance]:::data
+            P4_GEN_SQL[从 t_account_detail 汇总<br/>按 account_no 分组<br/>生成 t_account_balance]:::process
+            P4_GEN_DATA[包含：<br/>期初余额 begin_balance 第一条明细的 pre_balance<br/>借方发生额 SUM debit_amount<br/>贷方发生额 SUM credit_amount<br/>期末余额 end_balance 最后一条明细的 post_balance]:::data
         end
         
         subgraph P4_CHECK1["借贷平衡校验"]
             direction TB
-            P4_CHECK1_SQL[SELECT SUM(debit_amount),<br/>SUM(credit_amount)<br/>FROM t_account_balance<br/>WHERE accounting_date = T]:::process
+            P4_CHECK1_SQL[SELECT SUM debit_amount,<br/>SUM credit_amount<br/>FROM t_account_balance<br/>WHERE accounting_date = T]:::process
             P4_CHECK1_JUDGE{ΣDebit == ΣCredit?}:::decision
             P4_CHECK1_FAIL[借贷不平衡<br/>触发告警]:::error
         end
