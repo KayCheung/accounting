@@ -160,7 +160,7 @@ CREATE TABLE t_business_detail (
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
 	tenant_id INT NOT NULL DEFAULT '-1' COMMENT '租户ID',
-    UNIQUE KEY uk_trace_no (trace_no,trace_seq,customer_id,item_code),
+    UNIQUE KEY uk_trace_no (trace_no,trace_seq,customer_id,funds_type),
     KEY idx_customer_id (customer_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='业务记账流水明细表';
 
@@ -243,7 +243,6 @@ CREATE TABLE t_accounting_rule_detail (
 	update_name varchar(32) NOT NULL DEFAULT '' COMMENT '更新人姓名',
     is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
 	tenant_id INT NOT NULL DEFAULT '-1' COMMENT '租户ID',
-    UNIQUE KEY uk_rule_id (rule_id, row_num, is_delete),
 	UNIQUE KEY uk_subject_code (rule_id, subject_code, funds_type, is_delete)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='记账规则明细表';
 
@@ -284,7 +283,7 @@ CREATE TABLE t_accounting_voucher (
     trade_type TINYINT NOT NULL COMMENT '交易类别：1-正常,2-调账,3-红,4-蓝',
     trade_time DATETIME NOT NULL COMMENT '交易时间',
     amount DECIMAL(18,6) NOT NULL COMMENT '金额',
-    status TINYINT NOT NULL DEFAULT '1' COMMENT '凭证状态：1-未过账,2-过账中,3-已过账,4-过账失败', 
+    status TINYINT NOT NULL DEFAULT '1' COMMENT '凭证状态：1-未过账,2-过账中,3-已过账,4-过账失败,5-已冲销', 
     post_time DATETIME NOT NULL DEFAULT '1970-01-01 00:00:00' COMMENT '过账时间',
     accounting_date DATE NOT NULL COMMENT '会计日期',
     summary VARCHAR(64) NOT NULL DEFAULT '' COMMENT '摘要',
@@ -657,5 +656,5 @@ CREATE TABLE t_message_receipt (
     is_delete BIGINT NOT NULL DEFAULT '0' COMMENT '逻辑删除标识：0-未删除，不等于0为已删除',
     UNIQUE KEY uk_message_id_consumer (message_id, consumer_group),
     KEY idx_business_key (business_key),
-    KEY idx_received_time (received_time, receipt_status)
+    KEY idx_received_time (received_time, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='消息回执表（记录消费者处理结果）';
