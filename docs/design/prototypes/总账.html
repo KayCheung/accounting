@@ -1,53 +1,364 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
-  <head>
+<head>
+    <meta charset="UTF-8" />
     <title>总账</title>
-    <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
-    <meta http-equiv="content-type" content="text/html; charset=utf-8"/>
-    <link href="resources/css/axure_rp_page.css" type="text/css" rel="stylesheet"/>
-    <link href="data/styles.css" type="text/css" rel="stylesheet"/>
-    <link href="files/总账/styles.css" type="text/css" rel="stylesheet"/>
-    <script src="resources/scripts/jquery-3.2.1.min.js"></script>
-    <script src="resources/scripts/axure/axQuery.js"></script>
-    <script src="resources/scripts/axure/globals.js"></script>
-    <script src="resources/scripts/axutils.js"></script>
-    <script src="resources/scripts/axure/annotation.js"></script>
-    <script src="resources/scripts/axure/axQuery.std.js"></script>
-    <script src="resources/scripts/axure/doc.js"></script>
-    <script src="resources/scripts/messagecenter.js"></script>
-    <script src="resources/scripts/axure/events.js"></script>
-    <script src="resources/scripts/axure/recording.js"></script>
-    <script src="resources/scripts/axure/action.js"></script>
-    <script src="resources/scripts/axure/expr.js"></script>
-    <script src="resources/scripts/axure/geometry.js"></script>
-    <script src="resources/scripts/axure/flyout.js"></script>
-    <script src="resources/scripts/axure/model.js"></script>
-    <script src="resources/scripts/axure/repeater.js"></script>
-    <script src="resources/scripts/axure/sto.js"></script>
-    <script src="resources/scripts/axure/utils.temp.js"></script>
-    <script src="resources/scripts/axure/variables.js"></script>
-    <script src="resources/scripts/axure/drag.js"></script>
-    <script src="resources/scripts/axure/move.js"></script>
-    <script src="resources/scripts/axure/visibility.js"></script>
-    <script src="resources/scripts/axure/style.js"></script>
-    <script src="resources/scripts/axure/adaptive.js"></script>
-    <script src="resources/scripts/axure/tree.js"></script>
-    <script src="resources/scripts/axure/init.temp.js"></script>
-    <script src="resources/scripts/axure/legacy.js"></script>
-    <script src="resources/scripts/axure/viewer.js"></script>
-    <script src="resources/scripts/axure/math.js"></script>
-    <script src="resources/scripts/axure/jquery.nicescroll.min.js"></script>
-    <script src="data/document.js"></script>
-    <script src="files/总账/data.js"></script>
-    <script type="text/javascript">
-      $axure.utils.getTransparentGifPath = function() { return 'resources/images/transparent.gif'; };
-      $axure.utils.getOtherPath = function() { return 'resources/Other.html'; };
-      $axure.utils.getReloadPath = function() { return 'resources/reload.html'; };
-    </script>
-  </head>
-  <body>
-    <div id="base" class="">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+        html, body { height: auto; overflow: auto !important; margin: 0; padding: 0; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; font-size: 13px; background: #f0f2f5; color: #333; }
+        a { color: #1890ff; text-decoration: none; }
+        /* 顶部导航栏 */
+        .navbar { background: #001529; padding: 0 24px; height: 48px; display: flex; align-items: center; justify-content: space-between; }
+        .navbar-brand { color: #fff; font-size: 16px; font-weight: bold; }
+        .navbar-nav { display: flex; gap: 24px; }
+        .navbar-nav a { color: rgba(255,255,255,0.65); font-size: 13px; }
+        .navbar-nav a.active { color: #fff; }
+        .navbar-right { color: rgba(255,255,255,0.65); font-size: 13px; }
+        /* 面包屑 */
+        .breadcrumb { padding: 12px 24px; font-size: 13px; color: #999; background: #fff; border-bottom: 1px solid #e8e8e8; }
+        .breadcrumb span { color: #333; }
+        /* 主容器 */
+        .main { padding: 20px 24px; }
+        /* 筛选卡片 */
+        .filter-card { background: #fff; border: 1px solid #e8e8e8; border-radius: 2px; padding: 20px 24px 12px; margin-bottom: 16px; }
+        .filter-row { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 12px; align-items: flex-end; }
+        .filter-item { display: flex; flex-direction: column; gap: 4px; }
+        .filter-item label { font-size: 12px; color: #666; }
+        .filter-item select, .filter-item input { height: 32px; padding: 0 10px; border: 1px solid #d9d9d9; border-radius: 2px; font-size: 13px; color: #333; outline: none; background: #fff; min-width: 140px; }
+        .filter-item select:focus, .filter-item input:focus { border-color: #1890ff; }
+        .filter-item.range { display: flex; flex-direction: column; }
+        .filter-item.range .range-row { display: flex; align-items: center; gap: 6px; }
+        .filter-item.range .range-row input { min-width: 120px; }
+        .filter-item.range .range-row span { color: #999; }
+        .btn { height: 32px; padding: 0 16px; border-radius: 2px; border: 1px solid #d9d9d9; background: #fff; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+        .btn-primary { background: #1890ff; color: #fff; border-color: #1890ff; }
+        .btn-primary:hover { background: #40a9ff; border-color: #40a9ff; }
+        .btn:hover { border-color: #1890ff; color: #1890ff; }
+        /* 工具栏 */
+        .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .toolbar-left { font-size: 13px; color: #666; }
+        .toolbar-left b { color: #333; }
+        .toolbar-right { display: flex; gap: 8px; }
+        /* 表格卡片 */
+        .table-card { background: #fff; border: 1px solid #e8e8e8; border-radius: 2px; }
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        thead tr { background: #fafafa; }
+        th { padding: 12px 12px; text-align: right; font-weight: 600; font-size: 12px; color: #666; border-bottom: 1px solid #e8e8e8; white-space: nowrap; }
+        th:first-child, th:nth-child(2) { text-align: left; }
+        td { padding: 11px 12px; text-align: right; border-bottom: 1px solid #f0f0f0; font-size: 13px; white-space: nowrap; }
+        td:first-child, td:nth-child(2) { text-align: left; }
+        tbody tr:hover { background: #e6f7ff; }
+        .tr-group { background: #f9f9f9; font-weight: 600; }
+        .tr-total { background: #fffbe6; font-weight: 700; border-top: 2px solid #e8e8e8; }
+        .num-red { color: #f5222d; }
+        .num-blue { color: #1890ff; }
+        .tag-dir { display: inline-block; padding: 1px 6px; border-radius: 2px; font-size: 11px; }
+        .tag-debit { background: #fff1f0; color: #f5222d; }
+        .tag-credit { background: #f6ffed; color: #52c41a; }
+        .account-link { color: #1890ff; cursor: pointer; }
+        /* 分页 */
+        .pagination { display: flex; align-items: center; justify-content: flex-end; padding: 14px 16px; gap: 4px; border-top: 1px solid #f0f0f0; }
+        .pagination span { font-size: 12px; color: #666; margin-right: 8px; }
+        .page-btn { height: 28px; min-width: 28px; padding: 0 8px; border: 1px solid #d9d9d9; background: #fff; border-radius: 2px; cursor: pointer; font-size: 12px; display: inline-flex; align-items: center; justify-content: center; }
+        .page-btn.active { background: #1890ff; color: #fff; border-color: #1890ff; }
+        .page-btn:hover:not(.active) { border-color: #1890ff; color: #1890ff; }
+        /* 分组表头 */
+        .th-group { text-align: center !important; background: #f0f5ff !important; color: #1890ff !important; border-bottom: 1px solid #d6e4ff !important; }
+        .section-header { padding: 8px 16px; background: #e6f7ff; border-bottom: 1px solid #bae7ff; font-size: 12px; color: #0050b3; font-weight: 600; }
+        /* 返回 */
+        .back-link { margin-bottom: 12px; display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
+    </style>
+</head>
+<body>
+<div class="navbar">
+    <div class="navbar-brand">金融级账务核心系统</div>
+    <div class="navbar-nav">
+        <a href="#">账务处理</a>
+        <a href="#" class="active">账簿查询</a>
+        <a href="#">期末处理</a>
+        <a href="#">报表中心</a>
+        <a href="#">系统管理</a>
     </div>
-    <script src="resources/scripts/axure/ios.js"></script>
-  </body>
+    <div class="navbar-right">admin &nbsp;|&nbsp; 退出</div>
+</div>
+<div class="breadcrumb">账簿查询 / <span>总账</span></div>
+<div class="main">
+    <a href="index.html" class="back-link">← 返回目录</a>
+
+    <!-- 筛选条件 -->
+    <div class="filter-card">
+        <div class="filter-row">
+            <div class="filter-item">
+                <label>账套</label>
+                <select><option>主账套（人民币）</option><option>美元账套</option></select>
+            </div>
+            <div class="filter-item">
+                <label>会计年度</label>
+                <select><option>2026</option><option>2025</option><option>2024</option></select>
+            </div>
+            <div class="filter-item">
+                <label>会计期间</label>
+                <select><option>全年</option><option>2026-01</option><option>2026-02</option><option>2026-03（当前）</option></select>
+            </div>
+            <div class="filter-item range">
+                <label>科目范围</label>
+                <div class="range-row">
+                    <input type="text" placeholder="起始科目" value="1001" />
+                    <span>至</span>
+                    <input type="text" placeholder="终止科目" value="9999" />
+                </div>
+            </div>
+            <div class="filter-item">
+                <label>科目级次</label>
+                <select><option>所有级次</option><option>一级</option><option>二级</option><option>三级</option></select>
+            </div>
+            <div class="filter-item">
+                <label>币种</label>
+                <select><option>本位币（CNY）</option><option>外币原币</option></select>
+            </div>
+        </div>
+        <div class="filter-row">
+            <div class="filter-item">
+                <label>显示无余额科目</label>
+                <select><option>是</option><option>否</option></select>
+            </div>
+            <div class="filter-item">
+                <label>科目名称</label>
+                <input type="text" placeholder="模糊搜索科目名称" style="min-width:180px" />
+            </div>
+            <div style="display:flex;align-items:flex-end;gap:8px;">
+                <button class="btn btn-primary">🔍 查询</button>
+                <button class="btn">重置</button>
+                <button class="btn">📤 导出 Excel</button>
+                <button class="btn">🖨 打印</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 工具栏 -->
+    <div class="toolbar">
+        <div class="toolbar-left">共查询到 <b>32</b> 个科目 &nbsp;|&nbsp; 账套：主账套（人民币）&nbsp;|&nbsp; 期间：2026-01 ~ 2026-03</div>
+        <div class="toolbar-right">
+            <button class="btn">汇总展示</button>
+            <button class="btn">分期展示</button>
+        </div>
+    </div>
+
+    <!-- 表格 -->
+    <div class="table-card">
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th rowspan="2" style="text-align:left;vertical-align:middle">科目编码</th>
+                        <th rowspan="2" style="text-align:left;vertical-align:middle">科目名称</th>
+                        <th rowspan="2" style="vertical-align:middle">余额方向</th>
+                        <th colspan="2" class="th-group">期初余额</th>
+                        <th colspan="2" class="th-group">本期发生额</th>
+                        <th colspan="2" class="th-group">期末余额</th>
+                        <th rowspan="2" style="vertical-align:middle">操作</th>
+                    </tr>
+                    <tr>
+                        <th>借方</th><th>贷方</th>
+                        <th>借方</th><th>贷方</th>
+                        <th>借方</th><th>贷方</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="section-header">
+                        <td colspan="10" style="text-align:left">▼ 资产类科目</td>
+                    </tr>
+                    <tr>
+                        <td><a class="account-link">1001</a></td>
+                        <td>库存现金</td>
+                        <td><span class="tag-dir tag-debit">借</span></td>
+                        <td>85,320.00</td><td></td>
+                        <td>12,500.00</td><td>8,200.00</td>
+                        <td class="num-blue">89,620.00</td><td></td>
+                        <td><a>明细</a></td>
+                    </tr>
+                    <tr>
+                        <td><a class="account-link">1002</a></td>
+                        <td>银行存款</td>
+                        <td><span class="tag-dir tag-debit">借</span></td>
+                        <td>12,856,430.00</td><td></td>
+                        <td>3,521,000.00</td><td>2,108,560.00</td>
+                        <td class="num-blue">14,268,870.00</td><td></td>
+                        <td><a>明细</a></td>
+                    </tr>
+                    <tr>
+                        <td><a class="account-link">1002.01</a></td>
+                        <td>&nbsp;&nbsp;&nbsp;工商银行-基本户</td>
+                        <td><span class="tag-dir tag-debit">借</span></td>
+                        <td>9,320,000.00</td><td></td>
+                        <td>2,800,000.00</td><td>1,500,000.00</td>
+                        <td class="num-blue">10,620,000.00</td><td></td>
+                        <td><a>明细</a></td>
+                    </tr>
+                    <tr>
+                        <td><a class="account-link">1002.02</a></td>
+                        <td>&nbsp;&nbsp;&nbsp;招商银行-结算户</td>
+                        <td><span class="tag-dir tag-debit">借</span></td>
+                        <td>3,536,430.00</td><td></td>
+                        <td>721,000.00</td><td>608,560.00</td>
+                        <td class="num-blue">3,648,870.00</td><td></td>
+                        <td><a>明细</a></td>
+                    </tr>
+                    <tr>
+                        <td><a class="account-link">1122</a></td>
+                        <td>应收账款</td>
+                        <td><span class="tag-dir tag-debit">借</span></td>
+                        <td>5,620,000.00</td><td></td>
+                        <td>1,860,000.00</td><td>980,000.00</td>
+                        <td class="num-blue">6,500,000.00</td><td></td>
+                        <td><a>明细</a></td>
+                    </tr>
+                    <tr>
+                        <td><a class="account-link">1221</a></td>
+                        <td>其他应收款</td>
+                        <td><span class="tag-dir tag-debit">借</span></td>
+                        <td>320,000.00</td><td></td>
+                        <td>85,000.00</td><td>120,000.00</td>
+                        <td class="num-blue">285,000.00</td><td></td>
+                        <td><a>明细</a></td>
+                    </tr>
+                    <tr>
+                        <td><a class="account-link">1401</a></td>
+                        <td>原材料</td>
+                        <td><span class="tag-dir tag-debit">借</span></td>
+                        <td>3,210,000.00</td><td></td>
+                        <td>680,000.00</td><td>450,000.00</td>
+                        <td class="num-blue">3,440,000.00</td><td></td>
+                        <td><a>明细</a></td>
+                    </tr>
+                    <tr>
+                        <td><a class="account-link">1405</a></td>
+                        <td>库存商品</td>
+                        <td><span class="tag-dir tag-debit">借</span></td>
+                        <td>8,520,000.00</td><td></td>
+                        <td>1,200,000.00</td><td>1,560,000.00</td>
+                        <td class="num-blue">8,160,000.00</td><td></td>
+                        <td><a>明细</a></td>
+                    </tr>
+                    <tr>
+                        <td><a class="account-link">1601</a></td>
+                        <td>固定资产</td>
+                        <td><span class="tag-dir tag-debit">借</span></td>
+                        <td>25,800,000.00</td><td></td>
+                        <td>0.00</td><td>0.00</td>
+                        <td class="num-blue">25,800,000.00</td><td></td>
+                        <td><a>明细</a></td>
+                    </tr>
+                    <tr>
+                        <td><a class="account-link">1602</a></td>
+                        <td>累计折旧</td>
+                        <td><span class="tag-dir tag-credit">贷</span></td>
+                        <td></td><td>8,600,000.00</td>
+                        <td>0.00</td><td>215,000.00</td>
+                        <td></td><td class="num-red">8,815,000.00</td>
+                        <td><a>明细</a></td>
+                    </tr>
+                    <tr class="section-header">
+                        <td colspan="10" style="text-align:left">▼ 负债类科目</td>
+                    </tr>
+                    <tr>
+                        <td><a class="account-link">2202</a></td>
+                        <td>应付账款</td>
+                        <td><span class="tag-dir tag-credit">贷</span></td>
+                        <td></td><td>4,560,000.00</td>
+                        <td>980,000.00</td><td>1,230,000.00</td>
+                        <td></td><td class="num-red">4,810,000.00</td>
+                        <td><a>明细</a></td>
+                    </tr>
+                    <tr>
+                        <td><a class="account-link">2211</a></td>
+                        <td>应付职工薪酬</td>
+                        <td><span class="tag-dir tag-credit">贷</span></td>
+                        <td></td><td>850,000.00</td>
+                        <td>850,000.00</td><td>920,000.00</td>
+                        <td></td><td class="num-red">920,000.00</td>
+                        <td><a>明细</a></td>
+                    </tr>
+                    <tr>
+                        <td><a class="account-link">2221</a></td>
+                        <td>应交税费</td>
+                        <td><span class="tag-dir tag-credit">贷</span></td>
+                        <td></td><td>1,280,000.00</td>
+                        <td>1,280,000.00</td><td>1,380,000.00</td>
+                        <td></td><td class="num-red">1,380,000.00</td>
+                        <td><a>明细</a></td>
+                    </tr>
+                    <tr class="section-header">
+                        <td colspan="10" style="text-align:left">▼ 损益类科目</td>
+                    </tr>
+                    <tr>
+                        <td><a class="account-link">6001</a></td>
+                        <td>主营业务收入</td>
+                        <td><span class="tag-dir tag-credit">贷</span></td>
+                        <td></td><td>0.00</td>
+                        <td>0.00</td><td>8,520,000.00</td>
+                        <td></td><td class="num-red">8,520,000.00</td>
+                        <td><a>明细</a></td>
+                    </tr>
+                    <tr>
+                        <td><a class="account-link">6401</a></td>
+                        <td>主营业务成本</td>
+                        <td><span class="tag-dir tag-debit">借</span></td>
+                        <td>0.00</td><td></td>
+                        <td>5,512,000.00</td><td>0.00</td>
+                        <td class="num-blue">5,512,000.00</td><td></td>
+                        <td><a>明细</a></td>
+                    </tr>
+                    <tr>
+                        <td><a class="account-link">6601</a></td>
+                        <td>销售费用</td>
+                        <td><span class="tag-dir tag-debit">借</span></td>
+                        <td>0.00</td><td></td>
+                        <td>312,000.00</td><td>0.00</td>
+                        <td class="num-blue">312,000.00</td><td></td>
+                        <td><a>明细</a></td>
+                    </tr>
+                    <tr>
+                        <td><a class="account-link">6602</a></td>
+                        <td>管理费用</td>
+                        <td><span class="tag-dir tag-debit">借</span></td>
+                        <td>0.00</td><td></td>
+                        <td>520,000.00</td><td>0.00</td>
+                        <td class="num-blue">520,000.00</td><td></td>
+                        <td><a>明细</a></td>
+                    </tr>
+                    <tr>
+                        <td><a class="account-link">6603</a></td>
+                        <td>财务费用</td>
+                        <td><span class="tag-dir tag-debit">借</span></td>
+                        <td>0.00</td><td></td>
+                        <td>48,600.00</td><td>0.00</td>
+                        <td class="num-blue">48,600.00</td><td></td>
+                        <td><a>明细</a></td>
+                    </tr>
+                    <tr class="tr-total">
+                        <td colspan="2">合计</td>
+                        <td></td>
+                        <td>56,411,750.00</td><td>15,290,000.00</td>
+                        <td>18,761,100.00</td><td>16,970,760.00</td>
+                        <td>58,202,090.00</td><td>23,925,000.00</td>
+                        <td></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="pagination">
+            <span>共 32 条</span>
+            <button class="page-btn">«</button>
+            <button class="page-btn active">1</button>
+            <button class="page-btn">2</button>
+            <button class="page-btn">»</button>
+            <span style="margin-left:8px">每页</span>
+            <select style="height:28px;border:1px solid #d9d9d9;border-radius:2px;padding:0 6px;font-size:12px"><option>20条</option><option>50条</option><option>100条</option></select>
+        </div>
+    </div>
+</div>
+</body>
 </html>

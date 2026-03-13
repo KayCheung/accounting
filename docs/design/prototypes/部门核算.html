@@ -1,53 +1,664 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
-  <head>
+<head>
+    <meta charset="UTF-8" />
     <title>部门核算</title>
-    <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
-    <meta http-equiv="content-type" content="text/html; charset=utf-8"/>
-    <link href="resources/css/axure_rp_page.css" type="text/css" rel="stylesheet"/>
-    <link href="data/styles.css" type="text/css" rel="stylesheet"/>
-    <link href="files/部门核算/styles.css" type="text/css" rel="stylesheet"/>
-    <script src="resources/scripts/jquery-3.2.1.min.js"></script>
-    <script src="resources/scripts/axure/axQuery.js"></script>
-    <script src="resources/scripts/axure/globals.js"></script>
-    <script src="resources/scripts/axutils.js"></script>
-    <script src="resources/scripts/axure/annotation.js"></script>
-    <script src="resources/scripts/axure/axQuery.std.js"></script>
-    <script src="resources/scripts/axure/doc.js"></script>
-    <script src="resources/scripts/messagecenter.js"></script>
-    <script src="resources/scripts/axure/events.js"></script>
-    <script src="resources/scripts/axure/recording.js"></script>
-    <script src="resources/scripts/axure/action.js"></script>
-    <script src="resources/scripts/axure/expr.js"></script>
-    <script src="resources/scripts/axure/geometry.js"></script>
-    <script src="resources/scripts/axure/flyout.js"></script>
-    <script src="resources/scripts/axure/model.js"></script>
-    <script src="resources/scripts/axure/repeater.js"></script>
-    <script src="resources/scripts/axure/sto.js"></script>
-    <script src="resources/scripts/axure/utils.temp.js"></script>
-    <script src="resources/scripts/axure/variables.js"></script>
-    <script src="resources/scripts/axure/drag.js"></script>
-    <script src="resources/scripts/axure/move.js"></script>
-    <script src="resources/scripts/axure/visibility.js"></script>
-    <script src="resources/scripts/axure/style.js"></script>
-    <script src="resources/scripts/axure/adaptive.js"></script>
-    <script src="resources/scripts/axure/tree.js"></script>
-    <script src="resources/scripts/axure/init.temp.js"></script>
-    <script src="resources/scripts/axure/legacy.js"></script>
-    <script src="resources/scripts/axure/viewer.js"></script>
-    <script src="resources/scripts/axure/math.js"></script>
-    <script src="resources/scripts/axure/jquery.nicescroll.min.js"></script>
-    <script src="data/document.js"></script>
-    <script src="files/部门核算/data.js"></script>
-    <script type="text/javascript">
-      $axure.utils.getTransparentGifPath = function() { return 'resources/images/transparent.gif'; };
-      $axure.utils.getOtherPath = function() { return 'resources/Other.html'; };
-      $axure.utils.getReloadPath = function() { return 'resources/reload.html'; };
-    </script>
-  </head>
-  <body>
-    <div id="base" class="">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+        html, body { height: auto; overflow: auto !important; margin: 0; padding: 0; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; font-size: 13px; background: #f0f2f5; color: #333; }
+        a { color: #1890ff; text-decoration: none; cursor: pointer; }
+        /* 导航 */
+        .navbar { background: #001529; padding: 0 24px; height: 48px; display: flex; align-items: center; justify-content: space-between; }
+        .navbar-brand { color: #fff; font-size: 16px; font-weight: bold; }
+        .navbar-nav { display: flex; gap: 24px; }
+        .navbar-nav a { color: rgba(255,255,255,0.65); font-size: 13px; }
+        .navbar-nav a.active { color: #fff; }
+        .navbar-right { color: rgba(255,255,255,0.65); font-size: 13px; }
+        .breadcrumb { padding: 12px 24px; font-size: 13px; color: #999; background: #fff; border-bottom: 1px solid #e8e8e8; }
+        .breadcrumb span { color: #333; }
+        /* 布局 */
+        .layout { display: flex; height: calc(100vh - 97px); min-height: 600px; }
+        /* 左侧部门树 */
+        .dept-tree { width: 220px; min-width: 220px; background: #fff; border-right: 1px solid #e8e8e8; display: flex; flex-direction: column; overflow: hidden; }
+        .dept-tree-header { padding: 12px 16px; font-size: 13px; font-weight: 600; color: #333; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; }
+        .dept-tree-search { padding: 8px 12px; border-bottom: 1px solid #f0f0f0; }
+        .dept-tree-search input { width: 100%; height: 28px; padding: 0 8px; border: 1px solid #d9d9d9; border-radius: 2px; font-size: 12px; box-sizing: border-box; }
+        .dept-tree-body { overflow-y: auto; flex: 1; padding: 8px 0; }
+        .tree-node { padding: 7px 16px; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+        .tree-node:hover { background: #e6f7ff; }
+        .tree-node.active { background: #e6f7ff; color: #1890ff; font-weight: 600; }
+        .tree-node.l1 { font-weight: 600; }
+        .tree-node.l2 { padding-left: 32px; color: #555; }
+        .tree-node.l3 { padding-left: 48px; color: #777; font-size: 12px; }
+        .tree-dot { width: 6px; height: 6px; border-radius: 50%; background: #d9d9d9; flex-shrink: 0; }
+        .tree-dot.active { background: #1890ff; }
+        /* 右侧内容区 */
+        .main-content { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+        /* 筛选 */
+        .filter-card { background: #fff; border: 1px solid #e8e8e8; border-radius: 2px; padding: 16px 20px; }
+        .filter-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
+        .filter-item { display: flex; flex-direction: column; gap: 4px; }
+        .filter-item label { font-size: 12px; color: #666; }
+        .filter-item select, .filter-item input { height: 32px; padding: 0 10px; border: 1px solid #d9d9d9; border-radius: 2px; font-size: 13px; color: #333; outline: none; background: #fff; min-width: 130px; }
+        .btn { height: 32px; padding: 0 16px; border-radius: 2px; border: 1px solid #d9d9d9; background: #fff; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+        .btn-primary { background: #1890ff; color: #fff; border-color: #1890ff; }
+        .btn-primary:hover { background: #40a9ff; border-color: #40a9ff; }
+        .btn:hover { border-color: #1890ff; color: #1890ff; }
+        /* KPI 卡片 */
+        .kpi-row { display: flex; gap: 12px; }
+        .kpi-card { flex: 1; background: #fff; border: 1px solid #e8e8e8; border-radius: 2px; padding: 14px 18px; border-left: 3px solid; }
+        .kpi-card.blue { border-left-color: #1890ff; }
+        .kpi-card.green { border-left-color: #52c41a; }
+        .kpi-card.orange { border-left-color: #fa8c16; }
+        .kpi-card.red { border-left-color: #f5222d; }
+        .kpi-card.purple { border-left-color: #722ed1; }
+        .kpi-label { font-size: 12px; color: #999; margin-bottom: 6px; }
+        .kpi-value { font-size: 20px; font-weight: 700; color: #333; }
+        .kpi-value.blue { color: #1890ff; }
+        .kpi-value.green { color: #52c41a; }
+        .kpi-value.red { color: #f5222d; }
+        .kpi-sub { font-size: 11px; color: #999; margin-top: 4px; }
+        .kpi-sub .up { color: #52c41a; }
+        .kpi-sub .dn { color: #f5222d; }
+        /* 分组表格 */
+        .section { background: #fff; border: 1px solid #e8e8e8; border-radius: 2px; }
+        .section-head { padding: 12px 16px; font-size: 14px; font-weight: 600; color: #333; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; }
+        .section-head .hint { font-size: 12px; color: #999; font-weight: normal; }
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        thead tr { background: #fafafa; }
+        th { padding: 10px 12px; text-align: right; font-weight: 600; font-size: 12px; color: #666; border-bottom: 1px solid #e8e8e8; white-space: nowrap; }
+        th.left { text-align: left; }
+        th.center { text-align: center; }
+        td { padding: 9px 12px; text-align: right; border-bottom: 1px solid #f0f0f0; font-size: 13px; white-space: nowrap; }
+        td.left { text-align: left; }
+        td.center { text-align: center; }
+        tbody tr:hover { background: #e6f7ff; }
+        .tr-cat { background: #f7f9fc; font-weight: 700; }
+        .tr-sub { }
+        .tr-sub td.left { padding-left: 28px; color: #555; }
+        .tr-total { background: #fffbe6; font-weight: 700; border-top: 2px solid #e8e8e8; }
+        .num-pos { color: #52c41a; }
+        .num-neg { color: #f5222d; }
+        .num-blue { color: #1890ff; }
+        .pct { font-size: 12px; color: #999; }
+        .bar-wrap { display: inline-flex; align-items: center; gap: 6px; }
+        .bar-bg { width: 60px; height: 8px; background: #f0f0f0; border-radius: 4px; overflow: hidden; }
+        .bar-fill { height: 100%; border-radius: 4px; }
+        .tag { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; }
+        .tag-dept { background: #e6f7ff; color: #0050b3; }
+        /* 横向对比表（矩阵）列着色 */
+        .col-highlight { background: #f0f9ff; }
+        /* 分页 */
+        .pagination { display: flex; align-items: center; justify-content: flex-end; padding: 12px 16px; gap: 4px; border-top: 1px solid #f0f0f0; }
+        .pagination span { font-size: 12px; color: #666; margin-right: 8px; }
+        .page-btn { height: 28px; min-width: 28px; padding: 0 8px; border: 1px solid #d9d9d9; background: #fff; border-radius: 2px; cursor: pointer; font-size: 12px; }
+        .page-btn.active { background: #1890ff; color: #fff; border-color: #1890ff; }
+        .back-link { margin-bottom: 4px; display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
+        /* Tab */
+        .tabs { display: flex; border-bottom: 2px solid #f0f0f0; gap: 0; }
+        .tab { padding: 10px 20px; font-size: 13px; cursor: pointer; color: #666; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+        .tab.active { color: #1890ff; border-bottom-color: #1890ff; font-weight: 600; }
+        .tab:hover:not(.active) { color: #1890ff; }
+    </style>
+</head>
+<body>
+<div class="navbar">
+    <div class="navbar-brand">金融级账务核心系统</div>
+    <div class="navbar-nav">
+        <a href="#">账务处理</a>
+        <a href="#" class="active">账簿查询</a>
+        <a href="#">期末处理</a>
+        <a href="#">报表中心</a>
+        <a href="#">系统管理</a>
     </div>
-    <script src="resources/scripts/axure/ios.js"></script>
-  </body>
+    <div class="navbar-right">admin &nbsp;|&nbsp; 退出</div>
+</div>
+<div class="breadcrumb">账簿查询 / 辅助核算 / <span>部门核算</span></div>
+
+<div class="layout">
+    <!-- 左侧部门树 -->
+    <div class="dept-tree">
+        <div class="dept-tree-header">
+            部门列表
+            <span style="font-size:11px;color:#1890ff;font-weight:normal;cursor:pointer">全部展开</span>
+        </div>
+        <div class="dept-tree-search">
+            <input type="text" placeholder="搜索部门..." />
+        </div>
+        <div class="dept-tree-body">
+            <div class="tree-node l1 active">
+                <span class="tree-dot active"></span> 全公司汇总
+            </div>
+            <div class="tree-node l1">
+                <span class="tree-dot"></span> ▶ 销售中心
+            </div>
+            <div class="tree-node l2">
+                <span class="tree-dot"></span> 华北销售部
+            </div>
+            <div class="tree-node l2">
+                <span class="tree-dot"></span> 华南销售部
+            </div>
+            <div class="tree-node l2">
+                <span class="tree-dot"></span> 电商事业部
+            </div>
+            <div class="tree-node l1">
+                <span class="tree-dot"></span> ▶ 技术中心
+            </div>
+            <div class="tree-node l2">
+                <span class="tree-dot"></span> 研发一部
+            </div>
+            <div class="tree-node l2">
+                <span class="tree-dot"></span> 研发二部
+            </div>
+            <div class="tree-node l2">
+                <span class="tree-dot"></span> 测试部
+            </div>
+            <div class="tree-node l2">
+                <span class="tree-dot"></span> 运维部
+            </div>
+            <div class="tree-node l1">
+                <span class="tree-dot"></span> ▶ 生产中心
+            </div>
+            <div class="tree-node l2">
+                <span class="tree-dot"></span> 生产一车间
+            </div>
+            <div class="tree-node l2">
+                <span class="tree-dot"></span> 生产二车间
+            </div>
+            <div class="tree-node l2">
+                <span class="tree-dot"></span> 品控部
+            </div>
+            <div class="tree-node l1">
+                <span class="tree-dot"></span> ▶ 职能部门
+            </div>
+            <div class="tree-node l2">
+                <span class="tree-dot"></span> 行政部
+            </div>
+            <div class="tree-node l2">
+                <span class="tree-dot"></span> 人力资源部
+            </div>
+            <div class="tree-node l2">
+                <span class="tree-dot"></span> 财务部
+            </div>
+            <div class="tree-node l2">
+                <span class="tree-dot"></span> 法务部
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧内容 -->
+    <div class="main-content">
+        <a href="index.html" class="back-link">← 返回目录</a>
+
+        <!-- 筛选 -->
+        <div class="filter-card">
+            <div class="filter-row">
+                <div class="filter-item">
+                    <label>会计年度</label>
+                    <select><option>2026</option><option>2025</option></select>
+                </div>
+                <div class="filter-item">
+                    <label>会计期间</label>
+                    <select><option>2026-03（当前）</option><option>2026-02</option><option>2026-01</option><option>全年累计</option></select>
+                </div>
+                <div class="filter-item">
+                    <label>核算维度</label>
+                    <select><option>费用核算</option><option>收入核算</option><option>利润核算</option><option>全部科目</option></select>
+                </div>
+                <div class="filter-item">
+                    <label>科目范围</label>
+                    <select><option>全部科目</option><option>费用类（6601-6603）</option><option>收入类（6001-6011）</option><option>自定义范围</option></select>
+                </div>
+                <div class="filter-item">
+                    <label>展示级次</label>
+                    <select><option>汇总（一级科目）</option><option>明细（二级科目）</option></select>
+                </div>
+                <div style="display:flex;align-items:flex-end;gap:8px;">
+                    <button class="btn btn-primary">🔍 查询</button>
+                    <button class="btn">重置</button>
+                    <button class="btn">📤 导出</button>
+                    <button class="btn">🖨 打印</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPI 卡片 -->
+        <div class="kpi-row">
+            <div class="kpi-card blue">
+                <div class="kpi-label">本期总费用</div>
+                <div class="kpi-value blue">880,600</div>
+                <div class="kpi-sub"><span class="dn">▼ 3.2%</span> 较上月</div>
+            </div>
+            <div class="kpi-card orange">
+                <div class="kpi-label">销售费用</div>
+                <div class="kpi-value" style="color:#fa8c16">312,000</div>
+                <div class="kpi-sub">占比 <b>35.4%</b></div>
+            </div>
+            <div class="kpi-card purple">
+                <div class="kpi-label">管理费用</div>
+                <div class="kpi-value" style="color:#722ed1">520,000</div>
+                <div class="kpi-sub">占比 <b>59.1%</b></div>
+            </div>
+            <div class="kpi-card green">
+                <div class="kpi-label">财务费用</div>
+                <div class="kpi-value green">48,600</div>
+                <div class="kpi-sub">占比 <b>5.5%</b></div>
+            </div>
+            <div class="kpi-card red">
+                <div class="kpi-label">人均费用</div>
+                <div class="kpi-value red">7,338</div>
+                <div class="kpi-sub">全员 120 人</div>
+            </div>
+        </div>
+
+        <!-- Tab 切换 -->
+        <div class="section">
+            <div class="tabs" style="padding:0 16px;background:#fff;border-bottom:1px solid #f0f0f0;">
+                <div class="tab active">各部门汇总对比</div>
+                <div class="tab">费用科目明细</div>
+                <div class="tab">月度趋势</div>
+            </div>
+
+            <div class="section-head">
+                <span>全公司各部门本期费用汇总 &nbsp;<span class="tag tag-dept">2026-03</span></span>
+                <span class="hint">金额单位：元</span>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="left" style="min-width:130px">科目名称</th>
+                            <th class="left" style="min-width:60px">科目编码</th>
+                            <th>销售中心<br/><span style="font-size:11px;color:#999">35人</span></th>
+                            <th>技术中心<br/><span style="font-size:11px;color:#999">42人</span></th>
+                            <th>生产中心<br/><span style="font-size:11px;color:#999">28人</span></th>
+                            <th>行政部<br/><span style="font-size:11px;color:#999">8人</span></th>
+                            <th>人力资源部<br/><span style="font-size:11px;color:#999">4人</span></th>
+                            <th>财务部<br/><span style="font-size:11px;color:#999">3人</span></th>
+                            <th style="color:#1890ff;font-weight:700">合计</th>
+                            <th>占比</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- 销售费用 -->
+                        <tr class="tr-cat">
+                            <td class="left">销售费用</td>
+                            <td class="left">6601</td>
+                            <td class="num-blue">248,000</td>
+                            <td>18,000</td>
+                            <td>—</td>
+                            <td>28,000</td>
+                            <td>8,000</td>
+                            <td>10,000</td>
+                            <td class="num-blue">312,000</td>
+                            <td>35.4%</td>
+                        </tr>
+                        <tr class="tr-sub">
+                            <td class="left">　职工薪酬</td>
+                            <td class="left">6601.01</td>
+                            <td>186,000</td>
+                            <td>12,000</td>
+                            <td>—</td>
+                            <td>18,000</td>
+                            <td>6,000</td>
+                            <td>6,000</td>
+                            <td>228,000</td>
+                            <td class="pct">73.1%</td>
+                        </tr>
+                        <tr class="tr-sub">
+                            <td class="left">　差旅费</td>
+                            <td class="left">6601.02</td>
+                            <td>42,000</td>
+                            <td>4,000</td>
+                            <td>—</td>
+                            <td>6,000</td>
+                            <td>1,200</td>
+                            <td>2,000</td>
+                            <td>55,200</td>
+                            <td class="pct">17.7%</td>
+                        </tr>
+                        <tr class="tr-sub">
+                            <td class="left">　业务招待费</td>
+                            <td class="left">6601.03</td>
+                            <td>20,000</td>
+                            <td>2,000</td>
+                            <td>—</td>
+                            <td>4,000</td>
+                            <td>800</td>
+                            <td>2,000</td>
+                            <td>28,800</td>
+                            <td class="pct">9.2%</td>
+                        </tr>
+
+                        <!-- 管理费用 -->
+                        <tr class="tr-cat">
+                            <td class="left">管理费用</td>
+                            <td class="left">6602</td>
+                            <td>32,000</td>
+                            <td class="num-blue">168,000</td>
+                            <td>128,000</td>
+                            <td>80,000</td>
+                            <td>62,000</td>
+                            <td>50,000</td>
+                            <td class="num-blue">520,000</td>
+                            <td>59.1%</td>
+                        </tr>
+                        <tr class="tr-sub">
+                            <td class="left">　职工薪酬</td>
+                            <td class="left">6602.01</td>
+                            <td>18,000</td>
+                            <td>120,000</td>
+                            <td>85,000</td>
+                            <td>52,000</td>
+                            <td>42,000</td>
+                            <td>36,000</td>
+                            <td>353,000</td>
+                            <td class="pct">67.9%</td>
+                        </tr>
+                        <tr class="tr-sub">
+                            <td class="left">　折旧摊销</td>
+                            <td class="left">6602.02</td>
+                            <td>4,000</td>
+                            <td>28,000</td>
+                            <td>32,000</td>
+                            <td>12,000</td>
+                            <td>8,000</td>
+                            <td>6,000</td>
+                            <td>90,000</td>
+                            <td class="pct">17.3%</td>
+                        </tr>
+                        <tr class="tr-sub">
+                            <td class="left">　办公费</td>
+                            <td class="left">6602.03</td>
+                            <td>5,000</td>
+                            <td>12,000</td>
+                            <td>6,000</td>
+                            <td>10,000</td>
+                            <td>8,000</td>
+                            <td>5,000</td>
+                            <td>46,000</td>
+                            <td class="pct">8.8%</td>
+                        </tr>
+                        <tr class="tr-sub">
+                            <td class="left">　研发费用</td>
+                            <td class="left">6602.04</td>
+                            <td>—</td>
+                            <td>8,000</td>
+                            <td>—</td>
+                            <td>—</td>
+                            <td>—</td>
+                            <td>—</td>
+                            <td>8,000</td>
+                            <td class="pct">1.5%</td>
+                        </tr>
+                        <tr class="tr-sub">
+                            <td class="left">　其他管理费</td>
+                            <td class="left">6602.09</td>
+                            <td>5,000</td>
+                            <td>—</td>
+                            <td>5,000</td>
+                            <td>6,000</td>
+                            <td>4,000</td>
+                            <td>3,000</td>
+                            <td>23,000</td>
+                            <td class="pct">4.4%</td>
+                        </tr>
+
+                        <!-- 财务费用 -->
+                        <tr class="tr-cat">
+                            <td class="left">财务费用</td>
+                            <td class="left">6603</td>
+                            <td>—</td>
+                            <td>—</td>
+                            <td>—</td>
+                            <td>—</td>
+                            <td>—</td>
+                            <td class="num-blue">48,600</td>
+                            <td class="num-blue">48,600</td>
+                            <td>5.5%</td>
+                        </tr>
+                        <tr class="tr-sub">
+                            <td class="left">　利息支出</td>
+                            <td class="left">6603.01</td>
+                            <td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>
+                            <td>55,000</td>
+                            <td>55,000</td>
+                            <td class="pct"></td>
+                        </tr>
+                        <tr class="tr-sub">
+                            <td class="left">　利息收入</td>
+                            <td class="left">6603.02</td>
+                            <td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>
+                            <td class="num-pos">-6,400</td>
+                            <td class="num-pos">-6,400</td>
+                            <td class="pct"></td>
+                        </tr>
+
+                        <!-- 合计 -->
+                        <tr class="tr-total">
+                            <td class="left" colspan="2">本期费用合计</td>
+                            <td>280,000</td>
+                            <td>186,000</td>
+                            <td>128,000</td>
+                            <td>108,000</td>
+                            <td>70,000</td>
+                            <td>108,600</td>
+                            <td class="num-blue">880,600</td>
+                            <td>100%</td>
+                        </tr>
+                        <tr style="background:#f9f9f9;font-size:12px;color:#888">
+                            <td class="left" colspan="2">人均费用</td>
+                            <td>8,000</td>
+                            <td>4,429</td>
+                            <td>4,571</td>
+                            <td>13,500</td>
+                            <td>17,500</td>
+                            <td>36,200</td>
+                            <td class="num-blue">7,338</td>
+                            <td>—</td>
+                        </tr>
+                        <tr style="background:#f9f9f9;font-size:12px;color:#888">
+                            <td class="left" colspan="2">上月同科目费用</td>
+                            <td>292,000</td>
+                            <td>191,000</td>
+                            <td>131,000</td>
+                            <td>109,000</td>
+                            <td>71,500</td>
+                            <td>115,000</td>
+                            <td>909,500</td>
+                            <td>—</td>
+                        </tr>
+                        <tr style="background:#f9f9f9;font-size:12px">
+                            <td class="left" colspan="2">环比增减</td>
+                            <td class="num-pos">▼ 4.1%</td>
+                            <td class="num-pos">▼ 2.6%</td>
+                            <td class="num-pos">▼ 2.3%</td>
+                            <td class="num-pos">▼ 0.9%</td>
+                            <td class="num-pos">▼ 2.1%</td>
+                            <td class="num-pos">▼ 5.6%</td>
+                            <td class="num-pos">▼ 3.2%</td>
+                            <td>—</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 费用占比可视化 -->
+        <div class="section">
+            <div class="section-head">
+                <span>各部门费用占比（本期）</span>
+                <span class="hint">总计 880,600 元</span>
+            </div>
+            <div style="padding:20px 24px;display:flex;gap:32px;flex-wrap:wrap;align-items:flex-start">
+                <!-- 柱状图模拟 -->
+                <div style="flex:1;min-width:320px">
+                    <div style="font-size:12px;color:#999;margin-bottom:12px">各部门费用金额（元）</div>
+                    <div style="display:flex;flex-direction:column;gap:10px">
+                        <div style="display:flex;align-items:center;gap:10px">
+                            <div style="width:80px;font-size:12px;color:#555;text-align:right">销售中心</div>
+                            <div style="flex:1;height:22px;background:#f0f0f0;border-radius:2px;overflow:hidden">
+                                <div style="width:31.8%;height:100%;background:#1890ff;border-radius:2px;display:flex;align-items:center;padding-left:6px"><span style="font-size:11px;color:#fff">280,000</span></div>
+                            </div>
+                            <div style="width:44px;font-size:12px;color:#666;text-align:right">31.8%</div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:10px">
+                            <div style="width:80px;font-size:12px;color:#555;text-align:right">技术中心</div>
+                            <div style="flex:1;height:22px;background:#f0f0f0;border-radius:2px;overflow:hidden">
+                                <div style="width:21.1%;height:100%;background:#36cfc9;border-radius:2px;display:flex;align-items:center;padding-left:6px"><span style="font-size:11px;color:#fff">186,000</span></div>
+                            </div>
+                            <div style="width:44px;font-size:12px;color:#666;text-align:right">21.1%</div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:10px">
+                            <div style="width:80px;font-size:12px;color:#555;text-align:right">生产中心</div>
+                            <div style="flex:1;height:22px;background:#f0f0f0;border-radius:2px;overflow:hidden">
+                                <div style="width:14.5%;height:100%;background:#73d13d;border-radius:2px;display:flex;align-items:center;padding-left:6px"><span style="font-size:11px;color:#fff">128,000</span></div>
+                            </div>
+                            <div style="width:44px;font-size:12px;color:#666;text-align:right">14.5%</div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:10px">
+                            <div style="width:80px;font-size:12px;color:#555;text-align:right">行政部</div>
+                            <div style="flex:1;height:22px;background:#f0f0f0;border-radius:2px;overflow:hidden">
+                                <div style="width:12.3%;height:100%;background:#fa8c16;border-radius:2px;display:flex;align-items:center;padding-left:6px"><span style="font-size:11px;color:#fff">108,000</span></div>
+                            </div>
+                            <div style="width:44px;font-size:12px;color:#666;text-align:right">12.3%</div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:10px">
+                            <div style="width:80px;font-size:12px;color:#555;text-align:right">人力资源部</div>
+                            <div style="flex:1;height:22px;background:#f0f0f0;border-radius:2px;overflow:hidden">
+                                <div style="width:7.9%;height:100%;background:#722ed1;border-radius:2px;display:flex;align-items:center;padding-left:6px"><span style="font-size:11px;color:#fff">70,000</span></div>
+                            </div>
+                            <div style="width:44px;font-size:12px;color:#666;text-align:right">7.9%</div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:10px">
+                            <div style="width:80px;font-size:12px;color:#555;text-align:right">财务部</div>
+                            <div style="flex:1;height:22px;background:#f0f0f0;border-radius:2px;overflow:hidden">
+                                <div style="width:12.3%;height:100%;background:#f5222d;border-radius:2px;display:flex;align-items:center;padding-left:6px"><span style="font-size:11px;color:#fff">108,600</span></div>
+                            </div>
+                            <div style="width:44px;font-size:12px;color:#666;text-align:right">12.3%</div>
+                        </div>
+                    </div>
+                </div>
+                <!-- 右侧：月度趋势模拟 -->
+                <div style="min-width:280px">
+                    <div style="font-size:12px;color:#999;margin-bottom:12px">近6月总费用趋势（万元）</div>
+                    <div style="display:flex;align-items:flex-end;gap:8px;height:100px;border-bottom:1px solid #e8e8e8;padding-bottom:4px">
+                        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1">
+                            <span style="font-size:11px;color:#999">78.2</span>
+                            <div style="width:100%;background:#bae7ff;height:68px;border-radius:2px 2px 0 0"></div>
+                            <span style="font-size:11px;color:#aaa">10月</span>
+                        </div>
+                        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1">
+                            <span style="font-size:11px;color:#999">82.4</span>
+                            <div style="width:100%;background:#bae7ff;height:72px;border-radius:2px 2px 0 0"></div>
+                            <span style="font-size:11px;color:#aaa">11月</span>
+                        </div>
+                        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1">
+                            <span style="font-size:11px;color:#999">91.0</span>
+                            <div style="width:100%;background:#bae7ff;height:79px;border-radius:2px 2px 0 0"></div>
+                            <span style="font-size:11px;color:#aaa">12月</span>
+                        </div>
+                        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1">
+                            <span style="font-size:11px;color:#999">88.2</span>
+                            <div style="width:100%;background:#91d5ff;height:77px;border-radius:2px 2px 0 0"></div>
+                            <span style="font-size:11px;color:#aaa">01月</span>
+                        </div>
+                        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1">
+                            <span style="font-size:11px;color:#999">90.9</span>
+                            <div style="width:100%;background:#91d5ff;height:79px;border-radius:2px 2px 0 0"></div>
+                            <span style="font-size:11px;color:#aaa">02月</span>
+                        </div>
+                        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1">
+                            <span style="font-size:11px;color:#999">88.1</span>
+                            <div style="width:100%;background:#1890ff;height:77px;border-radius:2px 2px 0 0"></div>
+                            <span style="font-size:11px;color:#aaa;font-weight:600">03月</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 凭证明细入口 -->
+        <div class="section">
+            <div class="section-head">
+                <span>相关凭证记录 &nbsp;<span class="hint">（当前部门：全公司 | 期间：2026-03 | 费用科目）</span></span>
+                <span class="hint">共 64 笔</span>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="left">日期</th>
+                            <th class="left">凭证号</th>
+                            <th class="left" style="min-width:160px">摘要</th>
+                            <th class="left">归属部门</th>
+                            <th class="left">科目</th>
+                            <th>借方金额</th>
+                            <th>贷方金额</th>
+                            <th class="center">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="left">2026-03-01</td>
+                            <td class="left"><a>记-2026003-00001</a></td>
+                            <td class="left">发放3月销售团队薪酬</td>
+                            <td class="left"><span class="tag tag-dept">销售中心</span></td>
+                            <td class="left">6601.01 职工薪酬</td>
+                            <td>186,000.00</td><td></td>
+                            <td class="center"><a>查看</a></td>
+                        </tr>
+                        <tr>
+                            <td class="left">2026-03-05</td>
+                            <td class="left"><a>记-2026003-00003</a></td>
+                            <td class="left">技术部研发人员3月薪酬</td>
+                            <td class="left"><span class="tag tag-dept">技术中心</span></td>
+                            <td class="left">6602.01 职工薪酬</td>
+                            <td>120,000.00</td><td></td>
+                            <td class="center"><a>查看</a></td>
+                        </tr>
+                        <tr>
+                            <td class="left">2026-03-08</td>
+                            <td class="left"><a>记-2026003-00005</a></td>
+                            <td class="left">缴纳银行贷款利息</td>
+                            <td class="left"><span class="tag tag-dept">财务部</span></td>
+                            <td class="left">6603.01 利息支出</td>
+                            <td>55,000.00</td><td></td>
+                            <td class="center"><a>查看</a></td>
+                        </tr>
+                        <tr>
+                            <td class="left">2026-03-10</td>
+                            <td class="left"><a>记-2026003-00007</a></td>
+                            <td class="left">销售出差北京差旅报销</td>
+                            <td class="left"><span class="tag tag-dept">销售中心</span></td>
+                            <td class="left">6601.02 差旅费</td>
+                            <td>28,600.00</td><td></td>
+                            <td class="center"><a>查看</a></td>
+                        </tr>
+                        <tr>
+                            <td class="left">2026-03-12</td>
+                            <td class="left"><a>记-2026003-00009</a></td>
+                            <td class="left">生产车间设备折旧摊销</td>
+                            <td class="left"><span class="tag tag-dept">生产中心</span></td>
+                            <td class="left">6602.02 折旧摊销</td>
+                            <td>32,000.00</td><td></td>
+                            <td class="center"><a>查看</a></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="pagination">
+                <span>共 64 条</span>
+                <button class="page-btn">«</button>
+                <button class="page-btn active">1</button>
+                <button class="page-btn">2</button>
+                <button class="page-btn">3</button>
+                <button class="page-btn">»</button>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
 </html>

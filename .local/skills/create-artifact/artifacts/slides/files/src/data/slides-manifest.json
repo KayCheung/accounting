@@ -1,0 +1,18 @@
+[
+  {
+    "id": "9f61f7eb-1ace-47f3-b8d5-9d5413e1282a",
+    "position": 1,
+    "filepath": "src/pages/slides/TitleSlide.tsx",
+    "title": "Welcome",
+    "description": "Opening title slide with deck name and presenter details.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "8ebe390e-c4f7-4144-8bd0-e0530bc8ef7e",
+    "position": 2,
+    "filepath": "src/pages/slides/Agenda.tsx",
+    "title": "Agenda",
+    "description": "Overview of the sequence and core discussion points.",
+    "speakerNotes": ""
+  }
+]

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <title>期末结转规则</title>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link type="text/css" href="resources/css/reset.css" rel="stylesheet" />
+    <link type="text/css" href="resources/css/default.css" rel="stylesheet" />
+    <style>
+        html, body { height: auto; overflow: auto !important; }
+        body { background-color: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { background: #fff; padding: 20px; border-bottom: 1px solid #e0e0e0; margin-bottom: 20px; }
+        .panel { background: #fff; border: 1px solid #d9d9d9; margin-bottom: 20px; }
+        .panel-header { background: #f5f5f5; padding: 12px 16px; border-bottom: 1px solid #e0e0e0; font-weight: bold; }
+        .panel-body { padding: 20px; }
+        .toolbar { margin-bottom: 16px; }
+        button { padding: 8px 16px; background: #1890ff; color: white; border: none; cursor: pointer; margin-right: 8px; }
+        button.secondary { background: #f0f0f0; color: #000; }
+        button:hover { opacity: 0.8; }
+        .table { width: 100%; border-collapse: collapse; }
+        .table th { background: #f5f5f5; padding: 12px; text-align: left; border-bottom: 1px solid #d9d9d9; font-weight: bold; }
+        .table td { padding: 12px; border-bottom: 1px solid #f0f0f0; }
+        .status { padding: 4px 8px; border-radius: 2px; font-size: 12px; }
+        .status-active { background: #f6ffed; color: #52c41a; }
+        .status-inactive { background: #fafafa; color: #8c8c8c; }
+        .tags { display: flex; gap: 4px; flex-wrap: wrap; }
+        .tag { background: #e6f7ff; color: #1890ff; padding: 2px 8px; border-radius: 2px; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>期末结转规则</h1>
+            <p>定义会计期末的损益结转、成本结转等规则，系统将按规则自动生成结转凭证</p>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>规则列表</span>
+                    <button>新增规则</button>
+                </div>
+            </div>
+            <div class="panel-body">
+                <div class="toolbar">
+                    <input type="text" placeholder="搜索规则名称..." style="width: 300px;" />
+                    <select style="width: 200px; margin-left: 8px;">
+                        <option>全部状态</option>
+                        <option>已启用</option>
+                        <option>已禁用</option>
+                    </select>
+                </div>
+
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th style="width: 25%;">规则名称</th>
+                            <th style="width: 20%;">规则类型</th>
+                            <th style="width: 20%;">源科目范围</th>
+                            <th style="width: 20%;">目标科目</th>
+                            <th style="width: 10%;">状态</th>
+                            <th style="width: 15%;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>本年利润结转规则</td>
+                            <td><span class="tag">损益结转</span></td>
+                            <td>6001-6999 (费用)</td>
+                            <td>3399 (本年利润)</td>
+                            <td><span class="status status-active">启用</span></td>
+                            <td><a href="#">编辑</a> | <a href="#">删除</a></td>
+                        </tr>
+                        <tr>
+                            <td>收入结转规则</td>
+                            <td><span class="tag">损益结转</span></td>
+                            <td>5001-5999 (收入)</td>
+                            <td>3399 (本年利润)</td>
+                            <td><span class="status status-active">启用</span></td>
+                            <td><a href="#">编辑</a> | <a href="#">删除</a></td>
+                        </tr>
+                        <tr>
+                            <td>制造成本结转规则</td>
+                            <td><span class="tag">成本结转</span></td>
+                            <td>2108 (制造费用)</td>
+                            <td>1405 (在产品)</td>
+                            <td><span class="status status-active">启用</span></td>
+                            <td><a href="#">编辑</a> | <a href="#">删除</a></td>
+                        </tr>
+                        <tr>
+                            <td>临时测试规则</td>
+                            <td><span class="tag">自定义</span></td>
+                            <td>6100-6200</td>
+                            <td>3399</td>
+                            <td><span class="status status-inactive">禁用</span></td>
+                            <td><a href="#">编辑</a> | <a href="#">删除</a></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">规则配置说明</div>
+            <div class="panel-body">
+                <div style="line-height: 1.8; color: #666;">
+                    <p><strong>损益结转:</strong> 将损益类科目(收入、费用)的期末余额结转到本年利润科目</p>
+                    <p><strong>成本结转:</strong> 将生产成本、制造费用等结转到产品成本科目</p>
+                    <p><strong>自定义结转:</strong> 用户自定义的结转规则，支持复杂的多步骤结转</p>
+                    <p style="margin-top: 12px; color: #1890ff;">
+                        <strong>提示:</strong> 规则执行时，系统将按照定义的科目范围，计算余额并生成结转凭证。可选择红字冲回或蓝字正常入账。
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

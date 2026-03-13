@@ -1,53 +1,250 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
-  <head>
+<head>
+    <meta charset="UTF-8" />
     <title>资产负债表</title>
-    <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
-    <meta http-equiv="content-type" content="text/html; charset=utf-8"/>
-    <link href="resources/css/axure_rp_page.css" type="text/css" rel="stylesheet"/>
-    <link href="data/styles.css" type="text/css" rel="stylesheet"/>
-    <link href="files/资产负债表/styles.css" type="text/css" rel="stylesheet"/>
-    <script src="resources/scripts/jquery-3.2.1.min.js"></script>
-    <script src="resources/scripts/axure/axQuery.js"></script>
-    <script src="resources/scripts/axure/globals.js"></script>
-    <script src="resources/scripts/axutils.js"></script>
-    <script src="resources/scripts/axure/annotation.js"></script>
-    <script src="resources/scripts/axure/axQuery.std.js"></script>
-    <script src="resources/scripts/axure/doc.js"></script>
-    <script src="resources/scripts/messagecenter.js"></script>
-    <script src="resources/scripts/axure/events.js"></script>
-    <script src="resources/scripts/axure/recording.js"></script>
-    <script src="resources/scripts/axure/action.js"></script>
-    <script src="resources/scripts/axure/expr.js"></script>
-    <script src="resources/scripts/axure/geometry.js"></script>
-    <script src="resources/scripts/axure/flyout.js"></script>
-    <script src="resources/scripts/axure/model.js"></script>
-    <script src="resources/scripts/axure/repeater.js"></script>
-    <script src="resources/scripts/axure/sto.js"></script>
-    <script src="resources/scripts/axure/utils.temp.js"></script>
-    <script src="resources/scripts/axure/variables.js"></script>
-    <script src="resources/scripts/axure/drag.js"></script>
-    <script src="resources/scripts/axure/move.js"></script>
-    <script src="resources/scripts/axure/visibility.js"></script>
-    <script src="resources/scripts/axure/style.js"></script>
-    <script src="resources/scripts/axure/adaptive.js"></script>
-    <script src="resources/scripts/axure/tree.js"></script>
-    <script src="resources/scripts/axure/init.temp.js"></script>
-    <script src="resources/scripts/axure/legacy.js"></script>
-    <script src="resources/scripts/axure/viewer.js"></script>
-    <script src="resources/scripts/axure/math.js"></script>
-    <script src="resources/scripts/axure/jquery.nicescroll.min.js"></script>
-    <script src="data/document.js"></script>
-    <script src="files/资产负债表/data.js"></script>
-    <script type="text/javascript">
-      $axure.utils.getTransparentGifPath = function() { return 'resources/images/transparent.gif'; };
-      $axure.utils.getOtherPath = function() { return 'resources/Other.html'; };
-      $axure.utils.getReloadPath = function() { return 'resources/reload.html'; };
-    </script>
-  </head>
-  <body>
-    <div id="base" class="">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+        html, body { height: auto; overflow: auto !important; margin: 0; padding: 0; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; font-size: 13px; background: #f0f2f5; color: #333; }
+        a { color: #1890ff; text-decoration: none; cursor: pointer; }
+        .navbar { background: #001529; padding: 0 24px; height: 48px; display: flex; align-items: center; justify-content: space-between; }
+        .navbar-brand { color: #fff; font-size: 16px; font-weight: bold; }
+        .navbar-nav { display: flex; gap: 24px; }
+        .navbar-nav a { color: rgba(255,255,255,0.65); font-size: 13px; }
+        .navbar-nav a.active { color: #fff; }
+        .navbar-right { color: rgba(255,255,255,0.65); font-size: 13px; }
+        .breadcrumb { padding: 12px 24px; font-size: 13px; color: #999; background: #fff; border-bottom: 1px solid #e8e8e8; }
+        .breadcrumb span { color: #333; }
+        .main { padding: 20px 24px; }
+        .filter-card { background: #fff; border: 1px solid #e8e8e8; border-radius: 2px; padding: 16px 24px; margin-bottom: 16px; display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; }
+        .filter-item { display: flex; flex-direction: column; gap: 4px; }
+        .filter-item label { font-size: 12px; color: #666; }
+        .filter-item select, .filter-item input { height: 32px; padding: 0 10px; border: 1px solid #d9d9d9; border-radius: 2px; font-size: 13px; color: #333; outline: none; background: #fff; min-width: 140px; }
+        .btn { height: 32px; padding: 0 16px; border-radius: 2px; border: 1px solid #d9d9d9; background: #fff; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+        .btn-primary { background: #1890ff; color: #fff; border-color: #1890ff; }
+        .btn:hover { border-color: #1890ff; color: #1890ff; }
+        .btn-primary:hover { background: #40a9ff; color: #fff; border-color: #40a9ff; }
+        /* 报表头 */
+        .report-header { background: #fff; border: 1px solid #e8e8e8; border-radius: 2px; padding: 20px 24px; margin-bottom: 0; text-align: center; border-bottom: none; }
+        .report-title { font-size: 20px; font-weight: bold; color: #000; margin-bottom: 6px; letter-spacing: 4px; }
+        .report-subtitle { font-size: 13px; color: #666; display: flex; justify-content: space-between; padding: 0 40px; margin-top: 8px; }
+        /* 表格 */
+        .table-card { background: #fff; border: 1px solid #e8e8e8; border-radius: 2px; }
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        /* 双栏表头 */
+        thead th { padding: 10px 12px; text-align: center; font-weight: 600; font-size: 12px; color: #fff; background: #1d6fa4; border: 1px solid #1a6093; white-space: nowrap; }
+        thead th.asset-header { background: #2178b4; }
+        thead th.liability-header { background: #1a5e96; }
+        /* 数据行 */
+        td { padding: 9px 12px; border: 1px solid #e8e8e8; font-size: 13px; white-space: nowrap; }
+        td.item-name { text-align: left; color: #333; }
+        td.item-name.level2 { padding-left: 24px; color: #555; }
+        td.item-name.subtotal { font-weight: 700; background: #f0f5ff; color: #003a8c; }
+        td.row-no { text-align: center; color: #999; font-size: 12px; width: 40px; }
+        td.amount { text-align: right; font-family: "Consolas", monospace; }
+        td.amount.end { color: #1d6fa4; font-weight: 500; }
+        td.amount.begin { color: #555; }
+        td.amount.subtotal { font-weight: 700; background: #f0f5ff; color: #003a8c; }
+        td.amount.grand { font-weight: 700; background: #fffbe6; color: #d4380d; }
+        td.item-name.grand { font-weight: 700; background: #fffbe6; color: #d4380d; }
+        td.separator { background: #f5f5f5; width: 8px; border: none; }
+        tbody tr:hover td:not(.separator) { background: #e6f7ff; }
+        /* 工具栏 */
+        .toolbar { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #fafafa; border-bottom: 1px solid #e8e8e8; }
+        .toolbar-left { font-size: 13px; color: #666; }
+        .toolbar-right { display: flex; gap: 8px; }
+        /* 注释 */
+        .note { padding: 12px 20px; font-size: 12px; color: #999; border-top: 1px solid #f0f0f0; background: #fafafa; }
+        .back-link { margin-bottom: 12px; display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
+    </style>
+</head>
+<body>
+<div class="navbar">
+    <div class="navbar-brand">金融级账务核心系统</div>
+    <div class="navbar-nav">
+        <a href="#">账务处理</a>
+        <a href="#">账簿查询</a>
+        <a href="#">期末处理</a>
+        <a href="#" class="active">报表中心</a>
+        <a href="#">系统管理</a>
     </div>
-    <script src="resources/scripts/axure/ios.js"></script>
-  </body>
+    <div class="navbar-right">admin &nbsp;|&nbsp; 退出</div>
+</div>
+<div class="breadcrumb">报表中心 / <span>资产负债表</span></div>
+<div class="main">
+    <a href="index.html" class="back-link">← 返回目录</a>
+
+    <!-- 筛选条件 -->
+    <div class="filter-card">
+        <div class="filter-item">
+            <label>账套</label>
+            <select><option>主账套（人民币）</option></select>
+        </div>
+        <div class="filter-item">
+            <label>报告期</label>
+            <select><option>2026-03（当前期）</option><option>2026-02</option><option>2026-01</option><option>2025-12</option></select>
+        </div>
+        <div class="filter-item">
+            <label>对比期</label>
+            <select><option>年初（2026-01-01）</option><option>2025-12</option><option>2025-09</option><option>不对比</option></select>
+        </div>
+        <div class="filter-item">
+            <label>报表模板</label>
+            <select><option>企业会计准则（2006）</option><option>小企业会计准则</option><option>金融企业准则</option></select>
+        </div>
+        <div style="display:flex;align-items:flex-end;gap:8px;">
+            <button class="btn btn-primary">🔍 生成报表</button>
+            <button class="btn">📤 导出 Excel</button>
+            <button class="btn">📄 导出 PDF</button>
+            <button class="btn">🖨 打印</button>
+        </div>
+    </div>
+
+    <!-- 报表标题 -->
+    <div class="report-header">
+        <div class="report-title">资 产 负 债 表</div>
+        <div class="report-subtitle">
+            <span>编制单位：XX科技有限公司</span>
+            <span>2026年3月31日</span>
+            <span>单位：元</span>
+        </div>
+    </div>
+
+    <!-- 表格 -->
+    <div class="table-card">
+        <div class="toolbar">
+            <div class="toolbar-left">报告期：2026-03 &nbsp;|&nbsp; 对比：年初（2026-01-01）&nbsp;|&nbsp; 编制状态：<span style="color:#52c41a">●</span> 已生成</div>
+            <div class="toolbar-right">
+                <button class="btn">校验平衡</button>
+                <button class="btn">审核</button>
+                <button class="btn">上报</button>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th class="asset-header" colspan="4">资 产</th>
+                        <th class="separator" rowspan="99"></th>
+                        <th class="liability-header" colspan="4">负债及所有者权益</th>
+                    </tr>
+                    <tr>
+                        <th class="asset-header">项目</th>
+                        <th class="asset-header">行次</th>
+                        <th class="asset-header">期末余额</th>
+                        <th class="asset-header">年初余额</th>
+                        <th class="liability-header">项目</th>
+                        <th class="liability-header">行次</th>
+                        <th class="liability-header">期末余额</th>
+                        <th class="liability-header">年初余额</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="item-name"><b>流动资产：</b></td><td class="row-no"></td><td class="amount end"></td><td class="amount begin"></td>
+                        <td class="item-name"><b>流动负债：</b></td><td class="row-no"></td><td class="amount end"></td><td class="amount begin"></td>
+                    </tr>
+                    <tr>
+                        <td class="item-name level2">货币资金</td><td class="row-no">1</td><td class="amount end">14,358,490.00</td><td class="amount begin">12,941,750.00</td>
+                        <td class="item-name level2">短期借款</td><td class="row-no">51</td><td class="amount end">5,000,000.00</td><td class="amount begin">5,000,000.00</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name level2">交易性金融资产</td><td class="row-no">2</td><td class="amount end">—</td><td class="amount begin">—</td>
+                        <td class="item-name level2">交易性金融负债</td><td class="row-no">52</td><td class="amount end">—</td><td class="amount begin">—</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name level2">应收票据</td><td class="row-no">3</td><td class="amount end">860,000.00</td><td class="amount begin">620,000.00</td>
+                        <td class="item-name level2">应付票据</td><td class="row-no">53</td><td class="amount end">380,000.00</td><td class="amount begin">250,000.00</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name level2">应收账款</td><td class="row-no">4</td><td class="amount end">6,500,000.00</td><td class="amount begin">5,820,000.00</td>
+                        <td class="item-name level2">应付账款</td><td class="row-no">54</td><td class="amount end">4,810,000.00</td><td class="amount begin">3,960,000.00</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name level2">预付账款</td><td class="row-no">5</td><td class="amount end">450,000.00</td><td class="amount begin">320,000.00</td>
+                        <td class="item-name level2">预收账款</td><td class="row-no">55</td><td class="amount end">1,200,000.00</td><td class="amount begin">980,000.00</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name level2">其他应收款</td><td class="row-no">6</td><td class="amount end">285,000.00</td><td class="amount begin">320,000.00</td>
+                        <td class="item-name level2">应付职工薪酬</td><td class="row-no">56</td><td class="amount end">920,000.00</td><td class="amount begin">850,000.00</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name level2">存货</td><td class="row-no">7</td><td class="amount end">11,600,000.00</td><td class="amount begin">10,800,000.00</td>
+                        <td class="item-name level2">应交税费</td><td class="row-no">57</td><td class="amount end">1,380,000.00</td><td class="amount begin">1,120,000.00</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name level2">其他流动资产</td><td class="row-no">8</td><td class="amount end">120,000.00</td><td class="amount begin">85,000.00</td>
+                        <td class="item-name level2">其他应付款</td><td class="row-no">58</td><td class="amount end">560,000.00</td><td class="amount begin">480,000.00</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name level2">一年内到期非流动资产</td><td class="row-no">9</td><td class="amount end">—</td><td class="amount begin">—</td>
+                        <td class="item-name level2">一年内到期非流动负债</td><td class="row-no">59</td><td class="amount end">1,500,000.00</td><td class="amount begin">1,000,000.00</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name subtotal">流动资产合计</td><td class="row-no subtotal">10</td><td class="amount end subtotal">34,173,490.00</td><td class="amount begin subtotal">30,906,750.00</td>
+                        <td class="item-name subtotal">流动负债合计</td><td class="row-no subtotal">60</td><td class="amount end subtotal">15,750,000.00</td><td class="amount begin subtotal">13,640,000.00</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name"><b>非流动资产：</b></td><td class="row-no"></td><td class="amount end"></td><td class="amount begin"></td>
+                        <td class="item-name"><b>非流动负债：</b></td><td class="row-no"></td><td class="amount end"></td><td class="amount begin"></td>
+                    </tr>
+                    <tr>
+                        <td class="item-name level2">长期股权投资</td><td class="row-no">11</td><td class="amount end">2,000,000.00</td><td class="amount begin">2,000,000.00</td>
+                        <td class="item-name level2">长期借款</td><td class="row-no">61</td><td class="amount end">8,000,000.00</td><td class="amount begin">8,000,000.00</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name level2">固定资产净值</td><td class="row-no">12</td><td class="amount end">16,985,000.00</td><td class="amount begin">17,410,000.00</td>
+                        <td class="item-name level2">递延所得税负债</td><td class="row-no">62</td><td class="amount end">120,000.00</td><td class="amount begin">100,000.00</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name level2">在建工程</td><td class="row-no">13</td><td class="amount end">850,000.00</td><td class="amount begin">1,200,000.00</td>
+                        <td class="item-name level2">其他非流动负债</td><td class="row-no">63</td><td class="amount end">—</td><td class="amount begin">—</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name level2">无形资产</td><td class="row-no">14</td><td class="amount end">1,200,000.00</td><td class="amount begin">1,350,000.00</td>
+                        <td class="item-name subtotal">非流动负债合计</td><td class="row-no subtotal">64</td><td class="amount end subtotal">8,120,000.00</td><td class="amount begin subtotal">8,100,000.00</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name level2">长期待摊费用</td><td class="row-no">15</td><td class="amount end">380,000.00</td><td class="amount begin">420,000.00</td>
+                        <td class="item-name subtotal">负债合计</td><td class="row-no subtotal">65</td><td class="amount end subtotal">23,870,000.00</td><td class="amount begin subtotal">21,740,000.00</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name level2">递延所得税资产</td><td class="row-no">16</td><td class="amount end">85,000.00</td><td class="amount begin">72,000.00</td>
+                        <td class="item-name"><b>所有者权益：</b></td><td class="row-no"></td><td class="amount end"></td><td class="amount begin"></td>
+                    </tr>
+                    <tr>
+                        <td class="item-name level2">其他非流动资产</td><td class="row-no">17</td><td class="amount end">—</td><td class="amount begin">—</td>
+                        <td class="item-name level2">实收资本（股本）</td><td class="row-no">66</td><td class="amount end">20,000,000.00</td><td class="amount begin">20,000,000.00</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name subtotal">非流动资产合计</td><td class="row-no subtotal">18</td><td class="amount end subtotal">21,500,000.00</td><td class="amount begin subtotal">22,452,000.00</td>
+                        <td class="item-name level2">资本公积</td><td class="row-no">67</td><td class="amount end">3,500,000.00</td><td class="amount begin">3,500,000.00</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name"></td><td class="row-no"></td><td class="amount end"></td><td class="amount begin"></td>
+                        <td class="item-name level2">盈余公积</td><td class="row-no">68</td><td class="amount end">1,800,000.00</td><td class="amount begin">1,600,000.00</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name"></td><td class="row-no"></td><td class="amount end"></td><td class="amount begin"></td>
+                        <td class="item-name level2">未分配利润</td><td class="row-no">69</td><td class="amount end">6,503,490.00</td><td class="amount begin">6,518,750.00</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name"></td><td class="row-no"></td><td class="amount end"></td><td class="amount begin"></td>
+                        <td class="item-name subtotal">所有者权益合计</td><td class="row-no subtotal">70</td><td class="amount end subtotal">31,803,490.00</td><td class="amount begin subtotal">31,618,750.00</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name grand">资产总计</td><td class="row-no grand">20</td><td class="amount grand">55,673,490.00</td><td class="amount grand">53,358,750.00</td>
+                        <td class="item-name grand">负债及所有者权益总计</td><td class="row-no grand">80</td><td class="amount grand">55,673,490.00</td><td class="amount grand">53,358,750.00</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="note">
+            注：本表按《企业会计准则》编制 &nbsp;|&nbsp; 左右合计差异：<span style="color:#52c41a">0.00（平衡）</span> &nbsp;|&nbsp; 生成时间：2026-03-13 09:30:22 &nbsp;|&nbsp; 编制人：张三
+        </div>
+    </div>
+</div>
+</body>
 </html>

@@ -1,53 +1,448 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
-  <head>
+<head>
+    <meta charset="UTF-8" />
     <title>利润表</title>
-    <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
-    <meta http-equiv="content-type" content="text/html; charset=utf-8"/>
-    <link href="resources/css/axure_rp_page.css" type="text/css" rel="stylesheet"/>
-    <link href="data/styles.css" type="text/css" rel="stylesheet"/>
-    <link href="files/利润表/styles.css" type="text/css" rel="stylesheet"/>
-    <script src="resources/scripts/jquery-3.2.1.min.js"></script>
-    <script src="resources/scripts/axure/axQuery.js"></script>
-    <script src="resources/scripts/axure/globals.js"></script>
-    <script src="resources/scripts/axutils.js"></script>
-    <script src="resources/scripts/axure/annotation.js"></script>
-    <script src="resources/scripts/axure/axQuery.std.js"></script>
-    <script src="resources/scripts/axure/doc.js"></script>
-    <script src="resources/scripts/messagecenter.js"></script>
-    <script src="resources/scripts/axure/events.js"></script>
-    <script src="resources/scripts/axure/recording.js"></script>
-    <script src="resources/scripts/axure/action.js"></script>
-    <script src="resources/scripts/axure/expr.js"></script>
-    <script src="resources/scripts/axure/geometry.js"></script>
-    <script src="resources/scripts/axure/flyout.js"></script>
-    <script src="resources/scripts/axure/model.js"></script>
-    <script src="resources/scripts/axure/repeater.js"></script>
-    <script src="resources/scripts/axure/sto.js"></script>
-    <script src="resources/scripts/axure/utils.temp.js"></script>
-    <script src="resources/scripts/axure/variables.js"></script>
-    <script src="resources/scripts/axure/drag.js"></script>
-    <script src="resources/scripts/axure/move.js"></script>
-    <script src="resources/scripts/axure/visibility.js"></script>
-    <script src="resources/scripts/axure/style.js"></script>
-    <script src="resources/scripts/axure/adaptive.js"></script>
-    <script src="resources/scripts/axure/tree.js"></script>
-    <script src="resources/scripts/axure/init.temp.js"></script>
-    <script src="resources/scripts/axure/legacy.js"></script>
-    <script src="resources/scripts/axure/viewer.js"></script>
-    <script src="resources/scripts/axure/math.js"></script>
-    <script src="resources/scripts/axure/jquery.nicescroll.min.js"></script>
-    <script src="data/document.js"></script>
-    <script src="files/利润表/data.js"></script>
-    <script type="text/javascript">
-      $axure.utils.getTransparentGifPath = function() { return 'resources/images/transparent.gif'; };
-      $axure.utils.getOtherPath = function() { return 'resources/Other.html'; };
-      $axure.utils.getReloadPath = function() { return 'resources/reload.html'; };
-    </script>
-  </head>
-  <body>
-    <div id="base" class="">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+        html, body { height: auto; overflow: auto !important; margin: 0; padding: 0; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; font-size: 13px; background: #f0f2f5; color: #333; }
+        a { color: #1890ff; text-decoration: none; cursor: pointer; }
+        .navbar { background: #001529; padding: 0 24px; height: 48px; display: flex; align-items: center; justify-content: space-between; }
+        .navbar-brand { color: #fff; font-size: 16px; font-weight: bold; }
+        .navbar-nav { display: flex; gap: 24px; }
+        .navbar-nav a { color: rgba(255,255,255,0.65); font-size: 13px; }
+        .navbar-nav a.active { color: #fff; }
+        .navbar-right { color: rgba(255,255,255,0.65); font-size: 13px; }
+        .breadcrumb { padding: 12px 24px; font-size: 13px; color: #999; background: #fff; border-bottom: 1px solid #e8e8e8; }
+        .breadcrumb span { color: #333; }
+        .main { padding: 20px 24px; max-width: 1000px; }
+        .filter-card { background: #fff; border: 1px solid #e8e8e8; border-radius: 2px; padding: 16px 24px; margin-bottom: 16px; display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; }
+        .filter-item { display: flex; flex-direction: column; gap: 4px; }
+        .filter-item label { font-size: 12px; color: #666; }
+        .filter-item select, .filter-item input { height: 32px; padding: 0 10px; border: 1px solid #d9d9d9; border-radius: 2px; font-size: 13px; color: #333; outline: none; background: #fff; min-width: 150px; }
+        .btn { height: 32px; padding: 0 16px; border-radius: 2px; border: 1px solid #d9d9d9; background: #fff; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+        .btn-primary { background: #1890ff; color: #fff; border-color: #1890ff; }
+        .btn:hover { border-color: #1890ff; color: #1890ff; }
+        .btn-primary:hover { background: #40a9ff; color: #fff; border-color: #40a9ff; }
+        /* 报表标题 */
+        .report-header { background: #fff; border: 1px solid #e8e8e8; border-radius: 2px 2px 0 0; padding: 20px 24px; text-align: center; border-bottom: none; }
+        .report-title { font-size: 20px; font-weight: bold; color: #000; margin-bottom: 6px; letter-spacing: 4px; }
+        .report-subtitle { font-size: 13px; color: #666; display: flex; justify-content: space-between; padding: 0 20px; margin-top: 8px; }
+        /* 工具栏 */
+        .toolbar { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #fafafa; border: 1px solid #e8e8e8; border-top: none; border-bottom: 1px solid #e8e8e8; margin-bottom: 0; }
+        .toolbar-left { font-size: 13px; color: #666; }
+        .toolbar-right { display: flex; gap: 8px; }
+        /* 表格 */
+        .table-card { background: #fff; border: 1px solid #e8e8e8; border-radius: 0 0 2px 2px; border-top: none; }
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        th { padding: 10px 16px; text-align: right; font-weight: 600; font-size: 12px; color: #fff; background: #1d6fa4; border: 1px solid #1a6093; white-space: nowrap; }
+        th.left { text-align: left; }
+        th.center { text-align: center; }
+        td { padding: 9px 16px; border: 1px solid #ebebeb; font-size: 13px; white-space: nowrap; text-align: right; }
+        td.item-name { text-align: left; color: #333; min-width: 220px; }
+        td.item-name.l1 { font-weight: 700; color: #000; background: #f7f9fc; }
+        td.item-name.l2 { padding-left: 28px; color: #555; }
+        td.item-name.l3 { padding-left: 44px; color: #777; font-size: 12px; }
+        td.item-name.subtotal { font-weight: 700; background: #e6f0fa; color: #003a8c; }
+        td.item-name.total { font-weight: 700; font-size: 14px; background: #fffbe6; color: #d4380d; }
+        td.row-no { text-align: center; color: #999; font-size: 12px; width: 36px; }
+        td.num { font-family: "Consolas", monospace; }
+        td.num.current { color: #1d6fa4; }
+        td.num.ytd { color: #2c8f5f; }
+        td.num.prior { color: #888; }
+        td.num.subtotal { font-weight: 700; background: #e6f0fa; color: #003a8c; }
+        td.num.total { font-weight: 700; font-size: 14px; background: #fffbe6; color: #d4380d; }
+        td.num.negative { color: #f5222d; }
+        td.num.zero { color: #bbb; }
+        tbody tr:hover td { background: #e6f7ff; }
+        /* 图表区 */
+        .chart-area { background: #fff; border: 1px solid #e8e8e8; border-radius: 2px; padding: 20px 24px; margin-top: 16px; }
+        .chart-title { font-size: 14px; font-weight: 600; margin-bottom: 16px; color: #333; }
+        .chart-bars { display: flex; gap: 32px; align-items: flex-end; height: 160px; padding: 0 12px; border-bottom: 2px solid #e8e8e8; }
+        .chart-bar-group { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; }
+        .bar-wrap { display: flex; gap: 4px; align-items: flex-end; height: 140px; }
+        .bar { width: 32px; border-radius: 2px 2px 0 0; display: flex; align-items: flex-end; justify-content: center; }
+        .bar-label { font-size: 11px; color: #666; margin-top: 6px; }
+        .bar-value { font-size: 10px; color: #fff; padding: 2px; writing-mode: vertical-rl; }
+        .chart-legend { display: flex; gap: 24px; margin-top: 12px; justify-content: center; }
+        .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #666; }
+        .legend-dot { width: 12px; height: 12px; border-radius: 2px; }
+        /* 摘要卡片 */
+        .kpi-row { display: flex; gap: 16px; margin-bottom: 16px; }
+        .kpi-card { flex: 1; background: #fff; border: 1px solid #e8e8e8; border-radius: 2px; padding: 16px 20px; }
+        .kpi-label { font-size: 12px; color: #999; margin-bottom: 8px; }
+        .kpi-value { font-size: 22px; font-weight: 700; color: #1d6fa4; }
+        .kpi-value.red { color: #f5222d; }
+        .kpi-value.green { color: #52c41a; }
+        .kpi-sub { font-size: 11px; color: #999; margin-top: 4px; }
+        .kpi-sub .up { color: #52c41a; }
+        .kpi-sub .down { color: #f5222d; }
+        /* 注释 */
+        .note { padding: 12px 20px; font-size: 12px; color: #999; border-top: 1px solid #f0f0f0; background: #fafafa; }
+        .back-link { margin-bottom: 12px; display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
+    </style>
+</head>
+<body>
+<div class="navbar">
+    <div class="navbar-brand">金融级账务核心系统</div>
+    <div class="navbar-nav">
+        <a href="#">账务处理</a>
+        <a href="#">账簿查询</a>
+        <a href="#">期末处理</a>
+        <a href="#" class="active">报表中心</a>
+        <a href="#">系统管理</a>
     </div>
-    <script src="resources/scripts/axure/ios.js"></script>
-  </body>
+    <div class="navbar-right">admin &nbsp;|&nbsp; 退出</div>
+</div>
+<div class="breadcrumb">报表中心 / <span>利润表</span></div>
+<div class="main">
+    <a href="index.html" class="back-link">← 返回目录</a>
+
+    <!-- 筛选条件 -->
+    <div class="filter-card">
+        <div class="filter-item">
+            <label>账套</label>
+            <select><option>主账套（人民币）</option></select>
+        </div>
+        <div class="filter-item">
+            <label>会计年度</label>
+            <select><option>2026</option><option>2025</option></select>
+        </div>
+        <div class="filter-item">
+            <label>报告期（止）</label>
+            <select><option>2026-03（当前期）</option><option>2026-02</option><option>2026-01</option></select>
+        </div>
+        <div class="filter-item">
+            <label>对比方式</label>
+            <select><option>同期对比（上年同期）</option><option>环比（上月）</option><option>预算对比</option><option>不对比</option></select>
+        </div>
+        <div class="filter-item">
+            <label>报表模板</label>
+            <select><option>企业会计准则（2006）</option><option>小企业会计准则</option></select>
+        </div>
+        <div style="display:flex;align-items:flex-end;gap:8px;">
+            <button class="btn btn-primary">🔍 生成报表</button>
+            <button class="btn">📤 导出 Excel</button>
+            <button class="btn">📄 导出 PDF</button>
+            <button class="btn">🖨 打印</button>
+        </div>
+    </div>
+
+    <!-- KPI 摘要 -->
+    <div class="kpi-row">
+        <div class="kpi-card">
+            <div class="kpi-label">本月营业收入</div>
+            <div class="kpi-value">8,520,000</div>
+            <div class="kpi-sub"><span class="up">▲ 12.3%</span> 较上年同期</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">本月营业利润</div>
+            <div class="kpi-value green">2,128,400</div>
+            <div class="kpi-sub"><span class="up">▲ 8.6%</span> 较上年同期</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">本月净利润</div>
+            <div class="kpi-value green">1,596,300</div>
+            <div class="kpi-sub"><span class="up">▲ 9.1%</span> 较上年同期</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">本月毛利率</div>
+            <div class="kpi-value">35.3%</div>
+            <div class="kpi-sub"><span class="down">▼ 0.8pp</span> 较上年同期</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">年累计净利润</div>
+            <div class="kpi-value green">4,218,500</div>
+            <div class="kpi-sub"><span class="up">▲ 11.2%</span> 较去年同期</div>
+        </div>
+    </div>
+
+    <!-- 报表标题 -->
+    <div class="report-header">
+        <div class="report-title">利 润 表</div>
+        <div class="report-subtitle">
+            <span>编制单位：XX科技有限公司</span>
+            <span>2026年1-3月</span>
+            <span>单位：元</span>
+        </div>
+    </div>
+
+    <!-- 工具栏 -->
+    <div class="toolbar">
+        <div class="toolbar-left">报告期：2026-01 ~ 2026-03 &nbsp;|&nbsp; 对比：上年同期（2025-01 ~ 2025-03）&nbsp;|&nbsp; 编制状态：<span style="color:#52c41a">●</span> 已生成</div>
+        <div class="toolbar-right">
+            <button class="btn">审核</button>
+            <button class="btn">上报</button>
+        </div>
+    </div>
+
+    <!-- 表格 -->
+    <div class="table-card">
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th class="left" style="min-width:220px">项 目</th>
+                        <th class="center" style="width:40px">行次</th>
+                        <th>本月金额</th>
+                        <th>本年累计</th>
+                        <th>上年同期（本月）</th>
+                        <th>上年同期（累计）</th>
+                        <th>同比增减（本月）</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- 营业收入 -->
+                    <tr>
+                        <td class="item-name l1">一、营业收入</td>
+                        <td class="row-no">1</td>
+                        <td class="num current">8,520,000.00</td>
+                        <td class="num ytd">24,860,000.00</td>
+                        <td class="num prior">7,586,000.00</td>
+                        <td class="num prior">22,100,000.00</td>
+                        <td class="num current" style="color:#52c41a">▲ 12.3%</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name l2">其中：主营业务收入</td>
+                        <td class="row-no">2</td>
+                        <td class="num current">8,120,000.00</td>
+                        <td class="num ytd">23,680,000.00</td>
+                        <td class="num prior">7,200,000.00</td>
+                        <td class="num prior">21,000,000.00</td>
+                        <td class="num" style="color:#52c41a">▲ 12.8%</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name l2">其他业务收入</td>
+                        <td class="row-no">3</td>
+                        <td class="num current">400,000.00</td>
+                        <td class="num ytd">1,180,000.00</td>
+                        <td class="num prior">386,000.00</td>
+                        <td class="num prior">1,100,000.00</td>
+                        <td class="num" style="color:#52c41a">▲ 3.6%</td>
+                    </tr>
+                    <!-- 营业成本 -->
+                    <tr>
+                        <td class="item-name l1">减：营业成本</td>
+                        <td class="row-no">4</td>
+                        <td class="num negative">5,512,000.00</td>
+                        <td class="num negative">16,085,000.00</td>
+                        <td class="num prior">4,878,000.00</td>
+                        <td class="num prior">14,200,000.00</td>
+                        <td class="num" style="color:#f5222d">▼ 13.0%</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name l2">其中：主营业务成本</td>
+                        <td class="row-no">5</td>
+                        <td class="num negative">5,262,000.00</td>
+                        <td class="num negative">15,360,000.00</td>
+                        <td class="num prior">4,648,000.00</td>
+                        <td class="num prior">13,560,000.00</td>
+                        <td class="num" style="color:#f5222d">▼ 13.2%</td>
+                    </tr>
+                    <!-- 税金及附加 -->
+                    <tr>
+                        <td class="item-name l1">减：税金及附加</td>
+                        <td class="row-no">6</td>
+                        <td class="num negative">96,000.00</td>
+                        <td class="num negative">280,000.00</td>
+                        <td class="num prior">85,000.00</td>
+                        <td class="num prior">248,000.00</td>
+                        <td class="num" style="color:#f5222d">▼ 12.9%</td>
+                    </tr>
+                    <!-- 毛利（非报表行，设计辅助展示） -->
+                    <tr style="background:#f0f9eb">
+                        <td class="item-name" style="padding-left:12px;color:#389e0d;font-weight:600">【毛利润】</td>
+                        <td class="row-no"></td>
+                        <td class="num" style="color:#389e0d;font-weight:600">3,008,000.00</td>
+                        <td class="num" style="color:#389e0d;font-weight:600">8,775,000.00</td>
+                        <td class="num prior">2,708,000.00</td>
+                        <td class="num prior">7,900,000.00</td>
+                        <td class="num" style="color:#52c41a">▲ 11.1%</td>
+                    </tr>
+                    <!-- 期间费用 -->
+                    <tr>
+                        <td class="item-name l1">减：销售费用</td>
+                        <td class="row-no">7</td>
+                        <td class="num negative">312,000.00</td>
+                        <td class="num negative">910,000.00</td>
+                        <td class="num prior">285,000.00</td>
+                        <td class="num prior">832,000.00</td>
+                        <td class="num" style="color:#f5222d">▼ 9.5%</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name l1">减：管理费用</td>
+                        <td class="row-no">8</td>
+                        <td class="num negative">520,000.00</td>
+                        <td class="num negative">1,518,000.00</td>
+                        <td class="num prior">492,000.00</td>
+                        <td class="num prior">1,436,000.00</td>
+                        <td class="num" style="color:#f5222d">▼ 5.7%</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name l2">其中：研发费用</td>
+                        <td class="row-no">9</td>
+                        <td class="num negative">180,000.00</td>
+                        <td class="num negative">525,000.00</td>
+                        <td class="num prior">165,000.00</td>
+                        <td class="num prior">482,000.00</td>
+                        <td class="num" style="color:#f5222d">▼ 9.1%</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name l1">减：财务费用</td>
+                        <td class="row-no">10</td>
+                        <td class="num negative">48,600.00</td>
+                        <td class="num negative">142,000.00</td>
+                        <td class="num prior">52,000.00</td>
+                        <td class="num prior">152,000.00</td>
+                        <td class="num" style="color:#52c41a">▲ 6.5%</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name l2">其中：利息费用</td>
+                        <td class="row-no">11</td>
+                        <td class="num negative">55,000.00</td>
+                        <td class="num negative">160,000.00</td>
+                        <td class="num prior">58,000.00</td>
+                        <td class="num prior">170,000.00</td>
+                        <td class="num" style="color:#52c41a">▲ 5.2%</td>
+                    </tr>
+                    <!-- 其他收益 -->
+                    <tr>
+                        <td class="item-name l1">加：其他收益</td>
+                        <td class="row-no">12</td>
+                        <td class="num current">0.00</td>
+                        <td class="num ytd">0.00</td>
+                        <td class="num prior zero">0.00</td>
+                        <td class="num prior zero">0.00</td>
+                        <td class="num zero">—</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name l1">加：投资收益</td>
+                        <td class="row-no">13</td>
+                        <td class="num current">28,000.00</td>
+                        <td class="num ytd">82,000.00</td>
+                        <td class="num prior">24,000.00</td>
+                        <td class="num prior">71,000.00</td>
+                        <td class="num" style="color:#52c41a">▲ 16.7%</td>
+                    </tr>
+                    <!-- 营业利润 -->
+                    <tr>
+                        <td class="item-name subtotal">二、营业利润</td>
+                        <td class="row-no subtotal">14</td>
+                        <td class="num subtotal">2,128,400.00</td>
+                        <td class="num subtotal">6,207,000.00</td>
+                        <td class="num subtotal">1,918,000.00</td>
+                        <td class="num subtotal">5,403,000.00</td>
+                        <td class="num" style="color:#52c41a;font-weight:700">▲ 11.0%</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name l1">加：营业外收入</td>
+                        <td class="row-no">15</td>
+                        <td class="num current">8,000.00</td>
+                        <td class="num ytd">23,500.00</td>
+                        <td class="num prior">6,000.00</td>
+                        <td class="num prior">18,000.00</td>
+                        <td class="num" style="color:#52c41a">▲ 33.3%</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name l1">减：营业外支出</td>
+                        <td class="row-no">16</td>
+                        <td class="num negative">6,100.00</td>
+                        <td class="num negative">18,000.00</td>
+                        <td class="num prior">5,000.00</td>
+                        <td class="num prior">15,000.00</td>
+                        <td class="num" style="color:#f5222d">▼ 22.0%</td>
+                    </tr>
+                    <!-- 利润总额 -->
+                    <tr>
+                        <td class="item-name subtotal">三、利润总额</td>
+                        <td class="row-no subtotal">17</td>
+                        <td class="num subtotal">2,130,300.00</td>
+                        <td class="num subtotal">6,212,500.00</td>
+                        <td class="num subtotal">1,919,000.00</td>
+                        <td class="num subtotal">5,406,000.00</td>
+                        <td class="num" style="color:#52c41a;font-weight:700">▲ 11.0%</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name l1">减：所得税费用</td>
+                        <td class="row-no">18</td>
+                        <td class="num negative">534,000.00</td>
+                        <td class="num negative">1,556,000.00</td>
+                        <td class="num prior">480,000.00</td>
+                        <td class="num prior">1,352,000.00</td>
+                        <td class="num" style="color:#f5222d">▼ 11.3%</td>
+                    </tr>
+                    <!-- 净利润 -->
+                    <tr>
+                        <td class="item-name total">四、净利润</td>
+                        <td class="row-no total">19</td>
+                        <td class="num total">1,596,300.00</td>
+                        <td class="num total">4,656,500.00</td>
+                        <td class="num prior" style="font-weight:700">1,439,000.00</td>
+                        <td class="num prior" style="font-weight:700">4,054,000.00</td>
+                        <td class="num" style="color:#52c41a;font-weight:700">▲ 10.9%</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name l2">其中：归属于母公司净利润</td>
+                        <td class="row-no">20</td>
+                        <td class="num current">1,596,300.00</td>
+                        <td class="num ytd">4,656,500.00</td>
+                        <td class="num prior">1,439,000.00</td>
+                        <td class="num prior">4,054,000.00</td>
+                        <td class="num" style="color:#52c41a">▲ 10.9%</td>
+                    </tr>
+                    <!-- 其他综合收益 -->
+                    <tr>
+                        <td class="item-name l1">五、其他综合收益（税后）</td>
+                        <td class="row-no">21</td>
+                        <td class="num zero">—</td>
+                        <td class="num zero">—</td>
+                        <td class="num zero">—</td>
+                        <td class="num zero">—</td>
+                        <td class="num zero">—</td>
+                    </tr>
+                    <!-- 综合收益总额 -->
+                    <tr>
+                        <td class="item-name total">六、综合收益总额</td>
+                        <td class="row-no total">22</td>
+                        <td class="num total">1,596,300.00</td>
+                        <td class="num total">4,656,500.00</td>
+                        <td class="num prior" style="font-weight:700">1,439,000.00</td>
+                        <td class="num prior" style="font-weight:700">4,054,000.00</td>
+                        <td class="num" style="color:#52c41a;font-weight:700">▲ 10.9%</td>
+                    </tr>
+                    <!-- 每股收益 -->
+                    <tr>
+                        <td class="item-name l1">七、每股收益</td>
+                        <td class="row-no"></td>
+                        <td class="num zero">—</td><td class="num zero">—</td><td class="num zero">—</td><td class="num zero">—</td><td class="num zero">—</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name l2">基本每股收益（元/股）</td>
+                        <td class="row-no">23</td>
+                        <td class="num current">0.080</td>
+                        <td class="num ytd">0.233</td>
+                        <td class="num prior">0.072</td>
+                        <td class="num prior">0.203</td>
+                        <td class="num" style="color:#52c41a">▲ 11.1%</td>
+                    </tr>
+                    <tr>
+                        <td class="item-name l2">稀释每股收益（元/股）</td>
+                        <td class="row-no">24</td>
+                        <td class="num current">0.080</td>
+                        <td class="num ytd">0.233</td>
+                        <td class="num prior">0.072</td>
+                        <td class="num prior">0.203</td>
+                        <td class="num" style="color:#52c41a">▲ 11.1%</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="note">
+            注：本表按《企业会计准则》编制 &nbsp;|&nbsp; 生成时间：2026-03-13 09:30:22 &nbsp;|&nbsp; 编制人：张三 &nbsp;|&nbsp; 所得税率：25%
+        </div>
+    </div>
+</div>
+</body>
 </html>

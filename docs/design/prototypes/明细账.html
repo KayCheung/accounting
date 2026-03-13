@@ -1,53 +1,380 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
-  <head>
+<head>
+    <meta charset="UTF-8" />
     <title>明细账</title>
-    <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
-    <meta http-equiv="content-type" content="text/html; charset=utf-8"/>
-    <link href="resources/css/axure_rp_page.css" type="text/css" rel="stylesheet"/>
-    <link href="data/styles.css" type="text/css" rel="stylesheet"/>
-    <link href="files/明细账/styles.css" type="text/css" rel="stylesheet"/>
-    <script src="resources/scripts/jquery-3.2.1.min.js"></script>
-    <script src="resources/scripts/axure/axQuery.js"></script>
-    <script src="resources/scripts/axure/globals.js"></script>
-    <script src="resources/scripts/axutils.js"></script>
-    <script src="resources/scripts/axure/annotation.js"></script>
-    <script src="resources/scripts/axure/axQuery.std.js"></script>
-    <script src="resources/scripts/axure/doc.js"></script>
-    <script src="resources/scripts/messagecenter.js"></script>
-    <script src="resources/scripts/axure/events.js"></script>
-    <script src="resources/scripts/axure/recording.js"></script>
-    <script src="resources/scripts/axure/action.js"></script>
-    <script src="resources/scripts/axure/expr.js"></script>
-    <script src="resources/scripts/axure/geometry.js"></script>
-    <script src="resources/scripts/axure/flyout.js"></script>
-    <script src="resources/scripts/axure/model.js"></script>
-    <script src="resources/scripts/axure/repeater.js"></script>
-    <script src="resources/scripts/axure/sto.js"></script>
-    <script src="resources/scripts/axure/utils.temp.js"></script>
-    <script src="resources/scripts/axure/variables.js"></script>
-    <script src="resources/scripts/axure/drag.js"></script>
-    <script src="resources/scripts/axure/move.js"></script>
-    <script src="resources/scripts/axure/visibility.js"></script>
-    <script src="resources/scripts/axure/style.js"></script>
-    <script src="resources/scripts/axure/adaptive.js"></script>
-    <script src="resources/scripts/axure/tree.js"></script>
-    <script src="resources/scripts/axure/init.temp.js"></script>
-    <script src="resources/scripts/axure/legacy.js"></script>
-    <script src="resources/scripts/axure/viewer.js"></script>
-    <script src="resources/scripts/axure/math.js"></script>
-    <script src="resources/scripts/axure/jquery.nicescroll.min.js"></script>
-    <script src="data/document.js"></script>
-    <script src="files/明细账/data.js"></script>
-    <script type="text/javascript">
-      $axure.utils.getTransparentGifPath = function() { return 'resources/images/transparent.gif'; };
-      $axure.utils.getOtherPath = function() { return 'resources/Other.html'; };
-      $axure.utils.getReloadPath = function() { return 'resources/reload.html'; };
-    </script>
-  </head>
-  <body>
-    <div id="base" class="">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+        html, body { height: auto; overflow: auto !important; margin: 0; padding: 0; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; font-size: 13px; background: #f0f2f5; color: #333; }
+        a { color: #1890ff; text-decoration: none; cursor: pointer; }
+        .navbar { background: #001529; padding: 0 24px; height: 48px; display: flex; align-items: center; justify-content: space-between; }
+        .navbar-brand { color: #fff; font-size: 16px; font-weight: bold; }
+        .navbar-nav { display: flex; gap: 24px; }
+        .navbar-nav a { color: rgba(255,255,255,0.65); font-size: 13px; }
+        .navbar-nav a.active { color: #fff; }
+        .navbar-right { color: rgba(255,255,255,0.65); font-size: 13px; }
+        .breadcrumb { padding: 12px 24px; font-size: 13px; color: #999; background: #fff; border-bottom: 1px solid #e8e8e8; }
+        .breadcrumb span { color: #333; }
+        .main { padding: 20px 24px; }
+        .filter-card { background: #fff; border: 1px solid #e8e8e8; border-radius: 2px; padding: 20px 24px 12px; margin-bottom: 16px; }
+        .filter-row { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 12px; align-items: flex-end; }
+        .filter-item { display: flex; flex-direction: column; gap: 4px; }
+        .filter-item label { font-size: 12px; color: #666; }
+        .filter-item select, .filter-item input { height: 32px; padding: 0 10px; border: 1px solid #d9d9d9; border-radius: 2px; font-size: 13px; color: #333; outline: none; background: #fff; min-width: 140px; }
+        .filter-item.range .range-row { display: flex; align-items: center; gap: 6px; }
+        .filter-item.range .range-row input { min-width: 120px; }
+        .filter-item.range .range-row span { color: #999; }
+        .btn { height: 32px; padding: 0 16px; border-radius: 2px; border: 1px solid #d9d9d9; background: #fff; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+        .btn-primary { background: #1890ff; color: #fff; border-color: #1890ff; }
+        .btn-primary:hover { background: #40a9ff; }
+        .btn:hover { border-color: #1890ff; color: #1890ff; }
+        /* 科目信息条 */
+        .account-info { background: #e6f7ff; border: 1px solid #bae7ff; border-radius: 2px; padding: 12px 20px; margin-bottom: 16px; display: flex; gap: 40px; align-items: center; flex-wrap: wrap; }
+        .account-info-item { font-size: 13px; }
+        .account-info-item label { color: #0050b3; font-size: 12px; margin-right: 6px; }
+        .account-info-item b { color: #003a8c; }
+        .account-info-item.highlight b { color: #f5222d; }
+        /* 工具栏 */
+        .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .toolbar-left { font-size: 13px; color: #666; }
+        .toolbar-left b { color: #333; }
+        .toolbar-right { display: flex; gap: 8px; }
+        /* 表格 */
+        .table-card { background: #fff; border: 1px solid #e8e8e8; border-radius: 2px; }
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        thead tr { background: #fafafa; }
+        th { padding: 12px 12px; text-align: right; font-weight: 600; font-size: 12px; color: #666; border-bottom: 1px solid #e8e8e8; white-space: nowrap; }
+        th.left, td.left { text-align: left !important; }
+        th.center, td.center { text-align: center !important; }
+        td { padding: 11px 12px; text-align: right; border-bottom: 1px solid #f0f0f0; font-size: 13px; white-space: nowrap; }
+        tbody tr:hover { background: #e6f7ff; }
+        .tr-period { background: #f6f6f6; font-weight: 700; color: #555; }
+        .tr-period td { border-top: 1px solid #e0e0e0; }
+        .tr-total { background: #fffbe6; font-weight: 700; border-top: 2px solid #e8e8e8; }
+        .num-red { color: #f5222d; }
+        .num-blue { color: #1890ff; }
+        .dir-debit { color: #f5222d; font-size: 11px; }
+        .dir-credit { color: #52c41a; font-size: 11px; }
+        .voucher-link { color: #1890ff; }
+        .tag { display: inline-block; padding: 1px 6px; border-radius: 2px; font-size: 11px; }
+        .tag-normal { background: #f0f0f0; color: #666; }
+        .pagination { display: flex; align-items: center; justify-content: flex-end; padding: 14px 16px; gap: 4px; border-top: 1px solid #f0f0f0; }
+        .pagination span { font-size: 12px; color: #666; margin-right: 8px; }
+        .page-btn { height: 28px; min-width: 28px; padding: 0 8px; border: 1px solid #d9d9d9; background: #fff; border-radius: 2px; cursor: pointer; font-size: 12px; }
+        .page-btn.active { background: #1890ff; color: #fff; border-color: #1890ff; }
+        .back-link { margin-bottom: 12px; display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
+        .balance-positive { color: #1890ff; }
+        .balance-negative { color: #f5222d; }
+    </style>
+</head>
+<body>
+<div class="navbar">
+    <div class="navbar-brand">金融级账务核心系统</div>
+    <div class="navbar-nav">
+        <a href="#">账务处理</a>
+        <a href="#" class="active">账簿查询</a>
+        <a href="#">期末处理</a>
+        <a href="#">报表中心</a>
+        <a href="#">系统管理</a>
     </div>
-    <script src="resources/scripts/axure/ios.js"></script>
-  </body>
+    <div class="navbar-right">admin &nbsp;|&nbsp; 退出</div>
+</div>
+<div class="breadcrumb">账簿查询 / <span>明细账</span></div>
+<div class="main">
+    <a href="index.html" class="back-link">← 返回目录</a>
+
+    <!-- 筛选条件 -->
+    <div class="filter-card">
+        <div class="filter-row">
+            <div class="filter-item">
+                <label>账套</label>
+                <select><option>主账套（人民币）</option><option>美元账套</option></select>
+            </div>
+            <div class="filter-item">
+                <label>会计年度</label>
+                <select><option>2026</option><option>2025</option><option>2024</option></select>
+            </div>
+            <div class="filter-item range">
+                <label>会计期间</label>
+                <div class="range-row">
+                    <select style="min-width:110px"><option>2026-01</option><option>2026-02</option><option selected>2026-03</option></select>
+                    <span>至</span>
+                    <select style="min-width:110px"><option>2026-01</option><option>2026-02</option><option selected>2026-03</option></select>
+                </div>
+            </div>
+            <div class="filter-item">
+                <label>科目</label>
+                <input type="text" placeholder="输入科目编码或名称" value="1002" style="min-width:180px" />
+            </div>
+            <div class="filter-item">
+                <label>辅助核算</label>
+                <select><option>不限</option><option>客户</option><option>供应商</option><option>部门</option><option>项目</option></select>
+            </div>
+        </div>
+        <div class="filter-row">
+            <div class="filter-item">
+                <label>摘要关键字</label>
+                <input type="text" placeholder="搜索摘要内容" style="min-width:180px" />
+            </div>
+            <div class="filter-item range">
+                <label>金额范围</label>
+                <div class="range-row">
+                    <input type="text" placeholder="最小金额" />
+                    <span>至</span>
+                    <input type="text" placeholder="最大金额" />
+                </div>
+            </div>
+            <div class="filter-item">
+                <label>凭证类别</label>
+                <select><option>全部</option><option>记账凭证</option><option>收款凭证</option><option>付款凭证</option></select>
+            </div>
+            <div style="display:flex;align-items:flex-end;gap:8px;">
+                <button class="btn btn-primary">🔍 查询</button>
+                <button class="btn">重置</button>
+                <button class="btn">📤 导出 Excel</button>
+                <button class="btn">🖨 打印</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 科目信息摘要 -->
+    <div class="account-info">
+        <div class="account-info-item"><label>科目编码</label><b>1002</b></div>
+        <div class="account-info-item"><label>科目名称</label><b>银行存款</b></div>
+        <div class="account-info-item"><label>科目级次</label><b>一级</b></div>
+        <div class="account-info-item"><label>余额方向</label><b>借方</b></div>
+        <div class="account-info-item"><label>期初余额</label><b>12,856,430.00</b></div>
+        <div class="account-info-item highlight"><label>期末余额</label><b>14,268,870.00</b></div>
+        <div class="account-info-item"><label>借方合计</label><b>3,521,000.00</b></div>
+        <div class="account-info-item"><label>贷方合计</label><b>2,108,560.00</b></div>
+    </div>
+
+    <!-- 工具栏 -->
+    <div class="toolbar">
+        <div class="toolbar-left">共 <b>28</b> 笔记录 &nbsp;|&nbsp; 期间：2026-01 ~ 2026-03</div>
+        <div class="toolbar-right">
+            <button class="btn">按期间展示</button>
+            <button class="btn">查看凭证</button>
+        </div>
+    </div>
+
+    <!-- 表格 -->
+    <div class="table-card">
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th class="left">日期</th>
+                        <th class="left">凭证号</th>
+                        <th class="left" style="min-width:200px">摘要</th>
+                        <th class="center">凭证类别</th>
+                        <th>借方金额</th>
+                        <th>贷方金额</th>
+                        <th class="center">方向</th>
+                        <th>余额</th>
+                        <th class="center">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- 期初 -->
+                    <tr class="tr-period">
+                        <td class="left" colspan="2">2026-01</td>
+                        <td class="left">期初余额</td>
+                        <td class="center"></td>
+                        <td></td><td></td>
+                        <td class="center dir-debit">借</td>
+                        <td class="balance-positive">12,856,430.00</td>
+                        <td class="center"></td>
+                    </tr>
+                    <tr>
+                        <td class="left">2026-01-05</td>
+                        <td class="left"><a class="voucher-link">记-2026001-00001</a></td>
+                        <td class="left">收到客户华润集团货款</td>
+                        <td class="center"><span class="tag tag-normal">记账</span></td>
+                        <td class="num-blue">1,200,000.00</td><td></td>
+                        <td class="center dir-debit">借</td>
+                        <td class="balance-positive">14,056,430.00</td>
+                        <td class="center"><a>查看</a></td>
+                    </tr>
+                    <tr>
+                        <td class="left">2026-01-08</td>
+                        <td class="left"><a class="voucher-link">记-2026001-00002</a></td>
+                        <td class="left">支付供应商货款-深圳物料</td>
+                        <td class="center"><span class="tag tag-normal">记账</span></td>
+                        <td></td><td class="num-red">680,000.00</td>
+                        <td class="center dir-debit">借</td>
+                        <td class="balance-positive">13,376,430.00</td>
+                        <td class="center"><a>查看</a></td>
+                    </tr>
+                    <tr>
+                        <td class="left">2026-01-15</td>
+                        <td class="left"><a class="voucher-link">记-2026001-00005</a></td>
+                        <td class="left">发放1月员工薪酬</td>
+                        <td class="center"><span class="tag tag-normal">记账</span></td>
+                        <td></td><td class="num-red">850,000.00</td>
+                        <td class="center dir-debit">借</td>
+                        <td class="balance-positive">12,526,430.00</td>
+                        <td class="center"><a>查看</a></td>
+                    </tr>
+                    <tr>
+                        <td class="left">2026-01-22</td>
+                        <td class="left"><a class="voucher-link">记-2026001-00008</a></td>
+                        <td class="left">收到客户中国移动预付款</td>
+                        <td class="center"><span class="tag tag-normal">记账</span></td>
+                        <td class="num-blue">800,000.00</td><td></td>
+                        <td class="center dir-debit">借</td>
+                        <td class="balance-positive">13,326,430.00</td>
+                        <td class="center"><a>查看</a></td>
+                    </tr>
+                    <tr>
+                        <td class="left">2026-01-28</td>
+                        <td class="left"><a class="voucher-link">记-2026001-00012</a></td>
+                        <td class="left">缴纳增值税及附加税</td>
+                        <td class="center"><span class="tag tag-normal">记账</span></td>
+                        <td></td><td class="num-red">280,000.00</td>
+                        <td class="center dir-debit">借</td>
+                        <td class="balance-positive">13,046,430.00</td>
+                        <td class="center"><a>查看</a></td>
+                    </tr>
+                    <tr class="tr-period">
+                        <td class="left" colspan="2" style="color:#1890ff">2026-01 本期合计</td>
+                        <td class="left"></td><td></td>
+                        <td class="num-blue">2,000,000.00</td>
+                        <td class="num-red">1,810,000.00</td>
+                        <td class="center dir-debit">借</td>
+                        <td class="balance-positive">13,046,430.00</td>
+                        <td></td>
+                    </tr>
+
+                    <!-- 2月 -->
+                    <tr class="tr-period">
+                        <td class="left" colspan="2">2026-02</td>
+                        <td class="left">上期结转</td><td></td>
+                        <td></td><td></td>
+                        <td class="center dir-debit">借</td>
+                        <td class="balance-positive">13,046,430.00</td>
+                        <td></td>
+                    </tr>
+                    <tr>
+                        <td class="left">2026-02-03</td>
+                        <td class="left"><a class="voucher-link">记-2026002-00001</a></td>
+                        <td class="left">收到客户腾讯云服务款</td>
+                        <td class="center"><span class="tag tag-normal">记账</span></td>
+                        <td class="num-blue">520,000.00</td><td></td>
+                        <td class="center dir-debit">借</td>
+                        <td class="balance-positive">13,566,430.00</td>
+                        <td class="center"><a>查看</a></td>
+                    </tr>
+                    <tr>
+                        <td class="left">2026-02-10</td>
+                        <td class="left"><a class="voucher-link">记-2026002-00003</a></td>
+                        <td class="left">支付办公室租金Q1</td>
+                        <td class="center"><span class="tag tag-normal">记账</span></td>
+                        <td></td><td class="num-red">180,000.00</td>
+                        <td class="center dir-debit">借</td>
+                        <td class="balance-positive">13,386,430.00</td>
+                        <td class="center"><a>查看</a></td>
+                    </tr>
+                    <tr>
+                        <td class="left">2026-02-18</td>
+                        <td class="left"><a class="voucher-link">记-2026002-00006</a></td>
+                        <td class="left">收到阿里巴巴采购货款</td>
+                        <td class="center"><span class="tag tag-normal">记账</span></td>
+                        <td class="num-blue">660,000.00</td><td></td>
+                        <td class="center dir-debit">借</td>
+                        <td class="balance-positive">14,046,430.00</td>
+                        <td class="center"><a>查看</a></td>
+                    </tr>
+                    <tr>
+                        <td class="left">2026-02-25</td>
+                        <td class="left"><a class="voucher-link">记-2026002-00009</a></td>
+                        <td class="left">发放2月员工薪酬</td>
+                        <td class="center"><span class="tag tag-normal">记账</span></td>
+                        <td></td><td class="num-red">850,000.00</td>
+                        <td class="center dir-debit">借</td>
+                        <td class="balance-positive">13,196,430.00</td>
+                        <td class="center"><a>查看</a></td>
+                    </tr>
+                    <tr class="tr-period">
+                        <td class="left" colspan="2" style="color:#1890ff">2026-02 本期合计</td>
+                        <td class="left"></td><td></td>
+                        <td class="num-blue">1,180,000.00</td>
+                        <td class="num-red">1,030,000.00</td>
+                        <td class="center dir-debit">借</td>
+                        <td class="balance-positive">13,196,430.00</td>
+                        <td></td>
+                    </tr>
+
+                    <!-- 3月 -->
+                    <tr class="tr-period">
+                        <td class="left" colspan="2">2026-03</td>
+                        <td class="left">上期结转</td><td></td>
+                        <td></td><td></td>
+                        <td class="center dir-debit">借</td>
+                        <td class="balance-positive">13,196,430.00</td>
+                        <td></td>
+                    </tr>
+                    <tr>
+                        <td class="left">2026-03-05</td>
+                        <td class="left"><a class="voucher-link">记-2026003-00001</a></td>
+                        <td class="left">收到华为终端货款尾款</td>
+                        <td class="center"><span class="tag tag-normal">记账</span></td>
+                        <td class="num-blue">341,000.00</td><td></td>
+                        <td class="center dir-debit">借</td>
+                        <td class="balance-positive">13,537,430.00</td>
+                        <td class="center"><a>查看</a></td>
+                    </tr>
+                    <tr>
+                        <td class="left">2026-03-12</td>
+                        <td class="left"><a class="voucher-link">记-2026003-00003</a></td>
+                        <td class="left">采购原材料付款</td>
+                        <td class="center"><span class="tag tag-normal">记账</span></td>
+                        <td></td><td class="num-red">268,560.00</td>
+                        <td class="center dir-debit">借</td>
+                        <td class="balance-positive">13,268,870.00</td>
+                        <td class="center"><a>查看</a></td>
+                    </tr>
+                    <tr>
+                        <td class="left">2026-03-13</td>
+                        <td class="left"><a class="voucher-link">记-2026003-00005</a></td>
+                        <td class="left">收到客户中石油预付款</td>
+                        <td class="center"><span class="tag tag-normal">记账</span></td>
+                        <td class="num-blue">1,000,000.00</td><td></td>
+                        <td class="center dir-debit">借</td>
+                        <td class="balance-positive">14,268,870.00</td>
+                        <td class="center"><a>查看</a></td>
+                    </tr>
+                    <tr class="tr-period">
+                        <td class="left" colspan="2" style="color:#1890ff">2026-03 本期合计</td>
+                        <td class="left"></td><td></td>
+                        <td class="num-blue">1,341,000.00</td>
+                        <td class="num-red">268,560.00</td>
+                        <td class="center dir-debit">借</td>
+                        <td class="balance-positive">14,268,870.00</td>
+                        <td></td>
+                    </tr>
+                    <tr class="tr-total">
+                        <td colspan="3" class="left">累计合计（2026-01 ~ 2026-03）</td>
+                        <td></td>
+                        <td>3,521,000.00</td>
+                        <td>2,108,560.00</td>
+                        <td class="center dir-debit">借</td>
+                        <td class="balance-positive">14,268,870.00</td>
+                        <td></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="pagination">
+            <span>共 28 条</span>
+            <button class="page-btn">«</button>
+            <button class="page-btn active">1</button>
+            <button class="page-btn">2</button>
+            <button class="page-btn">»</button>
+        </div>
+    </div>
+</div>
+</body>
 </html>
