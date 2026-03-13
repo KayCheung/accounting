@@ -1,53 +1,851 @@
-﻿<!DOCTYPE html>
-<html>
-  <head>
-    <title>客户子账户余额明细</title>
-    <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
-    <meta http-equiv="content-type" content="text/html; charset=utf-8"/>
-    <link href="resources/css/axure_rp_page.css" type="text/css" rel="stylesheet"/>
-    <link href="data/styles.css" type="text/css" rel="stylesheet"/>
-    <link href="files/客户子账户余额明细/styles.css" type="text/css" rel="stylesheet"/>
-    <script src="resources/scripts/jquery-3.2.1.min.js"></script>
-    <script src="resources/scripts/axure/axQuery.js"></script>
-    <script src="resources/scripts/axure/globals.js"></script>
-    <script src="resources/scripts/axutils.js"></script>
-    <script src="resources/scripts/axure/annotation.js"></script>
-    <script src="resources/scripts/axure/axQuery.std.js"></script>
-    <script src="resources/scripts/axure/doc.js"></script>
-    <script src="resources/scripts/messagecenter.js"></script>
-    <script src="resources/scripts/axure/events.js"></script>
-    <script src="resources/scripts/axure/recording.js"></script>
-    <script src="resources/scripts/axure/action.js"></script>
-    <script src="resources/scripts/axure/expr.js"></script>
-    <script src="resources/scripts/axure/geometry.js"></script>
-    <script src="resources/scripts/axure/flyout.js"></script>
-    <script src="resources/scripts/axure/model.js"></script>
-    <script src="resources/scripts/axure/repeater.js"></script>
-    <script src="resources/scripts/axure/sto.js"></script>
-    <script src="resources/scripts/axure/utils.temp.js"></script>
-    <script src="resources/scripts/axure/variables.js"></script>
-    <script src="resources/scripts/axure/drag.js"></script>
-    <script src="resources/scripts/axure/move.js"></script>
-    <script src="resources/scripts/axure/visibility.js"></script>
-    <script src="resources/scripts/axure/style.js"></script>
-    <script src="resources/scripts/axure/adaptive.js"></script>
-    <script src="resources/scripts/axure/tree.js"></script>
-    <script src="resources/scripts/axure/init.temp.js"></script>
-    <script src="resources/scripts/axure/legacy.js"></script>
-    <script src="resources/scripts/axure/viewer.js"></script>
-    <script src="resources/scripts/axure/math.js"></script>
-    <script src="resources/scripts/axure/jquery.nicescroll.min.js"></script>
-    <script src="data/document.js"></script>
-    <script src="files/客户子账户余额明细/data.js"></script>
-    <script type="text/javascript">
-      $axure.utils.getTransparentGifPath = function() { return 'resources/images/transparent.gif'; };
-      $axure.utils.getOtherPath = function() { return 'resources/Other.html'; };
-      $axure.utils.getReloadPath = function() { return 'resources/reload.html'; };
-    </script>
-  </head>
-  <body>
-    <div id="base" class="">
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <title>客户子账户余额明细</title>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <style>
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body {
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+      background:#f0f2f5; color:#333; min-width:1280px;
+    }
+
+    /* ── 顶栏 ── */
+    .topbar {
+      background:#fff; border-bottom:1px solid #e8e8e8;
+      padding:0 24px; height:56px; display:flex; align-items:center;
+      justify-content:space-between; position:sticky; top:0; z-index:100;
+      box-shadow:0 1px 4px rgba(0,0,0,.06);
+    }
+    .topbar-left { display:flex; align-items:center; gap:16px; }
+    .logo { font-size:18px; font-weight:700; color:#1890ff; letter-spacing:1px; }
+    .vd  { width:1px; height:20px; background:#e8e8e8; }
+    .bc  { font-size:13px; color:#8c8c8c; display:flex; align-items:center; gap:6px; }
+    .bc a { color:#595959; text-decoration:none; }
+    .bc a:hover { color:#1890ff; }
+    .bc-sep { color:#bfbfbf; }
+    .bc-cur { color:#262626; font-weight:500; }
+    .topbar-right { display:flex; align-items:center; gap:16px; font-size:13px; color:#595959; }
+    .av {
+      width:32px; height:32px; border-radius:50%;
+      background:linear-gradient(135deg,#667eea,#764ba2);
+      color:#fff; display:flex; align-items:center; justify-content:center;
+      font-size:12px; font-weight:600;
+    }
+
+    .main { padding:24px; }
+
+    /* ── 按钮 ── */
+    .btn {
+      display:inline-flex; align-items:center; justify-content:center;
+      height:32px; padding:0 16px; border-radius:4px; font-size:13px;
+      font-weight:500; cursor:pointer; border:1px solid transparent;
+      transition:all .2s; gap:5px; white-space:nowrap;
+    }
+    .btn-primary { background:#1890ff; color:#fff; border-color:#1890ff; }
+    .btn-primary:hover { background:#40a9ff; border-color:#40a9ff; }
+    .btn-default { background:#fff; color:#595959; border-color:#d9d9d9; }
+    .btn-default:hover { color:#1890ff; border-color:#1890ff; }
+    .btn-sm { height:26px; padding:0 10px; font-size:12px; }
+    .btn-link { background:none; border:none; color:#1890ff; padding:0 4px; height:auto; font-size:13px; cursor:pointer; }
+    .btn-link:hover { color:#40a9ff; }
+    .btn-back {
+      display:inline-flex; align-items:center; gap:6px; color:#595959;
+      font-size:13px; text-decoration:none; border:1px solid #d9d9d9;
+      border-radius:4px; padding:5px 12px; background:#fff; transition:all .2s;
+    }
+    .btn-back:hover { color:#1890ff; border-color:#1890ff; }
+
+    /* ── 子账户类型切换 ── */
+    .sub-switcher {
+      background:#fff; border-radius:8px; padding:16px 24px;
+      margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,.06);
+      display:flex; align-items:center; gap:16px;
+    }
+    .switcher-label { font-size:13px; color:#595959; font-weight:500; white-space:nowrap; }
+    .tab-group { display:flex; gap:0; border:1px solid #d9d9d9; border-radius:6px; overflow:hidden; }
+    .tab-btn {
+      padding:7px 20px; font-size:13px; font-weight:500; cursor:pointer;
+      background:#fff; color:#595959; border:none; border-right:1px solid #d9d9d9;
+      transition:all .2s;
+    }
+    .tab-btn:last-child { border-right:none; }
+    .tab-btn.active-avail { background:#1890ff; color:#fff; }
+    .tab-btn.active-frozen { background:#faad14; color:#fff; }
+    .tab-btn:not(.active-avail):not(.active-frozen):hover { background:#f5f9ff; color:#1890ff; }
+    .switcher-hint { font-size:12px; color:#8c8c8c; margin-left:auto; }
+
+    /* ── 信息头部三栏 ── */
+    .info-row {
+      display:grid; grid-template-columns:300px 1fr 260px;
+      gap:16px; margin-bottom:16px;
+    }
+
+    /* 客户卡 */
+    .cust-card {
+      background:linear-gradient(135deg,#434343,#000);
+      border-radius:10px; padding:20px 22px; color:#fff;
+      box-shadow:0 4px 14px rgba(0,0,0,.25);
+    }
+    .cc-label { font-size:11px; opacity:.65; margin-bottom:3px; letter-spacing:.4px; text-transform:uppercase; }
+    .cc-val   { font-size:14px; font-weight:600; margin-bottom:8px; }
+    .cc-val.big { font-size:20px; margin-bottom:6px; }
+    .cc-meta { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
+    .cc-tag {
+      display:inline-block; padding:2px 9px; border-radius:10px; font-size:11px;
+      background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3);
+    }
+
+    /* 账户卡 */
+    .acct-card {
+      background:#fff; border-radius:10px; padding:20px 22px;
+      box-shadow:0 1px 3px rgba(0,0,0,.06);
+    }
+    .acct-card-head { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px; }
+    .acct-name { font-size:15px; font-weight:700; color:#262626; }
+    .acct-no   { font-family:monospace; font-size:12px; color:#8c8c8c; margin-top:3px; }
+    .acct-stats { display:flex; gap:24px; }
+    .as-item { text-align:center; }
+    .as-label { font-size:11px; color:#8c8c8c; margin-bottom:4px; }
+    .as-val   { font-size:16px; font-weight:700; font-variant-numeric:tabular-nums; }
+    .as-val.total  { color:#262626; }
+    .as-val.avail  { color:#1890ff; }
+    .as-val.frozen { color:#faad14; }
+
+    /* 当前子账户卡 */
+    .sub-card-avail {
+      background:linear-gradient(135deg,#1890ff,#096dd9);
+      border-radius:10px; padding:20px 22px; color:#fff;
+      box-shadow:0 4px 14px rgba(24,144,255,.35);
+    }
+    .sub-card-frozen {
+      background:linear-gradient(135deg,#faad14,#d48806);
+      border-radius:10px; padding:20px 22px; color:#fff;
+      box-shadow:0 4px 14px rgba(250,173,20,.35);
+    }
+    .sub-card-label { font-size:11px; opacity:.8; margin-bottom:4px; }
+    .sub-card-type  { font-size:15px; font-weight:700; margin-bottom:12px; }
+    .sub-card-bal-label { font-size:12px; opacity:.8; margin-bottom:4px; }
+    .sub-card-bal   { font-size:28px; font-weight:800; font-variant-numeric:tabular-nums; }
+    .sub-card-meta  { display:flex; gap:16px; margin-top:12px; }
+    .sub-card-m-item { }
+    .sub-card-m-label { font-size:11px; opacity:.75; margin-bottom:2px; }
+    .sub-card-m-val   { font-size:14px; font-weight:600; font-variant-numeric:tabular-nums; }
+
+    /* ── 冻结记录栏（仅冻结子账户显示）── */
+    .freeze-bar {
+      background:#fff; border-radius:8px; padding:0;
+      margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,.06);
+      overflow:hidden;
+    }
+    .freeze-bar-hdr {
+      padding:12px 20px; background:#fffbe6; border-bottom:1px solid #ffe58f;
+      display:flex; align-items:center; justify-content:space-between;
+    }
+    .freeze-bar-title { font-size:13px; font-weight:600; color:#ad6800; display:flex; align-items:center; gap:6px; }
+    .freeze-list { display:flex; overflow-x:auto; gap:0; }
+    .freeze-item {
+      flex:0 0 220px; padding:14px 18px; border-right:1px solid #f0f0f0;
+      cursor:pointer; transition:background .15s;
+    }
+    .freeze-item:last-child { border-right:none; }
+    .freeze-item:hover { background:#f5f9ff; }
+    .freeze-item.active { background:#e6f7ff; border-bottom:2px solid #1890ff; }
+    .fi-id    { font-size:11px; color:#8c8c8c; margin-bottom:3px; font-family:monospace; }
+    .fi-amt   { font-size:16px; font-weight:700; color:#faad14; }
+    .fi-row   { display:flex; justify-content:space-between; align-items:center; margin-top:4px; }
+    .fi-date  { font-size:11px; color:#8c8c8c; }
+    .fi-badge { font-size:11px; padding:1px 7px; border-radius:8px; }
+    .fi-active   { background:#fff7e6; color:#faad14; border:1px solid #ffe58f; }
+    .fi-unfrozen { background:#f6ffed; color:#52c41a; border:1px solid #b7eb8f; }
+    .fi-expired  { background:#fafafa; color:#8c8c8c; border:1px solid #d9d9d9; }
+
+    /* ── 筛选 ── */
+    .filter-card {
+      background:#fff; border-radius:8px; padding:18px 24px 10px;
+      margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,.06);
+    }
+    .filter-row { display:flex; flex-wrap:wrap; gap:14px 22px; align-items:flex-end; }
+    .fi-item { display:flex; flex-direction:column; gap:5px; }
+    .fl { font-size:13px; color:#595959; font-weight:500; }
+    .inp,.sel {
+      height:32px; border:1px solid #d9d9d9; border-radius:4px;
+      padding:0 11px; font-size:13px; color:#333; background:#fff;
+      outline:none; transition:border-color .2s; min-width:150px;
+    }
+    .inp:focus,.sel:focus { border-color:#1890ff; box-shadow:0 0 0 2px rgba(24,144,255,.12); }
+    .inp::placeholder { color:#bfbfbf; }
+    .filter-actions { display:flex; gap:8px; align-items:flex-end; margin-left:auto; }
+
+    /* ── 表格 ── */
+    .table-card {
+      background:#fff; border-radius:8px;
+      box-shadow:0 1px 3px rgba(0,0,0,.06); overflow:hidden;
+    }
+    .tbl-toolbar {
+      padding:13px 24px; border-bottom:1px solid #f0f0f0;
+      display:flex; align-items:center; justify-content:space-between;
+    }
+    .tbl-sum { font-size:13px; color:#595959; }
+    .tbl-sum strong { color:#262626; }
+
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    thead th {
+      background:#fafafa; color:#595959; font-weight:600;
+      padding:11px 14px; text-align:left;
+      border-bottom:1px solid #f0f0f0; white-space:nowrap;
+    }
+    tbody tr { border-bottom:1px solid #f5f5f5; transition:background .15s; }
+    tbody tr:last-child { border-bottom:none; }
+    tbody tr:hover { background:#f5f9ff; }
+    tbody td { padding:10px 14px; color:#262626; vertical-align:middle; }
+    .td-seq { color:#8c8c8c; }
+    .td-mono { font-family:monospace; font-size:12px; color:#595959; }
+    .td-r { text-align:right; font-variant-numeric:tabular-nums; font-weight:600; }
+    .td-r.inc { color:#52c41a; }
+    .td-r.dec { color:#f5222d; }
+    .td-r.bal { color:#262626; }
+    .td-r.z   { color:#bfbfbf; font-weight:400; }
+
+    tfoot .sr td {
+      background:#fffbe6; font-weight:600; color:#262626;
+      border-top:2px solid #ffe58f; padding:10px 14px;
+    }
+
+    /* ── 徽章 ── */
+    .badge {
+      display:inline-flex; align-items:center; gap:4px;
+      padding:2px 8px; border-radius:10px; font-size:12px; font-weight:500;
+    }
+    .badge::before { content:""; width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+    .bs  { background:#f6ffed; color:#52c41a;  border:1px solid #b7eb8f; }  .bs::before  { background:#52c41a; }
+    .bp  { background:#e6f7ff; color:#1890ff;  border:1px solid #91d5ff; }  .bp::before  { background:#1890ff; animation:pulse 1.5s ease-in-out infinite; }
+    .be  { background:#fff2f0; color:#ff4d4f;  border:1px solid #ffccc7; }  .be::before  { background:#ff4d4f; }
+    .bw  { background:#fffbe6; color:#faad14;  border:1px solid #ffe58f; }  .bw::before  { background:#faad14; }
+    .bdf { background:#fafafa; color:#8c8c8c;  border:1px solid #d9d9d9; }  .bdf::before { background:#bfbfbf; }
+    @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+
+    .tag { display:inline-block; padding:1px 8px; border-radius:3px; font-size:12px; border:1px solid; }
+    .t-blue   { background:#e6f7ff; color:#1890ff; border-color:#91d5ff; }
+    .t-gold   { background:#fffbe6; color:#faad14; border-color:#ffe58f; }
+    .t-green  { background:#f6ffed; color:#52c41a; border-color:#b7eb8f; }
+    .t-red    { background:#fff2f0; color:#f5222d; border-color:#ffa39e; }
+    .t-gray   { background:#fafafa; color:#8c8c8c; border-color:#d9d9d9; }
+    .t-purple { background:#f9f0ff; color:#722ed1; border-color:#d3adf7; }
+
+    /* ── 变动方向 ── */
+    .dir-in  { color:#52c41a; font-weight:700; }
+    .dir-out { color:#f5222d; font-weight:700; }
+
+    .vch-link { color:#1890ff; cursor:pointer; }
+    .vch-link:hover { color:#40a9ff; text-decoration:underline; }
+
+    /* ── 分页 ── */
+    .pg-wrap {
+      padding:14px 24px; display:flex; align-items:center; justify-content:space-between;
+      border-top:1px solid #f0f0f0;
+    }
+    .pg-info { font-size:13px; color:#8c8c8c; }
+    .pg { display:flex; align-items:center; gap:6px; }
+    .pgb {
+      min-width:32px; height:32px; border:1px solid #d9d9d9; border-radius:4px;
+      background:#fff; color:#595959; font-size:13px; cursor:pointer;
+      display:flex; align-items:center; justify-content:center; padding:0 8px; transition:all .2s;
+    }
+    .pgb:hover { color:#1890ff; border-color:#1890ff; }
+    .pgb.act  { color:#fff; background:#1890ff; border-color:#1890ff; }
+    .pgb:disabled { color:#bfbfbf; cursor:not-allowed; border-color:#e8e8e8; }
+    .pgsz { height:32px; border:1px solid #d9d9d9; border-radius:4px; padding:0 8px; font-size:13px; background:#fff; cursor:pointer; }
+
+    /* ── 弹窗 ── */
+    .modal-ov {
+      display:none; position:fixed; inset:0;
+      background:rgba(0,0,0,.45); z-index:1000;
+      align-items:center; justify-content:center;
+    }
+    .modal-ov.show { display:flex; }
+    .modal {
+      background:#fff; border-radius:8px;
+      box-shadow:0 6px 40px rgba(0,0,0,.18);
+      width:740px; max-width:95vw; max-height:90vh; overflow-y:auto;
+    }
+    .modal-hdr {
+      padding:18px 24px; border-bottom:1px solid #f0f0f0;
+      display:flex; align-items:center; justify-content:space-between;
+    }
+    .modal-title { font-size:16px; font-weight:600; color:#262626; }
+    .modal-x { font-size:18px; color:#8c8c8c; cursor:pointer; background:none; border:none; line-height:1; }
+    .modal-x:hover { color:#262626; }
+    .modal-body { padding:24px; }
+    .modal-ftr { padding:14px 24px; border-top:1px solid #f0f0f0; display:flex; justify-content:flex-end; gap:10px; }
+
+    .dg { display:grid; grid-template-columns:1fr 1fr; gap:15px 30px; }
+    .dg-full { grid-column:1/-1; }
+    .dl { font-size:12px; color:#8c8c8c; margin-bottom:3px; }
+    .dv { font-size:14px; color:#262626; font-weight:500; }
+    .ddiv { grid-column:1/-1; border:none; border-top:1px dashed #f0f0f0; margin:4px 0; }
+    .dsec { grid-column:1/-1; font-size:13px; font-weight:600; color:#595959; border-left:3px solid #1890ff; padding-left:8px; margin-top:4px; }
+    .dsec-gold { border-left-color:#faad14; }
+
+    /* ── 冻结记录弹窗 ── */
+    .freeze-detail-card {
+      background:#fffbe6; border:1px solid #ffe58f; border-radius:8px; padding:16px;
+      margin-bottom:16px;
+    }
+    .freeze-detail-title { font-size:13px; font-weight:600; color:#ad6800; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
+    .freeze-detail-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px 20px; }
+    .fdg-item-label { font-size:11px; color:#8c8c8c; margin-bottom:2px; }
+    .fdg-item-val   { font-size:13px; color:#262626; font-weight:600; }
+
+    /* ── Toast ── */
+    #toast {
+      position:fixed; bottom:32px; right:32px; z-index:9999;
+      background:#262626; color:#fff; padding:10px 20px; border-radius:6px;
+      font-size:13px; box-shadow:0 4px 12px rgba(0,0,0,.3);
+      transition:opacity .3s; opacity:0; pointer-events:none;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── 顶栏 ── -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="logo">账务核心</div>
+    <div class="vd"></div>
+    <div class="bc">
+      <a href="index.html">首页</a>
+      <span class="bc-sep">›</span>
+      <a href="客户分户账户.html">客户分户账户</a>
+      <span class="bc-sep">›</span>
+      <a href="客户分户子账户.html">客户子账户</a>
+      <span class="bc-sep">›</span>
+      <span class="bc-cur">子账户余额明细</span>
     </div>
-    <script src="resources/scripts/axure/ios.js"></script>
-  </body>
+  </div>
+  <div class="topbar-right">
+    <span>会计日期：2025-03-13</span>
+    <div class="vd"></div>
+    <div class="av">管理</div>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- 返回 -->
+  <div style="margin-bottom:16px;display:flex;gap:10px;">
+    <a class="btn-back" href="客户分户子账户.html">← 返回子账户列表</a>
+    <a class="btn-back" href="客户分户余额明细.html">↑ 主账户余额明细</a>
+  </div>
+
+  <!-- 子账户类型切换 -->
+  <div class="sub-switcher">
+    <span class="switcher-label">当前查看子账户：</span>
+    <div class="tab-group">
+      <button class="tab-btn" id="tab-avail" onclick="switchSub('avail')">💳 可用余额子账户</button>
+      <button class="tab-btn active-frozen" id="tab-frozen" onclick="switchSub('frozen')">🔒 冻结余额子账户</button>
+    </div>
+    <span class="switcher-hint" id="switcher-hint">冻结子账户记录因冻结/解冻操作产生的余额变动</span>
+  </div>
+
+  <!-- 信息三栏 -->
+  <div class="info-row">
+    <!-- 客户信息 -->
+    <div class="cust-card">
+      <div class="cc-label">客户姓名</div>
+      <div class="cc-val big">杨某某</div>
+      <div class="cc-label">客户ID</div>
+      <div class="cc-val" style="font-family:monospace;font-size:11px;opacity:.85;">4a0f04ae2d2144ff9540339d19f2d99b</div>
+      <div class="cc-meta">
+        <span class="cc-tag">个人客户</span>
+        <span class="cc-tag">138****8888</span>
+        <span class="cc-tag">开户 2025-01-20</span>
+      </div>
+    </div>
+    <!-- 主账户信息 -->
+    <div class="acct-card">
+      <div class="acct-card-head">
+        <div>
+          <div class="acct-name">芒好贷自营贷款本金账户</div>
+          <div class="acct-no">13010125012410001</div>
+        </div>
+        <span class="badge bs">正常</span>
+      </div>
+      <div class="acct-stats">
+        <div class="as-item">
+          <div class="as-label">总余额（元）</div>
+          <div class="as-val total">5,617.00</div>
+        </div>
+        <div class="as-item">
+          <div class="as-label">可用余额</div>
+          <div class="as-val avail">4,617.00</div>
+        </div>
+        <div class="as-item">
+          <div class="as-label">冻结余额</div>
+          <div class="as-val frozen">1,000.00</div>
+        </div>
+        <div class="as-item">
+          <div class="as-label">账户类型</div>
+          <div class="as-val" style="font-size:13px;color:#595959;font-weight:500;">贷款本金</div>
+        </div>
+      </div>
+    </div>
+    <!-- 当前子账户卡（动态切换） -->
+    <div id="sub-card">
+      <!-- 由 JS 渲染 -->
+    </div>
+  </div>
+
+  <!-- 冻结记录列表（仅冻结子账户显示） -->
+  <div class="freeze-bar" id="freeze-bar">
+    <div class="freeze-bar-hdr">
+      <div class="freeze-bar-title">🔒 当前冻结记录（点击筛选对应明细）</div>
+      <span style="font-size:12px;color:#ad6800;">共 3 条冻结记录 · 累计冻结 1,000.00 元</span>
+    </div>
+    <div class="freeze-list">
+      <div class="freeze-item active" onclick="filterByFreeze('FRZ001')">
+        <div class="fi-id">FRZ-20250303-001</div>
+        <div class="fi-amt">500.00 元</div>
+        <div class="fi-row">
+          <span class="fi-date">2025-03-03</span>
+          <span class="fi-badge fi-unfrozen">已解冻</span>
+        </div>
+        <div style="font-size:11px;color:#8c8c8c;margin-top:3px;">提现预冻结</div>
+      </div>
+      <div class="freeze-item" onclick="filterByFreeze('FRZ002')">
+        <div class="fi-id">FRZ-20250311-002</div>
+        <div class="fi-amt">1,000.00 元</div>
+        <div class="fi-row">
+          <span class="fi-date">2025-03-11</span>
+          <span class="fi-badge fi-active">冻结中</span>
+        </div>
+        <div style="font-size:11px;color:#8c8c8c;margin-top:3px;">司法冻结申请</div>
+      </div>
+      <div class="freeze-item" onclick="filterByFreeze('')">
+        <div class="fi-id">全部明细</div>
+        <div class="fi-amt" style="color:#262626;">—</div>
+        <div class="fi-row">
+          <span class="fi-date">不限冻结单</span>
+          <span class="fi-badge fi-unfrozen" style="background:#e6f7ff;color:#1890ff;border-color:#91d5ff;">全部</span>
+        </div>
+        <div style="font-size:11px;color:#8c8c8c;margin-top:3px;">显示所有明细</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 筛选 -->
+  <div class="filter-card">
+    <div class="filter-row">
+      <div class="fi-item">
+        <label class="fl">会计日期</label>
+        <input class="inp" id="f-from" type="date" value="2025-01-20"/>
+      </div>
+      <div class="fi-item">
+        <label class="fl" style="opacity:0;">至</label>
+        <input class="inp" id="f-to" type="date" value="2025-03-13"/>
+      </div>
+      <div class="fi-item">
+        <label class="fl">凭证号</label>
+        <input class="inp" id="f-vch" type="text" placeholder="请输入凭证号"/>
+      </div>
+      <div class="fi-item">
+        <label class="fl">操作类型</label>
+        <select class="sel" id="f-type">
+          <option value="">全部</option>
+          <!-- options injected by JS -->
+        </select>
+      </div>
+      <div class="fi-item">
+        <label class="fl">记账状态</label>
+        <select class="sel" id="f-status">
+          <option value="">全部</option>
+          <option value="POSTED">已过账</option>
+          <option value="PROCESSING">记账中</option>
+          <option value="ROLLBACK">已冲销</option>
+        </select>
+      </div>
+      <div class="filter-actions">
+        <button class="btn btn-primary" onclick="doSearch()">🔍 搜索</button>
+        <button class="btn btn-default" onclick="doReset()">重置</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 表格 -->
+  <div class="table-card">
+    <div class="tbl-toolbar">
+      <div class="tbl-sum">共 <strong id="total-cnt">0</strong> 条明细</div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-default btn-sm" onclick="exportData()">📥 导出</button>
+      </div>
+    </div>
+    <table>
+      <thead id="thead-row"></thead>
+      <tbody id="tbody"></tbody>
+      <tfoot id="tfoot"></tfoot>
+    </table>
+    <div class="pg-wrap">
+      <div class="pg-info">
+        每页
+        <select class="pgsz" onchange="changePS(this.value)">
+          <option value="10" selected>10</option>
+          <option value="20">20</option>
+        </select>
+        条，<span id="pg-txt">共 0 条，第 1/1 页</span>
+      </div>
+      <div class="pg" id="pg"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 明细详情弹窗 ── -->
+<div class="modal-ov" id="detail-modal">
+  <div class="modal">
+    <div class="modal-hdr">
+      <div class="modal-title">子账户明细详情</div>
+      <button class="modal-x" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- 冻结单关联（冻结子账户专有） -->
+      <div id="freeze-detail-block" class="freeze-detail-card" style="display:none;">
+        <div class="freeze-detail-title">🔒 关联冻结记录</div>
+        <div class="freeze-detail-grid">
+          <div><div class="fdg-item-label">冻结单号</div><div class="fdg-item-val" id="dd-frz-id"></div></div>
+          <div><div class="fdg-item-label">冻结金额</div><div class="fdg-item-val" id="dd-frz-amt"></div></div>
+          <div><div class="fdg-item-label">冻结状态</div><div class="fdg-item-val" id="dd-frz-st"></div></div>
+          <div><div class="fdg-item-label">冻结原因</div><div class="fdg-item-val" id="dd-frz-reason"></div></div>
+          <div><div class="fdg-item-label">冻结时间</div><div class="fdg-item-val" id="dd-frz-time"></div></div>
+          <div><div class="fdg-item-label">有效期至</div><div class="fdg-item-val" id="dd-frz-exp"></div></div>
+        </div>
+      </div>
+      <div class="dg">
+        <div class="dsec">明细标识</div>
+        <div><div class="dl">明细编号</div><div class="dv td-mono" id="d-no"></div></div>
+        <div><div class="dl">凭证号</div><div class="dv td-mono" id="d-vch"></div></div>
+        <div><div class="dl">会计日期</div><div class="dv" id="d-date"></div></div>
+        <div><div class="dl">记账状态</div><div class="dv" id="d-status"></div></div>
+        <hr class="ddiv"/>
+        <div class="dsec">金额信息</div>
+        <div><div class="dl">操作类型</div><div class="dv" id="d-type"></div></div>
+        <div><div class="dl">变动金额（元）</div><div class="dv" id="d-amt"></div></div>
+        <div><div class="dl">变动前余额（元）</div><div class="dv" id="d-before"></div></div>
+        <div><div class="dl">变动后余额（元）</div><div class="dv" id="d-after"></div></div>
+        <hr class="ddiv"/>
+        <div class="dsec">业务信息</div>
+        <div class="dg-full"><div class="dl">业务摘要</div><div class="dv" id="d-summary"></div></div>
+        <div><div class="dl">外部业务单号</div><div class="dv td-mono" id="d-bizno"></div></div>
+        <div><div class="dl">事务编号</div><div class="dv td-mono" id="d-txno"></div></div>
+        <hr class="ddiv"/>
+        <div class="dsec">时间信息</div>
+        <div><div class="dl">创建时间</div><div class="dv" id="d-created"></div></div>
+        <div><div class="dl">过账时间</div><div class="dv" id="d-posted"></div></div>
+      </div>
+    </div>
+    <div class="modal-ftr">
+      <button class="btn btn-default" onclick="closeModal()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ──────── 子账户数据定义 ────────
+const SUB_DATA = {
+  avail: {
+    name:'可用余额子账户',
+    balance:4617.00, initBalance:3000.00, inAmt:8617.00, outAmt:7000.00,
+    txCount:14,
+    typeOptions:['全部','借款入账','还款扣减','冻结扣减','解冻归还','逾期转出','逾期回迁','期初录入','冲销'],
+    headers:['序号','明细编号','凭证号','会计日期','业务摘要','操作类型','增加（元）','减少（元）','变动前余额（元）','变动后余额（元）','记账状态','操作'],
+    data:[
+      { id:1,  no:'SADTL-A-001', vch:'VCH-20250120-0001', date:'2025-01-20', summary:'期初余额录入',         type:'期初录入', inc:3000.00, dec:0,       before:0,       after:3000.00, status:'POSTED',     bizNo:'SYS2025012000001', txNo:'TX-20250120-0001', created:'2025-01-20 09:00:01', posted:'2025-01-20 09:00:03', frzId:null },
+      { id:2,  no:'SADTL-A-002', vch:'VCH-20250210-0018', date:'2025-02-10', summary:'发放自营贷款-A产品',   type:'借款入账', inc:2000.00, dec:0,       before:3000.00, after:5000.00, status:'POSTED',     bizNo:'LOAN202502100031', txNo:'TX-20250210-0012', created:'2025-02-10 10:15:22', posted:'2025-02-10 10:15:26', frzId:null },
+      { id:3,  no:'SADTL-A-003', vch:'VCH-20250215-0024', date:'2025-02-15', summary:'还款入账-第1期',       type:'还款扣减', inc:0,       dec:500.00,  before:5000.00, after:4500.00, status:'POSTED',     bizNo:'REPAY202502150022', txNo:'TX-20250215-0009', created:'2025-02-15 14:30:11', posted:'2025-02-15 14:30:15', frzId:null },
+      { id:4,  no:'SADTL-A-004', vch:'VCH-20250220-0030', date:'2025-02-20', summary:'还款入账-第2期',       type:'还款扣减', inc:0,       dec:500.00,  before:4500.00, after:4000.00, status:'POSTED',     bizNo:'REPAY202502200019', txNo:'TX-20250220-0015', created:'2025-02-20 09:05:33', posted:'2025-02-20 09:05:37', frzId:null },
+      { id:5,  no:'SADTL-A-005', vch:'VCH-20250225-0012', date:'2025-02-25', summary:'逾期贷款转移-扣减可用', type:'逾期转出', inc:0,       dec:1000.00, before:4000.00, after:3000.00, status:'POSTED',     bizNo:'OVD2025022500008',  txNo:'TX-20250225-0004', created:'2025-02-25 00:01:05', posted:'2025-02-25 00:01:08', frzId:null },
+      { id:6,  no:'SADTL-A-006', vch:'VCH-20250228-0035', date:'2025-02-28', summary:'还款入账-第3期',       type:'还款扣减', inc:0,       dec:500.00,  before:3000.00, after:2500.00, status:'POSTED',     bizNo:'REPAY202502280031', txNo:'TX-20250228-0017', created:'2025-02-28 10:22:44', posted:'2025-02-28 10:22:49', frzId:null },
+      { id:7,  no:'SADTL-A-007', vch:'VCH-20250301-0008', date:'2025-03-01', summary:'追加贷款发放-第二笔',  type:'借款入账', inc:3617.00, dec:0,       before:2500.00, after:6117.00, status:'POSTED',     bizNo:'LOAN2025030100005', txNo:'TX-20250301-0003', created:'2025-03-01 11:45:00', posted:'2025-03-01 11:45:05', frzId:null },
+      { id:8,  no:'SADTL-A-008', vch:'VCH-20250303-0019', date:'2025-03-03', summary:'提现预冻结-扣减可用',  type:'冻结扣减', inc:0,       dec:500.00,  before:6117.00, after:5617.00, status:'POSTED',     bizNo:'FRZ2025030300011',  txNo:'TX-20250303-0007', created:'2025-03-03 14:00:22', posted:'2025-03-03 14:00:25', frzId:'FRZ001' },
+      { id:9,  no:'SADTL-A-009', vch:'VCH-20250305-0028', date:'2025-03-05', summary:'提现失败解冻-归还可用', type:'解冻归还', inc:500.00,  dec:0,       before:5617.00, after:6117.00, status:'ROLLBACK',   bizNo:'UFZ2025030500018',  txNo:'TX-20250305-0010', created:'2025-03-05 09:30:11', posted:'2025-03-05 09:30:14', frzId:'FRZ001' },
+      { id:10, no:'SADTL-A-010', vch:'VCH-20250307-0022', date:'2025-03-07', summary:'还款入账-第4期',       type:'还款扣减', inc:0,       dec:500.00,  before:6117.00, after:5617.00, status:'POSTED',     bizNo:'REPAY202503070029', txNo:'TX-20250307-0014', created:'2025-03-07 10:11:55', posted:'2025-03-07 10:11:59', frzId:null },
+      { id:11, no:'SADTL-A-011', vch:'VCH-20250308-0033', date:'2025-03-08', summary:'逾期贷款回迁-归还可用', type:'逾期回迁', inc:1000.00, dec:0,       before:5617.00, after:6617.00, status:'POSTED',     bizNo:'OVD2025030800040',  txNo:'TX-20250308-0021', created:'2025-03-08 00:01:12', posted:'2025-03-08 00:01:15', frzId:null },
+      { id:12, no:'SADTL-A-012', vch:'VCH-20250310-0041', date:'2025-03-10', summary:'还款入账-第5期',       type:'还款扣减', inc:0,       dec:500.00,  before:6617.00, after:6117.00, status:'POSTED',     bizNo:'REPAY202503100055', txNo:'TX-20250310-0025', created:'2025-03-10 14:05:30', posted:'2025-03-10 14:05:34', frzId:null },
+      { id:13, no:'SADTL-A-013', vch:'VCH-20250311-0049', date:'2025-03-11', summary:'司法冻结-扣减可用',    type:'冻结扣减', inc:0,       dec:1000.00, before:6117.00, after:5117.00, status:'POSTED',     bizNo:'LGL2025031100007',  txNo:'TX-20250311-0041', created:'2025-03-11 16:00:00', posted:'2025-03-11 16:00:04', frzId:'FRZ002' },
+      { id:14, no:'SADTL-A-014', vch:'VCH-20250312-0038', date:'2025-03-12', summary:'还款入账-第6期',       type:'还款扣减', inc:0,       dec:500.00,  before:5117.00, after:4617.00, status:'POSTED',     bizNo:'REPAY202503120048', txNo:'TX-20250312-0027', created:'2025-03-12 15:45:09', posted:'2025-03-12 15:45:13', frzId:null },
+    ]
+  },
+  frozen: {
+    name:'冻结余额子账户',
+    balance:1000.00, initBalance:0.00, inAmt:1500.00, outAmt:500.00,
+    txCount:4,
+    typeOptions:['全部','冻结入账','解冻扣减'],
+    headers:['序号','明细编号','凭证号','会计日期','业务摘要','操作类型','冻结增加（元）','冻结减少（元）','变动前余额（元）','变动后余额（元）','记账状态','操作'],
+    data:[
+      { id:1,  no:'SADTL-F-001', vch:'VCH-20250303-0020', date:'2025-03-03', summary:'提现预冻结-冻结子账户增加',   type:'冻结入账', inc:500.00,  dec:0,      before:0,       after:500.00,  status:'POSTED',   bizNo:'FRZ2025030300011',  txNo:'TX-20250303-0007', created:'2025-03-03 14:00:22', posted:'2025-03-03 14:00:26', frzId:'FRZ001' },
+      { id:2,  no:'SADTL-F-002', vch:'VCH-20250305-0029', date:'2025-03-05', summary:'提现失败解冻-冻结子账户减少',  type:'解冻扣减', inc:0,       dec:500.00, before:500.00,  after:0.00,    status:'ROLLBACK', bizNo:'UFZ2025030500018',  txNo:'TX-20250305-0010', created:'2025-03-05 09:30:11', posted:'2025-03-05 09:30:15', frzId:'FRZ001' },
+      { id:3,  no:'SADTL-F-003', vch:'VCH-20250311-0050', date:'2025-03-11', summary:'司法冻结申请-冻结子账户增加',  type:'冻结入账', inc:1000.00, dec:0,      before:0.00,    after:1000.00, status:'POSTED',   bizNo:'LGL2025031100007',  txNo:'TX-20250311-0041', created:'2025-03-11 16:00:00', posted:'2025-03-11 16:00:05', frzId:'FRZ002' },
+      { id:4,  no:'SADTL-F-004', vch:'VCH-20250313-0022', date:'2025-03-13', summary:'司法冻结追加-追加冻结金额',   type:'冻结入账', inc:500.00,  dec:0,      before:1000.00, after:1500.00, status:'PROCESSING',bizNo:'LGL2025031300003',  txNo:'TX-20250313-0012', created:'2025-03-13 09:15:00', posted:'', frzId:'FRZ002' },
+    ]
+  }
+};
+
+const FREEZE_RECORDS = {
+  FRZ001: { id:'FRZ-20250303-001', amt:'500.00', status:'已解冻', reason:'提现预冻结', time:'2025-03-03 14:00:22', exp:'2025-04-03 14:00:00' },
+  FRZ002: { id:'FRZ-20250311-002', amt:'1,000.00', status:'冻结中', reason:'司法冻结申请', time:'2025-03-11 16:00:00', exp:'2025-09-11 16:00:00' },
+};
+
+const STATUS_MAP = {
+  POSTED:'已过账', PROCESSING:'记账中', ROLLBACK:'已冲销', FAILED:'失败'
+};
+const STATUS_CLS = {
+  POSTED:'bs', PROCESSING:'bp', ROLLBACK:'bdf', FAILED:'be'
+};
+
+let currentSub = 'frozen';
+let fd = [];
+let cp = 1, ps = 10;
+
+// ──────── 切换子账户类型 ────────
+function switchSub(type) {
+  currentSub = type;
+  document.getElementById('tab-avail').className  = 'tab-btn' + (type==='avail' ?' active-avail':'');
+  document.getElementById('tab-frozen').className = 'tab-btn' + (type==='frozen'?' active-frozen':'');
+
+  const hint = document.getElementById('switcher-hint');
+  hint.textContent = type === 'avail'
+    ? '可用子账户记录因借款、还款、冻结扣减等操作产生的余额变动'
+    : '冻结子账户记录因冻结/解冻操作产生的余额变动';
+
+  // 冻结记录栏仅冻结子账户显示
+  document.getElementById('freeze-bar').style.display = type === 'frozen' ? '' : 'none';
+
+  // 子账户卡
+  const d = SUB_DATA[type];
+  const cardCls = type === 'avail' ? 'sub-card-avail' : 'sub-card-frozen';
+  const icon = type === 'avail' ? '💳' : '🔒';
+  document.getElementById('sub-card').innerHTML = `
+    <div class="${cardCls}">
+      <div class="sub-card-label">当前子账户类型</div>
+      <div class="sub-card-type">${icon} ${d.name}</div>
+      <div class="sub-card-bal-label">当前余额（元）</div>
+      <div class="sub-card-bal">${fmt(d.balance)}</div>
+      <div class="sub-card-meta">
+        <div class="sub-card-m-item">
+          <div class="sub-card-m-label">期初余额</div>
+          <div class="sub-card-m-val">${fmt(d.initBalance)}</div>
+        </div>
+        <div class="sub-card-m-item">
+          <div class="sub-card-m-label">本期增加额</div>
+          <div class="sub-card-m-val">${fmt(d.inAmt)}</div>
+        </div>
+        <div class="sub-card-m-item">
+          <div class="sub-card-m-label">本期减少额</div>
+          <div class="sub-card-m-val">${fmt(d.outAmt)}</div>
+        </div>
+        <div class="sub-card-m-item">
+          <div class="sub-card-m-label">本期笔数</div>
+          <div class="sub-card-m-val">${d.txCount}</div>
+        </div>
+      </div>
+    </div>`;
+
+  // 表头
+  const headers = d.headers;
+  document.getElementById('thead-row').innerHTML =
+    '<tr>' + headers.map(h=>`<th>${h}</th>`).join('') + '</tr>';
+
+  // 操作类型筛选
+  const sel = document.getElementById('f-type');
+  sel.innerHTML = d.typeOptions.map(t=>`<option value="${t==='全部'?'':t}">${t}</option>`).join('');
+
+  // 重置筛选，载入数据
+  fd = [...d.data];
+  cp = 1;
+  render();
+}
+
+function filterByFreeze(frzId) {
+  // 高亮冻结记录项
+  document.querySelectorAll('.freeze-item').forEach(el => {
+    el.classList.remove('active');
+    if ((frzId==='' && el.onclick.toString().includes("''")) ||
+        el.onclick.toString().includes(`'${frzId}'`)) el.classList.add('active');
+  });
+  fd = frzId
+    ? SUB_DATA.frozen.data.filter(r => r.frzId === frzId)
+    : [...SUB_DATA.frozen.data];
+  cp = 1;
+  render();
+}
+
+// ──────── 渲染 ────────
+function render() {
+  const start = (cp-1)*ps;
+  const rows  = fd.slice(start, start+ps);
+  const tbody = document.getElementById('tbody');
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:48px;color:#8c8c8c;">暂无数据</td></tr>`;
+    document.getElementById('tfoot').innerHTML=''; renderPg(); return;
+  }
+
+  tbody.innerHTML = rows.map((r,i) => {
+    const stCls = STATUS_CLS[r.status]||'bdf';
+    const stLbl = STATUS_MAP[r.status]||r.status;
+    const incS  = r.inc>0 ? `<span class="td-r inc">+${fmt(r.inc)}</span>` : `<span class="td-r z">—</span>`;
+    const decS  = r.dec>0 ? `<span class="td-r dec">-${fmt(r.dec)}</span>` : `<span class="td-r z">—</span>`;
+    const typeTag = currentSub==='frozen'
+      ? (r.type==='冻结入账' ? `<span class="tag t-gold">${r.type}</span>` : `<span class="tag t-green">${r.type}</span>`)
+      : getAvailTypeTag(r.type);
+    const rvMark = r.status==='ROLLBACK' ? ' <span class="tag t-gray" style="font-size:11px;">冲销</span>' : '';
+
+    return `<tr>
+      <td class="td-seq">${start+i+1}</td>
+      <td class="td-mono" style="font-size:11px;">${r.no}</td>
+      <td><a class="vch-link td-mono" onclick="openDetail(${r.id})">${r.vch}${rvMark}</a></td>
+      <td style="color:#595959;font-size:12px;">${r.date}</td>
+      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.summary}">${r.summary}</td>
+      <td>${typeTag}</td>
+      <td>${incS}</td>
+      <td>${decS}</td>
+      <td class="td-r bal">${fmt(r.before)}</td>
+      <td class="td-r bal">${fmt(r.after)}</td>
+      <td><span class="badge ${stCls}">${stLbl}</span></td>
+      <td><button class="btn btn-link" onclick="openDetail(${r.id})">详情</button></td>
+    </tr>`;
+  }).join('');
+
+  const ti = fd.reduce((s,r)=>s+r.inc,0);
+  const td = fd.reduce((s,r)=>s+r.dec,0);
+  document.getElementById('tfoot').innerHTML = `<tr class="sr">
+    <td colspan="6" style="text-align:right;">合计（${fd.length} 条）：</td>
+    <td class="td-r inc">+${fmt(ti)}</td>
+    <td class="td-r dec">-${fmt(td)}</td>
+    <td colspan="4">净变动：<strong style="color:${ti-td>=0?'#52c41a':'#f5222d'}">${ti>=td?'+':''}${fmt(ti-td)}</strong></td>
+  </tr>`;
+
+  document.getElementById('total-cnt').textContent = fd.length;
+  renderPg();
+}
+
+function getAvailTypeTag(type) {
+  const map = {
+    '借款入账':'t-red','还款扣减':'t-blue','冻结扣减':'t-gold',
+    '解冻归还':'t-green','逾期转出':'t-purple','逾期回迁':'t-green','期初录入':'t-gray','冲销':'t-gray'
+  };
+  return `<span class="tag ${map[type]||'t-blue'}">${type}</span>`;
+}
+
+function fmt(n){ return n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,','); }
+
+function renderPg() {
+  const total=fd.length, tp=Math.max(1,Math.ceil(total/ps));
+  document.getElementById('pg-txt').textContent=`共 ${total} 条，第 ${cp}/${tp} 页`;
+  const el=document.getElementById('pg');
+  let h=`<button class="pgb" ${cp<=1?'disabled':''} onclick="go(1)">«</button>`;
+  h+=`<button class="pgb" ${cp<=1?'disabled':''} onclick="go(${cp-1})">‹</button>`;
+  const r=[];
+  for(let p=Math.max(1,cp-2);p<=Math.min(tp,cp+2);p++) r.push(p);
+  if(r[0]>1) h+=`<button class="pgb" onclick="go(1)">1</button>${r[0]>2?'<span style="padding:0 4px;color:#8c8c8c;">…</span>':''}`;
+  r.forEach(p=>{h+=`<button class="pgb${p===cp?' act':''}" onclick="go(${p})">${p}</button>`;});
+  if(r[r.length-1]<tp) h+=`${r[r.length-1]<tp-1?'<span style="padding:0 4px;color:#8c8c8c;">…</span>':''}<button class="pgb" onclick="go(${tp})">${tp}</button>`;
+  h+=`<button class="pgb" ${cp>=tp?'disabled':''} onclick="go(${cp+1})">›</button>`;
+  h+=`<button class="pgb" ${cp>=tp?'disabled':''} onclick="go(${tp})">»</button>`;
+  el.innerHTML=h;
+}
+
+function go(p){cp=p;render();}
+function changePS(s){ps=parseInt(s);cp=1;render();}
+
+// ──────── 搜索 ────────
+function doSearch() {
+  const vch    = document.getElementById('f-vch').value.trim().toLowerCase();
+  const type   = document.getElementById('f-type').value;
+  const status = document.getElementById('f-status').value;
+  const from   = document.getElementById('f-from').value;
+  const to     = document.getElementById('f-to').value;
+
+  fd = SUB_DATA[currentSub].data.filter(r => {
+    if (vch    && !r.vch.toLowerCase().includes(vch)) return false;
+    if (type   && r.type !== type)                    return false;
+    if (status && r.status !== status)                return false;
+    if (from   && r.date < from)                      return false;
+    if (to     && r.date > to)                        return false;
+    return true;
+  });
+  cp=1; render();
+  toast(`找到 ${fd.length} 条明细`);
+}
+
+function doReset() {
+  document.getElementById('f-vch').value='';
+  document.getElementById('f-type').value='';
+  document.getElementById('f-status').value='';
+  document.getElementById('f-from').value='2025-01-20';
+  document.getElementById('f-to').value='2025-03-13';
+  fd=[...SUB_DATA[currentSub].data]; cp=1; render();
+  toast('已重置筛选条件');
+}
+
+// ──────── 详情弹窗 ────────
+function openDetail(id) {
+  const r = SUB_DATA[currentSub].data.find(x=>x.id===id); if(!r) return;
+  const stCls = STATUS_CLS[r.status]||'bdf';
+  const stLbl = STATUS_MAP[r.status]||r.status;
+  const amt   = r.inc>0 ? r.inc : r.dec;
+  const amtColor = r.inc>0?'#52c41a':'#f5222d';
+  const amtSign  = r.inc>0?'+':'-';
+
+  // 冻结单关联块
+  const frzBlock = document.getElementById('freeze-detail-block');
+  if (r.frzId && FREEZE_RECORDS[r.frzId]) {
+    const f = FREEZE_RECORDS[r.frzId];
+    frzBlock.style.display='';
+    document.getElementById('dd-frz-id').textContent     = f.id;
+    document.getElementById('dd-frz-amt').textContent    = f.amt + ' 元';
+    document.getElementById('dd-frz-st').textContent     = f.status;
+    document.getElementById('dd-frz-reason').textContent = f.reason;
+    document.getElementById('dd-frz-time').textContent   = f.time;
+    document.getElementById('dd-frz-exp').textContent    = f.exp;
+  } else {
+    frzBlock.style.display='none';
+  }
+
+  document.getElementById('d-no').textContent      = r.no;
+  document.getElementById('d-vch').textContent     = r.vch;
+  document.getElementById('d-date').textContent    = r.date;
+  document.getElementById('d-status').innerHTML    = `<span class="badge ${stCls}">${stLbl}</span>`;
+  document.getElementById('d-type').innerHTML      = currentSub==='frozen'
+    ? (r.type==='冻结入账'?`<span class="tag t-gold">${r.type}</span>`:`<span class="tag t-green">${r.type}</span>`)
+    : getAvailTypeTag(r.type);
+  document.getElementById('d-amt').innerHTML       = `<strong style="font-size:16px;color:${amtColor}">${amtSign}${fmt(amt)}</strong> 元`;
+  document.getElementById('d-before').textContent  = fmt(r.before)+' 元';
+  document.getElementById('d-after').textContent   = fmt(r.after)+' 元';
+  document.getElementById('d-summary').textContent = r.summary;
+  document.getElementById('d-bizno').textContent   = r.bizNo;
+  document.getElementById('d-txno').textContent    = r.txNo;
+  document.getElementById('d-created').textContent = r.created;
+  document.getElementById('d-posted').textContent  = r.posted||'—';
+
+  document.getElementById('detail-modal').classList.add('show');
+}
+
+function closeModal() { document.getElementById('detail-modal').classList.remove('show'); }
+document.getElementById('detail-modal').addEventListener('click', e=>{ if(e.target===e.currentTarget) closeModal(); });
+
+function exportData() { toast('正在导出子账户明细，请稍候…'); }
+
+function toast(msg) {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.style.opacity='1';
+  clearTimeout(t._t); t._t=setTimeout(()=>{t.style.opacity='0';},2500);
+}
+
+// ──────── 初始化（默认冻结子账户） ────────
+switchSub('frozen');
+</script>
+</body>
 </html>
