@@ -1,53 +1,679 @@
-﻿<!DOCTYPE html>
-<html>
-  <head>
-    <title>客户分户子账户</title>
-    <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
-    <meta http-equiv="content-type" content="text/html; charset=utf-8"/>
-    <link href="resources/css/axure_rp_page.css" type="text/css" rel="stylesheet"/>
-    <link href="data/styles.css" type="text/css" rel="stylesheet"/>
-    <link href="files/客户分户子账户/styles.css" type="text/css" rel="stylesheet"/>
-    <script src="resources/scripts/jquery-3.2.1.min.js"></script>
-    <script src="resources/scripts/axure/axQuery.js"></script>
-    <script src="resources/scripts/axure/globals.js"></script>
-    <script src="resources/scripts/axutils.js"></script>
-    <script src="resources/scripts/axure/annotation.js"></script>
-    <script src="resources/scripts/axure/axQuery.std.js"></script>
-    <script src="resources/scripts/axure/doc.js"></script>
-    <script src="resources/scripts/messagecenter.js"></script>
-    <script src="resources/scripts/axure/events.js"></script>
-    <script src="resources/scripts/axure/recording.js"></script>
-    <script src="resources/scripts/axure/action.js"></script>
-    <script src="resources/scripts/axure/expr.js"></script>
-    <script src="resources/scripts/axure/geometry.js"></script>
-    <script src="resources/scripts/axure/flyout.js"></script>
-    <script src="resources/scripts/axure/model.js"></script>
-    <script src="resources/scripts/axure/repeater.js"></script>
-    <script src="resources/scripts/axure/sto.js"></script>
-    <script src="resources/scripts/axure/utils.temp.js"></script>
-    <script src="resources/scripts/axure/variables.js"></script>
-    <script src="resources/scripts/axure/drag.js"></script>
-    <script src="resources/scripts/axure/move.js"></script>
-    <script src="resources/scripts/axure/visibility.js"></script>
-    <script src="resources/scripts/axure/style.js"></script>
-    <script src="resources/scripts/axure/adaptive.js"></script>
-    <script src="resources/scripts/axure/tree.js"></script>
-    <script src="resources/scripts/axure/init.temp.js"></script>
-    <script src="resources/scripts/axure/legacy.js"></script>
-    <script src="resources/scripts/axure/viewer.js"></script>
-    <script src="resources/scripts/axure/math.js"></script>
-    <script src="resources/scripts/axure/jquery.nicescroll.min.js"></script>
-    <script src="data/document.js"></script>
-    <script src="files/客户分户子账户/data.js"></script>
-    <script type="text/javascript">
-      $axure.utils.getTransparentGifPath = function() { return 'resources/images/transparent.gif'; };
-      $axure.utils.getOtherPath = function() { return 'resources/Other.html'; };
-      $axure.utils.getReloadPath = function() { return 'resources/reload.html'; };
-    </script>
-  </head>
-  <body>
-    <div id="base" class="">
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <title>客户分户子账户</title>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <style>
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body {
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+      background:#f0f2f5; color:#333; min-width:1280px;
+    }
+
+    /* ── 顶栏 ── */
+    .topbar {
+      background:#fff; border-bottom:1px solid #e8e8e8;
+      padding:0 24px; height:56px; display:flex; align-items:center;
+      justify-content:space-between; position:sticky; top:0; z-index:100;
+      box-shadow:0 1px 4px rgba(0,0,0,.06);
+    }
+    .tl { display:flex; align-items:center; gap:16px; }
+    .logo { font-size:18px; font-weight:700; color:#1890ff; letter-spacing:1px; }
+    .vd  { width:1px; height:20px; background:#e8e8e8; }
+    .bc  { font-size:13px; color:#8c8c8c; display:flex; align-items:center; gap:6px; }
+    .bc a { color:#595959; text-decoration:none; }
+    .bc a:hover { color:#1890ff; }
+    .bc-sep { color:#bfbfbf; }
+    .bc-cur { color:#262626; font-weight:500; }
+    .tr { display:flex; align-items:center; gap:16px; font-size:13px; color:#595959; }
+    .av { width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600; }
+
+    /* ── 布局 ── */
+    .main { padding:24px; }
+
+    /* ── 按钮 ── */
+    .btn {
+      display:inline-flex; align-items:center; justify-content:center;
+      height:32px; padding:0 16px; border-radius:4px; font-size:13px;
+      font-weight:500; cursor:pointer; border:1px solid transparent;
+      transition:all .2s; gap:5px; white-space:nowrap;
+    }
+    .btn-primary { background:#1890ff; color:#fff; border-color:#1890ff; }
+    .btn-primary:hover { background:#40a9ff; border-color:#40a9ff; }
+    .btn-default { background:#fff; color:#595959; border-color:#d9d9d9; }
+    .btn-default:hover { color:#1890ff; border-color:#1890ff; }
+    .btn-sm { height:26px; padding:0 10px; font-size:12px; }
+    .btn-link { background:none; border:none; color:#1890ff; padding:0 4px; height:auto; font-size:13px; cursor:pointer; }
+    .btn-link:hover { color:#40a9ff; }
+
+    /* ── 页头 ── */
+    .page-hdr {
+      background:#fff; border-radius:8px; padding:18px 24px;
+      margin-bottom:16px; display:flex; align-items:center; justify-content:space-between;
+      box-shadow:0 1px 3px rgba(0,0,0,.06);
+    }
+    .page-title { font-size:20px; font-weight:600; color:#262626; }
+    .page-desc  { font-size:13px; color:#8c8c8c; margin-top:3px; }
+
+    /* ── 统计卡 ── */
+    .stat-bar {
+      display:grid; grid-template-columns:repeat(5,1fr); gap:16px; margin-bottom:16px;
+    }
+    .stat-card {
+      background:#fff; border-radius:8px; padding:16px 18px;
+      box-shadow:0 1px 3px rgba(0,0,0,.06); display:flex; align-items:center; gap:12px;
+    }
+    .si { width:40px; height:40px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+    .si-blue   { background:#e6f7ff; }
+    .si-green  { background:#f6ffed; }
+    .si-gold   { background:#fffbe6; }
+    .si-red    { background:#fff2f0; }
+    .si-purple { background:#f9f0ff; }
+    .sb { }
+    .sb-lbl { font-size:12px; color:#8c8c8c; margin-bottom:3px; }
+    .sb-val { font-size:20px; font-weight:700; font-variant-numeric:tabular-nums; }
+    .c-blue   { color:#1890ff; }
+    .c-green  { color:#52c41a; }
+    .c-gold   { color:#faad14; }
+    .c-red    { color:#f5222d; }
+    .c-purple { color:#722ed1; }
+
+    /* ── 筛选 ── */
+    .filter-card {
+      background:#fff; border-radius:8px; padding:18px 24px 12px;
+      margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,.06);
+    }
+    .filter-row { display:flex; flex-wrap:wrap; gap:14px 22px; align-items:flex-end; }
+    .fi { display:flex; flex-direction:column; gap:5px; }
+    .fl { font-size:13px; color:#595959; font-weight:500; }
+    .inp,.sel {
+      height:32px; border:1px solid #d9d9d9; border-radius:4px;
+      padding:0 11px; font-size:13px; color:#333; background:#fff;
+      outline:none; transition:border-color .2s; min-width:160px;
+    }
+    .inp:focus,.sel:focus { border-color:#1890ff; box-shadow:0 0 0 2px rgba(24,144,255,.12); }
+    .inp::placeholder { color:#bfbfbf; }
+    .fa { display:flex; gap:8px; align-items:flex-end; margin-left:auto; }
+
+    /* ── 表格卡 ── */
+    .table-card { background:#fff; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,.06); overflow:hidden; }
+    .tbl-tb {
+      padding:13px 24px; border-bottom:1px solid #f0f0f0;
+      display:flex; align-items:center; justify-content:space-between;
+    }
+    .tbl-sum { font-size:13px; color:#595959; }
+    .tbl-sum strong { color:#262626; }
+
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    thead th {
+      background:#fafafa; color:#595959; font-weight:600;
+      padding:11px 14px; text-align:left;
+      border-bottom:1px solid #f0f0f0; white-space:nowrap;
+    }
+    tbody tr { border-bottom:1px solid #f5f5f5; transition:background .15s; }
+    tbody tr:last-child { border-bottom:none; }
+    tbody tr:hover { background:#f5f9ff; }
+    tbody td { padding:11px 14px; color:#262626; vertical-align:middle; }
+    .td-seq  { color:#8c8c8c; }
+    .td-mono { font-family:monospace; font-size:12px; color:#595959; }
+    .td-r    { text-align:right; font-variant-numeric:tabular-nums; font-weight:600; }
+    .td-r.avail  { color:#1890ff; }
+    .td-r.frozen { color:#faad14; }
+    .td-r.zero   { color:#bfbfbf; font-weight:400; }
+    .ops { white-space:nowrap; }
+
+    /* ── 子账户类型标签 ── */
+    .sub-type-avail  { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:12px; font-size:12px; font-weight:600; background:#e6f7ff; color:#1890ff; border:1px solid #91d5ff; }
+    .sub-type-frozen { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:12px; font-size:12px; font-weight:600; background:#fffbe6; color:#faad14; border:1px solid #ffe58f; }
+
+    /* ── 徽章 ── */
+    .badge { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:10px; font-size:12px; font-weight:500; }
+    .badge::before { content:""; width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+    .bs  { background:#f6ffed; color:#52c41a; border:1px solid #b7eb8f; }  .bs::before  { background:#52c41a; }
+    .bw  { background:#fffbe6; color:#faad14; border:1px solid #ffe58f; }  .bw::before  { background:#faad14; }
+    .be  { background:#fff2f0; color:#ff4d4f; border:1px solid #ffccc7; }  .be::before  { background:#ff4d4f; }
+    .bdf { background:#fafafa; color:#8c8c8c; border:1px solid #d9d9d9; }  .bdf::before { background:#bfbfbf; }
+
+    .tag { display:inline-block; padding:1px 8px; border-radius:3px; font-size:12px; border:1px solid; }
+    .t-blue   { background:#e6f7ff; color:#1890ff; border-color:#91d5ff; }
+    .t-purple { background:#f9f0ff; color:#722ed1; border-color:#d3adf7; }
+    .t-green  { background:#f6ffed; color:#52c41a; border-color:#b7eb8f; }
+    .t-orange { background:#fff7e6; color:#fa8c16; border-color:#ffd591; }
+    .t-gray   { background:#fafafa; color:#8c8c8c; border-color:#d9d9d9; }
+
+    /* ── 进度条（余额占比） ── */
+    .balance-bar { display:flex; align-items:center; gap:8px; }
+    .bar-wrap { flex:1; height:6px; background:#f0f0f0; border-radius:3px; overflow:hidden; min-width:60px; }
+    .bar-fill { height:100%; border-radius:3px; }
+    .bar-avail  { background:#1890ff; }
+    .bar-frozen { background:#faad14; }
+
+    /* ── 分页 ── */
+    .pg-wrap { padding:14px 24px; display:flex; align-items:center; justify-content:space-between; border-top:1px solid #f0f0f0; }
+    .pg-info { font-size:13px; color:#8c8c8c; }
+    .pg { display:flex; align-items:center; gap:6px; }
+    .pgb { min-width:32px; height:32px; border:1px solid #d9d9d9; border-radius:4px; background:#fff; color:#595959; font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0 8px; transition:all .2s; }
+    .pgb:hover { color:#1890ff; border-color:#1890ff; }
+    .pgb.act  { color:#fff; background:#1890ff; border-color:#1890ff; }
+    .pgb:disabled { color:#bfbfbf; cursor:not-allowed; border-color:#e8e8e8; }
+    .pgsz { height:32px; border:1px solid #d9d9d9; border-radius:4px; padding:0 8px; font-size:13px; background:#fff; cursor:pointer; }
+
+    /* ── 详情弹窗 ── */
+    .modal-ov { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1000; align-items:center; justify-content:center; }
+    .modal-ov.show { display:flex; }
+    .modal { background:#fff; border-radius:8px; box-shadow:0 6px 40px rgba(0,0,0,.18); width:700px; max-width:95vw; max-height:90vh; overflow-y:auto; }
+    .mh { padding:18px 24px; border-bottom:1px solid #f0f0f0; display:flex; align-items:center; justify-content:space-between; }
+    .mt { font-size:16px; font-weight:600; color:#262626; }
+    .mx { font-size:18px; color:#8c8c8c; cursor:pointer; background:none; border:none; line-height:1; }
+    .mx:hover { color:#262626; }
+    .mb { padding:24px; }
+    .mf { padding:14px 24px; border-top:1px solid #f0f0f0; display:flex; justify-content:flex-end; gap:10px; }
+
+    /* ── 余额卡（弹窗内） ── */
+    .bal-cards { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px; }
+    .bal-card-avail  { background:linear-gradient(135deg,#1890ff,#096dd9); color:#fff; border-radius:8px; padding:16px 18px; }
+    .bal-card-frozen { background:linear-gradient(135deg,#faad14,#d48806); color:#fff; border-radius:8px; padding:16px 18px; }
+    .bc-lbl { font-size:11px; opacity:.8; margin-bottom:4px; }
+    .bc-val { font-size:22px; font-weight:800; font-variant-numeric:tabular-nums; }
+    .bc-sub { font-size:11px; opacity:.75; margin-top:6px; }
+
+    .dg { display:grid; grid-template-columns:1fr 1fr; gap:14px 28px; }
+    .dg-full { grid-column:1/-1; }
+    .dl { font-size:12px; color:#8c8c8c; margin-bottom:3px; }
+    .dv { font-size:14px; color:#262626; font-weight:500; }
+    .ddiv { grid-column:1/-1; border:none; border-top:1px dashed #f0f0f0; margin:4px 0; }
+    .dsec { grid-column:1/-1; font-size:13px; font-weight:600; color:#595959; border-left:3px solid #1890ff; padding-left:8px; margin-top:4px; }
+
+    /* ── 冻结记录迷你表（弹窗内） ── */
+    .frz-mini { border:1px solid #ffe58f; border-radius:6px; overflow:hidden; }
+    .frz-mini-hdr { background:#fffbe6; padding:8px 12px; font-size:12px; font-weight:600; color:#ad6800; }
+    .frz-mini table { width:100%; }
+    .frz-mini thead th { background:#fffbe6; font-size:12px; padding:7px 12px; color:#8c8c8c; font-weight:500; border-bottom:1px solid #ffe58f; }
+    .frz-mini tbody td { font-size:12px; padding:7px 12px; border-bottom:1px solid #fff7e6; }
+    .frz-mini tbody tr:last-child td { border-bottom:none; }
+
+    /* ── Toast ── */
+    #toast { position:fixed; bottom:32px; right:32px; z-index:9999; background:#262626; color:#fff; padding:10px 20px; border-radius:6px; font-size:13px; box-shadow:0 4px 12px rgba(0,0,0,.3); transition:opacity .3s; opacity:0; pointer-events:none; }
+  </style>
+</head>
+<body>
+
+<!-- ── 顶栏 ── -->
+<div class="topbar">
+  <div class="tl">
+    <div class="logo">账务核心</div>
+    <div class="vd"></div>
+    <div class="bc">
+      <a href="index.html">首页</a>
+      <span class="bc-sep">›</span>
+      <a href="客户分户账户.html">客户分户账户</a>
+      <span class="bc-sep">›</span>
+      <span class="bc-cur">客户子账户</span>
     </div>
-    <script src="resources/scripts/axure/ios.js"></script>
-  </body>
+  </div>
+  <div class="tr">
+    <span>会计日期：2025-03-13</span>
+    <div class="vd"></div>
+    <div class="av">管理</div>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- 页头 -->
+  <div class="page-hdr">
+    <div>
+      <div class="page-title">客户子账户</div>
+      <div class="page-desc">每个客户主账户下设可用余额子账户与冻结余额子账户，管理客户资金的可用与冻结状态</div>
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-default" onclick="exportData()">📥 导出</button>
+      <button class="btn btn-default" onclick="refreshData()">🔄 刷新</button>
+    </div>
+  </div>
+
+  <!-- 统计卡 -->
+  <div class="stat-bar">
+    <div class="stat-card">
+      <div class="si si-blue">💳</div>
+      <div class="sb"><div class="sb-lbl">子账户总数</div><div class="sb-val c-blue">42</div></div>
+    </div>
+    <div class="stat-card">
+      <div class="si si-green">✅</div>
+      <div class="sb"><div class="sb-lbl">可用子账户</div><div class="sb-val c-green">21</div></div>
+    </div>
+    <div class="stat-card">
+      <div class="si si-gold">🔒</div>
+      <div class="sb"><div class="sb-lbl">冻结子账户</div><div class="sb-val c-gold">21</div></div>
+    </div>
+    <div class="stat-card">
+      <div class="si si-purple">💰</div>
+      <div class="sb"><div class="sb-lbl">可用余额合计（元）</div><div class="sb-val c-purple">48,234.00</div></div>
+    </div>
+    <div class="stat-card">
+      <div class="si si-red">🔐</div>
+      <div class="sb"><div class="sb-lbl">冻结余额合计（元）</div><div class="sb-val c-red">3,800.00</div></div>
+    </div>
+  </div>
+
+  <!-- 筛选 -->
+  <div class="filter-card">
+    <div class="filter-row">
+      <div class="fi">
+        <label class="fl">客户姓名</label>
+        <input class="inp" id="f-cname" type="text" placeholder="请输入客户姓名"/>
+      </div>
+      <div class="fi">
+        <label class="fl">主账户编号</label>
+        <input class="inp" id="f-acctno" type="text" placeholder="请输入主账户编号"/>
+      </div>
+      <div class="fi">
+        <label class="fl">子账户类型</label>
+        <select class="sel" id="f-subtype">
+          <option value="">全部类型</option>
+          <option value="AVAIL">可用余额子账户</option>
+          <option value="FROZEN">冻结余额子账户</option>
+        </select>
+      </div>
+      <div class="fi">
+        <label class="fl">客户类型</label>
+        <select class="sel" id="f-ctype">
+          <option value="">全部</option>
+          <option value="个人">个人</option>
+          <option value="企业">企业</option>
+        </select>
+      </div>
+      <div class="fi">
+        <label class="fl">账户状态</label>
+        <select class="sel" id="f-status">
+          <option value="">全部状态</option>
+          <option value="NORMAL">正常</option>
+          <option value="FROZEN">冻结</option>
+          <option value="CLOSED">注销</option>
+        </select>
+      </div>
+      <div class="fi">
+        <label class="fl">余额筛选</label>
+        <select class="sel" id="f-bal">
+          <option value="">不限</option>
+          <option value="GT0">余额 > 0</option>
+          <option value="EQ0">余额 = 0</option>
+        </select>
+      </div>
+      <div class="fa">
+        <button class="btn btn-primary" onclick="doSearch()">🔍 搜索</button>
+        <button class="btn btn-default" onclick="doReset()">重置</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 表格 -->
+  <div class="table-card">
+    <div class="tbl-tb">
+      <div class="tbl-sum">共 <strong id="total-cnt">0</strong> 条记录</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span style="font-size:12px;color:#8c8c8c;">每个主账户自动创建 2 个子账户</span>
+        <a class="btn btn-default btn-sm" href="客户子账户余额明细.html">查看余额明细 →</a>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:50px;">序号</th>
+          <th style="width:90px;">子账户类型</th>
+          <th style="width:175px;">子账户编号</th>
+          <th style="width:80px;">客户姓名</th>
+          <th style="width:70px;">客户类型</th>
+          <th style="width:175px;">主账户编号</th>
+          <th style="width:185px;">主账户名称</th>
+          <th style="width:150px;">子账户余额（元）</th>
+          <th style="width:155px;">余额占主账户比</th>
+          <th style="width:80px;">状态</th>
+          <th style="width:170px;">创建时间</th>
+          <th style="width:140px;">操作</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div class="pg-wrap">
+      <div class="pg-info">
+        每页
+        <select class="pgsz" onchange="changePS(this.value)">
+          <option value="10" selected>10</option>
+          <option value="20">20</option>
+          <option value="50">50</option>
+        </select>
+        条，<span id="pg-txt">共 0 条，第 1/1 页</span>
+      </div>
+      <div class="pg" id="pg"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── 子账户详情弹窗 ── -->
+<div class="modal-ov" id="detail-modal">
+  <div class="modal">
+    <div class="mh">
+      <div class="mt">子账户详情</div>
+      <button class="mx" onclick="closeModal()">✕</button>
+    </div>
+    <div class="mb">
+      <!-- 余额双卡 -->
+      <div class="bal-cards" id="d-bal-cards"></div>
+
+      <div class="dg">
+        <div class="dsec">子账户信息</div>
+        <div><div class="dl">子账户编号</div><div class="dv td-mono" id="d-subno"></div></div>
+        <div><div class="dl">子账户类型</div><div class="dv" id="d-subtype"></div></div>
+        <div><div class="dl">子账户状态</div><div class="dv" id="d-status"></div></div>
+        <div><div class="dl">创建时间</div><div class="dv" id="d-created"></div></div>
+        <hr class="ddiv"/>
+        <div class="dsec">客户信息</div>
+        <div><div class="dl">客户姓名</div><div class="dv" id="d-cname"></div></div>
+        <div><div class="dl">客户类型</div><div class="dv" id="d-ctype"></div></div>
+        <div class="dg-full"><div class="dl">客户ID</div><div class="dv td-mono" style="font-size:12px;" id="d-cid"></div></div>
+        <hr class="ddiv"/>
+        <div class="dsec">主账户信息</div>
+        <div><div class="dl">主账户编号</div><div class="dv td-mono" id="d-acctno"></div></div>
+        <div><div class="dl">主账户名称</div><div class="dv" id="d-acctname"></div></div>
+        <div><div class="dl">主账户总余额</div><div class="dv" id="d-total-bal"></div></div>
+        <div><div class="dl">所属科目</div><div class="dv" id="d-subject"></div></div>
+        <hr class="ddiv"/>
+        <div class="dsec">余额详情</div>
+        <div><div class="dl">本期增加额（元）</div><div class="dv" id="d-in"></div></div>
+        <div><div class="dl">本期减少额（元）</div><div class="dv" id="d-out"></div></div>
+        <div><div class="dl">期初余额（元）</div><div class="dv" id="d-init"></div></div>
+        <div><div class="dl">最后变动时间</div><div class="dv" id="d-last-mv"></div></div>
+      </div>
+
+      <!-- 冻结记录（仅冻结子账户显示） -->
+      <div id="d-frz-section" style="display:none;margin-top:20px;">
+        <div class="frz-mini">
+          <div class="frz-mini-hdr">🔒 当前有效冻结记录</div>
+          <table>
+            <thead><tr><th>冻结单号</th><th>冻结金额</th><th>冻结原因</th><th>状态</th><th>有效期至</th></tr></thead>
+            <tbody id="d-frz-list"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-default" onclick="closeModal()">关闭</button>
+      <a class="btn btn-primary" href="客户子账户余额明细.html">查看余额明细</a>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ──────── 数据 ────────
+const CUST = [
+  { id:'4a0f04ae2d2144ff9540339d19f2d99b', name:'杨某某', type:'个人' },
+  { id:'b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7', name:'王某某', type:'个人' },
+  { id:'c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8', name:'芒好科技有限公司', type:'企业' },
+  { id:'d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9', name:'张某某', type:'个人' },
+];
+
+const FREEZE_RECORDS = {
+  'FRZ-20250303-001': { id:'FRZ-20250303-001', amt:500.00, reason:'提现预冻结', status:'已解冻', exp:'2025-04-03' },
+  'FRZ-20250311-002': { id:'FRZ-20250311-002', amt:1000.00, reason:'司法冻结申请', status:'冻结中', exp:'2025-09-11' },
+  'FRZ-20250308-003': { id:'FRZ-20250308-003', amt:2000.00, reason:'账务异常冻结', status:'冻结中', exp:'2025-06-08' },
+  'FRZ-20250301-004': { id:'FRZ-20250301-004', amt:800.00, reason:'提现预冻结', status:'已解冻', exp:'2025-04-01' },
+};
+
+// 主账户定义
+const ACCOUNTS = [
+  { no:'13010125012410001', name:'芒好贷自营贷款本金账户', subject:'130101·贷款本金', custIdx:0, totalBal:5617.00, availBal:4617.00, frozenBal:1000.00, created:'2025-01-20 09:00:00', freezeIds:['FRZ-20250303-001','FRZ-20250311-002'] },
+  { no:'13010225012410001', name:'芒好贷自营逾期贷款账户', subject:'130102·逾期贷款', custIdx:0, totalBal:1200.00, availBal:1200.00, frozenBal:0.00,    created:'2025-01-20 09:00:00', freezeIds:[] },
+  { no:'11320125012410001', name:'芒好贷自营应收利息账户', subject:'113201·应收利息', custIdx:0, totalBal:436.32,  availBal:436.32,  frozenBal:0.00,    created:'2025-01-20 09:00:00', freezeIds:[] },
+  { no:'13010135012410001', name:'芒好贷助贷贷款本金账户', subject:'130101·贷款本金', custIdx:1, totalBal:12000.00, availBal:10000.00, frozenBal:2000.00, created:'2025-01-25 10:00:00', freezeIds:['FRZ-20250308-003'] },
+  { no:'11320135012410001', name:'芒好贷助贷应收利息账户', subject:'113201·应收利息', custIdx:1, totalBal:850.00,  availBal:850.00,  frozenBal:0.00,    created:'2025-01-25 10:00:00', freezeIds:[] },
+  { no:'13010145012410001', name:'企业贷款本金账户',        subject:'130101·贷款本金', custIdx:2, totalBal:28000.00, availBal:28000.00, frozenBal:0.00,   created:'2025-02-01 09:30:00', freezeIds:[] },
+  { no:'20110145012410001', name:'企业应付利息账户',         subject:'201101·应付利息', custIdx:2, totalBal:1280.00, availBal:1280.00,  frozenBal:0.00,   created:'2025-02-01 09:30:00', freezeIds:[] },
+  { no:'13010155012410001', name:'芒好贷自营贷款本金账户',  subject:'130101·贷款本金', custIdx:3, totalBal:3850.00, availBal:3050.00, frozenBal:800.00,  created:'2025-02-10 11:00:00', freezeIds:['FRZ-20250301-004'] },
+  { no:'11320155012410001', name:'芒好贷自营应收利息账户',  subject:'113201·应收利息', custIdx:3, totalBal:320.00,  availBal:320.00,  frozenBal:0.00,    created:'2025-02-10 11:00:00', freezeIds:[] },
+  { no:'13010265012410001', name:'芒好贷助贷逾期贷款账户', subject:'130102·逾期贷款', custIdx:3, totalBal:680.00,  availBal:680.00,  frozenBal:0.00,    created:'2025-02-10 11:00:00', freezeIds:[] },
+];
+
+// 展开为子账户列表
+const allData = [];
+let sid = 1;
+ACCOUNTS.forEach(acc => {
+  const cust = CUST[acc.custIdx];
+  const statusAvail  = acc.availBal  > 0 ? 'NORMAL' : 'NORMAL';
+  const statusFrozen = acc.frozenBal > 0 ? 'FROZEN' : 'NORMAL';
+
+  // 可用子账户
+  allData.push({
+    sid: sid++,
+    subNo: acc.no.replace(/(\d{3})(\d{3})/, '$1$2') + '-AVAIL',
+    subType: 'AVAIL',
+    custName: cust.name, custType: cust.type, custId: cust.id,
+    acctNo: acc.no, acctName: acc.name, subject: acc.subject,
+    totalBal: acc.totalBal,
+    bal: acc.availBal,
+    initBal: acc.availBal * 0.6,
+    inAmt:  acc.availBal * 1.4,
+    outAmt: acc.availBal * 0.4 * 1.0,
+    status: statusAvail,
+    created: acc.created,
+    lastMoved: '2025-03-13 08:30:00',
+    freezeIds: [],
+  });
+
+  // 冻结子账户
+  allData.push({
+    sid: sid++,
+    subNo: acc.no.replace(/(\d{3})(\d{3})/, '$1$2') + '-FROZN',
+    subType: 'FROZEN',
+    custName: cust.name, custType: cust.type, custId: cust.id,
+    acctNo: acc.no, acctName: acc.name, subject: acc.subject,
+    totalBal: acc.totalBal,
+    bal: acc.frozenBal,
+    initBal: 0,
+    inAmt:  acc.frozenBal + (acc.freezeIds.length * 500),
+    outAmt: acc.freezeIds.length * 500,
+    status: acc.frozenBal > 0 ? 'FROZEN' : 'NORMAL',
+    created: acc.created,
+    lastMoved: acc.frozenBal > 0 ? '2025-03-11 16:00:00' : acc.created,
+    freezeIds: acc.freezeIds,
+  });
+});
+
+const STATUS_LBL = { NORMAL:'正常', FROZEN:'冻结', CLOSED:'注销' };
+const STATUS_CLS = { NORMAL:'bs',   FROZEN:'bw',   CLOSED:'bdf' };
+
+let fd = [...allData], cp = 1, ps = 10;
+
+// ──────── 渲染 ────────
+function render() {
+  const start = (cp-1)*ps;
+  const rows  = fd.slice(start, start+ps);
+  const tbody = document.getElementById('tbody');
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:48px;color:#8c8c8c;">暂无数据</td></tr>`;
+    renderPg(); return;
+  }
+
+  tbody.innerHTML = rows.map((r,i) => {
+    const isAvail = r.subType === 'AVAIL';
+    const typeTag = isAvail
+      ? `<span class="sub-type-avail">💳 可用</span>`
+      : `<span class="sub-type-frozen">🔒 冻结</span>`;
+    const stCls = STATUS_CLS[r.status]||'bdf';
+    const stLbl = STATUS_LBL[r.status]||r.status;
+    const balCls = isAvail ? 'avail' : 'frozen';
+    const balStr = r.bal > 0 ? fmt(r.bal) : `<span class="td-r zero">${fmt(r.bal)}</span>`;
+
+    // 占比条
+    const pct = r.totalBal > 0 ? Math.min(100, (r.bal / r.totalBal) * 100) : 0;
+    const barCls = isAvail ? 'bar-avail' : 'bar-frozen';
+    const barHtml = `<div class="balance-bar">
+      <div class="bar-wrap"><div class="bar-fill ${barCls}" style="width:${pct.toFixed(1)}%"></div></div>
+      <span style="font-size:11px;color:#8c8c8c;width:34px;text-align:right;">${pct.toFixed(0)}%</span>
+    </div>`;
+
+    const custTypeTag = r.custType === '企业'
+      ? `<span class="tag t-purple">${r.custType}</span>`
+      : `<span class="tag t-blue">${r.custType}</span>`;
+
+    return `<tr>
+      <td class="td-seq">${start+i+1}</td>
+      <td>${typeTag}</td>
+      <td class="td-mono">${r.subNo}</td>
+      <td>${r.custName}</td>
+      <td>${custTypeTag}</td>
+      <td class="td-mono">${r.acctNo}</td>
+      <td style="max-width:185px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.acctName}">${r.acctName}</td>
+      <td class="td-r ${balCls}">${fmt(r.bal)}</td>
+      <td>${barHtml}</td>
+      <td><span class="badge ${stCls}">${stLbl}</span></td>
+      <td style="color:#595959;font-size:12px;">${r.created}</td>
+      <td class="ops">
+        <button class="btn btn-link" onclick="openDetail(${r.sid})">详情</button>
+        <span style="color:#d9d9d9;">|</span>
+        <a class="btn btn-link" href="客户子账户余额明细.html">余额明细</a>
+      </td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('total-cnt').textContent = fd.length;
+  renderPg();
+}
+
+function fmt(n) { return n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,','); }
+
+function renderPg() {
+  const total=fd.length, tp=Math.max(1,Math.ceil(total/ps));
+  document.getElementById('pg-txt').textContent=`共 ${total} 条，第 ${cp}/${tp} 页`;
+  const el=document.getElementById('pg');
+  let h=`<button class="pgb" ${cp<=1?'disabled':''} onclick="go(1)">«</button>`;
+  h+=`<button class="pgb" ${cp<=1?'disabled':''} onclick="go(${cp-1})">‹</button>`;
+  const r=[];
+  for(let p=Math.max(1,cp-2);p<=Math.min(tp,cp+2);p++) r.push(p);
+  if(r[0]>1) h+=`<button class="pgb" onclick="go(1)">1</button>${r[0]>2?'<span style="padding:0 4px;color:#8c8c8c;">…</span>':''}`;
+  r.forEach(p=>{h+=`<button class="pgb${p===cp?' act':''}" onclick="go(${p})">${p}</button>`;});
+  if(r[r.length-1]<tp) h+=`${r[r.length-1]<tp-1?'<span style="padding:0 4px;color:#8c8c8c;">…</span>':''}<button class="pgb" onclick="go(${tp})">${tp}</button>`;
+  h+=`<button class="pgb" ${cp>=tp?'disabled':''} onclick="go(${cp+1})">›</button>`;
+  h+=`<button class="pgb" ${cp>=tp?'disabled':''} onclick="go(${tp})">»</button>`;
+  el.innerHTML=h;
+}
+
+function go(p){cp=p;render();}
+function changePS(s){ps=parseInt(s);cp=1;render();}
+
+// ──────── 搜索 ────────
+function doSearch() {
+  const cname   = document.getElementById('f-cname').value.trim();
+  const acctno  = document.getElementById('f-acctno').value.trim();
+  const subtype = document.getElementById('f-subtype').value;
+  const ctype   = document.getElementById('f-ctype').value;
+  const status  = document.getElementById('f-status').value;
+  const bal     = document.getElementById('f-bal').value;
+
+  fd = allData.filter(r => {
+    if (cname   && !r.custName.includes(cname))    return false;
+    if (acctno  && !r.acctNo.includes(acctno))     return false;
+    if (subtype && r.subType !== subtype)           return false;
+    if (ctype   && r.custType !== ctype)            return false;
+    if (status  && r.status !== status)             return false;
+    if (bal === 'GT0' && r.bal <= 0)                return false;
+    if (bal === 'EQ0' && r.bal !== 0)               return false;
+    return true;
+  });
+  cp=1; render();
+  toast(`找到 ${fd.length} 条记录`);
+}
+
+function doReset() {
+  ['f-cname','f-acctno'].forEach(id=>document.getElementById(id).value='');
+  ['f-subtype','f-ctype','f-status','f-bal'].forEach(id=>document.getElementById(id).value='');
+  fd=[...allData]; cp=1; render();
+  toast('已重置筛选条件');
+}
+
+// ──────── 详情弹窗 ────────
+function openDetail(sid) {
+  const r = allData.find(x=>x.sid===sid); if(!r) return;
+  const isAvail = r.subType === 'AVAIL';
+  const stCls   = STATUS_CLS[r.status]||'bdf';
+  const stLbl   = STATUS_LBL[r.status]||r.status;
+
+  // 余额双卡
+  const acc = ACCOUNTS.find(a=>a.no===r.acctNo);
+  document.getElementById('d-bal-cards').innerHTML = `
+    <div class="bal-card-avail">
+      <div class="bc-lbl">可用余额子账户（元）</div>
+      <div class="bc-val">${fmt(acc?acc.availBal:0)}</div>
+      <div class="bc-sub">占主账户 ${acc && acc.totalBal>0?(acc.availBal/acc.totalBal*100).toFixed(1):0}%</div>
+    </div>
+    <div class="bal-card-frozen">
+      <div class="bc-lbl">冻结余额子账户（元）</div>
+      <div class="bc-val">${fmt(acc?acc.frozenBal:0)}</div>
+      <div class="bc-sub">占主账户 ${acc && acc.totalBal>0?(acc.frozenBal/acc.totalBal*100).toFixed(1):0}%</div>
+    </div>`;
+
+  document.getElementById('d-subno').textContent    = r.subNo;
+  document.getElementById('d-subtype').innerHTML    = isAvail
+    ? `<span class="sub-type-avail">💳 可用余额子账户</span>`
+    : `<span class="sub-type-frozen">🔒 冻结余额子账户</span>`;
+  document.getElementById('d-status').innerHTML     = `<span class="badge ${stCls}">${stLbl}</span>`;
+  document.getElementById('d-created').textContent  = r.created;
+  document.getElementById('d-cname').textContent    = r.custName;
+  document.getElementById('d-ctype').innerHTML      = r.custType==='企业'
+    ? `<span class="tag t-purple">${r.custType}</span>`
+    : `<span class="tag t-blue">${r.custType}</span>`;
+  document.getElementById('d-cid').textContent      = r.custId;
+  document.getElementById('d-acctno').textContent   = r.acctNo;
+  document.getElementById('d-acctname').textContent = r.acctName;
+  document.getElementById('d-total-bal').textContent= fmt(r.totalBal)+' 元';
+  document.getElementById('d-subject').textContent  = r.subject;
+  document.getElementById('d-in').textContent       = fmt(r.inAmt)+' 元';
+  document.getElementById('d-out').textContent      = fmt(r.outAmt)+' 元';
+  document.getElementById('d-init').textContent     = fmt(r.initBal)+' 元';
+  document.getElementById('d-last-mv').textContent  = r.lastMoved;
+
+  // 冻结记录（仅冻结子账户且有余额显示）
+  const frzSec = document.getElementById('d-frz-section');
+  if (!isAvail && r.freezeIds && r.freezeIds.length) {
+    frzSec.style.display='';
+    const rows = r.freezeIds.map(fid => {
+      const f = FREEZE_RECORDS[fid]; if(!f) return '';
+      const stColor = f.status==='冻结中'?'color:#faad14;':'color:#52c41a;';
+      return `<tr>
+        <td style="font-family:monospace;font-size:11px;">${f.id}</td>
+        <td style="font-weight:600;color:#faad14;">${fmt(f.amt)} 元</td>
+        <td>${f.reason}</td>
+        <td style="font-weight:600;${stColor}">${f.status}</td>
+        <td style="color:#8c8c8c;">${f.exp}</td>
+      </tr>`;
+    }).join('');
+    document.getElementById('d-frz-list').innerHTML = rows || '<tr><td colspan="5" style="text-align:center;color:#8c8c8c;">暂无有效冻结</td></tr>';
+  } else {
+    frzSec.style.display='none';
+  }
+
+  document.getElementById('detail-modal').classList.add('show');
+}
+
+function closeModal() { document.getElementById('detail-modal').classList.remove('show'); }
+document.getElementById('detail-modal').addEventListener('click', e=>{if(e.target===e.currentTarget)closeModal();});
+
+function exportData()  { toast('正在导出子账户数据，请稍候…'); }
+function refreshData() { render(); toast('数据已刷新'); }
+
+function toast(msg) {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.style.opacity='1';
+  clearTimeout(t._t); t._t=setTimeout(()=>{t.style.opacity='0';},2500);
+}
+
+render();
+</script>
+</body>
 </html>
