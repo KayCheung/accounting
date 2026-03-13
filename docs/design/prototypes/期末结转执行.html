@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <title>期末结转执行</title>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link type="text/css" href="resources/css/reset.css" rel="stylesheet" />
+    <link type="text/css" href="resources/css/default.css" rel="stylesheet" />
+    <style>
+        html, body { height: auto; overflow: auto !important; }
+        body { background-color: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { background: #fff; padding: 20px; border-bottom: 1px solid #e0e0e0; margin-bottom: 20px; }
+        .panel { background: #fff; border: 1px solid #d9d9d9; margin-bottom: 20px; }
+        .panel-header { background: #f5f5f5; padding: 12px 16px; border-bottom: 1px solid #e0e0e0; font-weight: bold; }
+        .panel-body { padding: 20px; }
+        .form-group { margin-bottom: 16px; }
+        label { display: block; margin-bottom: 4px; font-weight: 500; }
+        input, select { width: 100%; padding: 8px; border: 1px solid #d9d9d9; border-radius: 2px; box-sizing: border-box; }
+        button { padding: 8px 16px; background: #1890ff; color: white; border: none; cursor: pointer; margin-right: 8px; }
+        button.danger { background: #ff4d4f; }
+        button:hover { opacity: 0.8; }
+        .table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+        .table th { background: #f5f5f5; padding: 12px; text-align: left; border-bottom: 1px solid #d9d9d9; font-weight: bold; }
+        .table td { padding: 12px; border-bottom: 1px solid #f0f0f0; }
+        .status { padding: 4px 8px; border-radius: 2px; font-size: 12px; }
+        .status-success { background: #f6ffed; color: #52c41a; }
+        .status-pending { background: #e6f7ff; color: #1890ff; }
+        .status-error { background: #fff1f0; color: #ff4d4f; }
+        .steps { display: flex; justify-content: space-between; margin-bottom: 20px; }
+        .step { flex: 1; text-align: center; }
+        .step-number { display: inline-block; width: 36px; height: 36px; line-height: 36px; background: #e6f7ff; color: #1890ff; border-radius: 50%; margin-bottom: 8px; font-weight: bold; }
+        .step.active .step-number { background: #1890ff; color: white; }
+        .step.completed .step-number { background: #52c41a; color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>期末结转执行</h1>
+            <p>根据配置的结转规则，自动生成并执行结转凭证</p>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">执行步骤</div>
+            <div class="panel-body">
+                <div class="steps">
+                    <div class="step completed">
+                        <div class="step-number">1</div>
+                        <div>选择期间</div>
+                    </div>
+                    <div class="step completed">
+                        <div class="step-number">2</div>
+                        <div>选择规则</div>
+                    </div>
+                    <div class="step active">
+                        <div class="step-number">3</div>
+                        <div>预览凭证</div>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">4</div>
+                        <div>执行结转</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">执行参数</div>
+            <div class="panel-body">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div class="form-group">
+                        <label>会计期间</label>
+                        <input type="text" value="2026年3月" disabled />
+                    </div>
+                    <div class="form-group">
+                        <label>结转规则</label>
+                        <input type="text" value="本年利润结转规则" disabled />
+                    </div>
+                    <div class="form-group">
+                        <label>凭证日期</label>
+                        <input type="date" value="2026-03-31" />
+                    </div>
+                    <div class="form-group">
+                        <label>凭证摘要</label>
+                        <input type="text" value="2026年3月份损益结转" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">生成的凭证预览</div>
+            <div class="panel-body">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th style="width: 25%;">科目</th>
+                            <th style="width: 20%;">借方金额</th>
+                            <th style="width: 20%;">贷方金额</th>
+                            <th style="width: 20%;">辅助核算</th>
+                            <th style="width: 15%;">备注</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>6001-主营业务成本</td>
+                            <td>¥ 1,500,000.00</td>
+                            <td></td>
+                            <td>-</td>
+                            <td>结转成本</td>
+                        </tr>
+                        <tr>
+                            <td>6101-营业税金及附加</td>
+                            <td>¥ 150,000.00</td>
+                            <td></td>
+                            <td>-</td>
+                            <td>结转费用</td>
+                        </tr>
+                        <tr>
+                            <td>3399-本年利润</td>
+                            <td></td>
+                            <td>¥ 1,650,000.00</td>
+                            <td>-</td>
+                            <td>期末结转</td>
+                        </tr>
+                        <tr style="background: #fafafa;">
+                            <td><strong>合计</strong></td>
+                            <td><strong>¥ 1,650,000.00</strong></td>
+                            <td><strong>¥ 1,650,000.00</strong></td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div style="margin-top: 20px; padding: 12px; background: #f0f5ff; border-left: 4px solid #1890ff; border-radius: 2px; color: #1890ff;">
+                    <strong>校验结果:</strong> 凭证借贷平衡 ✓ | 科目有效 ✓ | 余额充足 ✓
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">执行操作</div>
+            <div class="panel-body">
+                <button>上一步</button>
+                <button>预览</button>
+                <button>立即执行</button>
+                <button style="background: #f0f0f0; color: #000;">取消</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">执行历史</div>
+            <div class="panel-body">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>执行时间</th>
+                            <th>执行用户</th>
+                            <th>期间</th>
+                            <th>凭证号</th>
+                            <th>金额</th>
+                            <th>状态</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>2026-03-01 14:30:00</td>
+                            <td>财务管理员</td>
+                            <td>2026-02</td>
+                            <td>ZZ202602001</td>
+                            <td>¥ 1,500,000.00</td>
+                            <td><span class="status status-success">已完成</span></td>
+                        </tr>
+                        <tr>
+                            <td>2026-02-01 09:15:00</td>
+                            <td>财务管理员</td>
+                            <td>2026-01</td>
+                            <td>ZZ202601001</td>
+                            <td>¥ 1,200,000.00</td>
+                            <td><span class="status status-success">已完成</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

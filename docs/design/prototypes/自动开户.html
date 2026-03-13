@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <title>记账自动开户</title>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link type="text/css" href="resources/css/reset.css" rel="stylesheet" />
+    <link type="text/css" href="resources/css/default.css" rel="stylesheet" />
+    <style>
+        html, body { height: auto; overflow: auto !important; }
+        body { background-color: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { background: #fff; padding: 20px; border-bottom: 1px solid #e0e0e0; margin-bottom: 20px; }
+        .panel { background: #fff; border: 1px solid #d9d9d9; margin-bottom: 20px; }
+        .panel-header { background: #f5f5f5; padding: 12px 16px; border-bottom: 1px solid #e0e0e0; font-weight: bold; }
+        .panel-body { padding: 20px; }
+        .form-group { margin-bottom: 16px; }
+        label { display: block; margin-bottom: 4px; font-weight: 500; }
+        input, select, textarea { width: 100%; padding: 8px; border: 1px solid #d9d9d9; border-radius: 2px; }
+        button { padding: 8px 16px; background: #1890ff; color: white; border: none; cursor: pointer; margin-right: 8px; }
+        button:hover { background: #40a9ff; }
+        .table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+        .table th { background: #f5f5f5; padding: 12px; text-align: left; border-bottom: 1px solid #d9d9d9; }
+        .table td { padding: 12px; border-bottom: 1px solid #f0f0f0; }
+        .status { padding: 4px 8px; border-radius: 2px; font-size: 12px; }
+        .status-success { background: #f6ffed; color: #52c41a; }
+        .status-pending { background: #e6f7ff; color: #1890ff; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>记账自动开户</h1>
+            <p>在记账时，如果账户不存在，系统将根据开户模板自动创建账户</p>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">自动开户配置</div>
+            <div class="panel-body">
+                <div class="form-group">
+                    <label>启用自动开户</label>
+                    <input type="checkbox" checked /> 在记账时自动创建不存在的账户
+                </div>
+                <div class="form-group">
+                    <label>开户模板选择规则</label>
+                    <select>
+                        <option>按客户类型匹配</option>
+                        <option>按业务线匹配</option>
+                        <option>使用默认模板</option>
+                    </select>
+                </div>
+                <button>保存配置</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">自动开户历史</div>
+            <div class="panel-body">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>开户时间</th>
+                            <th>账户类型</th>
+                            <th>账户号</th>
+                            <th>客户信息</th>
+                            <th>使用模板</th>
+                            <th>状态</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>2026-03-11 10:30:45</td>
+                            <td>客户分户</td>
+                            <td>CUST001-001</td>
+                            <td>张三 / 客户001</td>
+                            <td>标准客户模板</td>
+                            <td><span class="status status-success">成功</span></td>
+                            <td><a href="#">查看</a></td>
+                        </tr>
+                        <tr>
+                            <td>2026-03-11 09:15:20</td>
+                            <td>项目分户</td>
+                            <td>PROJ002-001</td>
+                            <td>项目A / 2026-Q1</td>
+                            <td>项目模板</td>
+                            <td><span class="status status-success">成功</span></td>
+                            <td><a href="#">查看</a></td>
+                        </tr>
+                        <tr>
+                            <td>2026-03-10 16:45:30</td>
+                            <td>部门分户</td>
+                            <td>DEPT003-001</td>
+                            <td>销售部 / 业务</td>
+                            <td>部门模板</td>
+                            <td><span class="status status-pending">处理中</span></td>
+                            <td><a href="#">查看</a></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">开户失败记录</div>
+            <div class="panel-body">
+                <p style="color: #8c8c8c;">暂无失败记录</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

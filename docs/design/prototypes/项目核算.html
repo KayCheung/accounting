@@ -1,53 +1,532 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
-  <head>
+<head>
+    <meta charset="UTF-8" />
     <title>项目核算</title>
-    <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
-    <meta http-equiv="content-type" content="text/html; charset=utf-8"/>
-    <link href="resources/css/axure_rp_page.css" type="text/css" rel="stylesheet"/>
-    <link href="data/styles.css" type="text/css" rel="stylesheet"/>
-    <link href="files/项目核算/styles.css" type="text/css" rel="stylesheet"/>
-    <script src="resources/scripts/jquery-3.2.1.min.js"></script>
-    <script src="resources/scripts/axure/axQuery.js"></script>
-    <script src="resources/scripts/axure/globals.js"></script>
-    <script src="resources/scripts/axutils.js"></script>
-    <script src="resources/scripts/axure/annotation.js"></script>
-    <script src="resources/scripts/axure/axQuery.std.js"></script>
-    <script src="resources/scripts/axure/doc.js"></script>
-    <script src="resources/scripts/messagecenter.js"></script>
-    <script src="resources/scripts/axure/events.js"></script>
-    <script src="resources/scripts/axure/recording.js"></script>
-    <script src="resources/scripts/axure/action.js"></script>
-    <script src="resources/scripts/axure/expr.js"></script>
-    <script src="resources/scripts/axure/geometry.js"></script>
-    <script src="resources/scripts/axure/flyout.js"></script>
-    <script src="resources/scripts/axure/model.js"></script>
-    <script src="resources/scripts/axure/repeater.js"></script>
-    <script src="resources/scripts/axure/sto.js"></script>
-    <script src="resources/scripts/axure/utils.temp.js"></script>
-    <script src="resources/scripts/axure/variables.js"></script>
-    <script src="resources/scripts/axure/drag.js"></script>
-    <script src="resources/scripts/axure/move.js"></script>
-    <script src="resources/scripts/axure/visibility.js"></script>
-    <script src="resources/scripts/axure/style.js"></script>
-    <script src="resources/scripts/axure/adaptive.js"></script>
-    <script src="resources/scripts/axure/tree.js"></script>
-    <script src="resources/scripts/axure/init.temp.js"></script>
-    <script src="resources/scripts/axure/legacy.js"></script>
-    <script src="resources/scripts/axure/viewer.js"></script>
-    <script src="resources/scripts/axure/math.js"></script>
-    <script src="resources/scripts/axure/jquery.nicescroll.min.js"></script>
-    <script src="data/document.js"></script>
-    <script src="files/项目核算/data.js"></script>
-    <script type="text/javascript">
-      $axure.utils.getTransparentGifPath = function() { return 'resources/images/transparent.gif'; };
-      $axure.utils.getOtherPath = function() { return 'resources/Other.html'; };
-      $axure.utils.getReloadPath = function() { return 'resources/reload.html'; };
-    </script>
-  </head>
-  <body>
-    <div id="base" class="">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+        html, body { height: auto; overflow: auto !important; margin: 0; padding: 0; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; font-size: 13px; background: #f0f2f5; color: #333; }
+        a { color: #1890ff; text-decoration: none; cursor: pointer; }
+        .navbar { background: #001529; padding: 0 24px; height: 48px; display: flex; align-items: center; justify-content: space-between; }
+        .navbar-brand { color: #fff; font-size: 16px; font-weight: bold; }
+        .navbar-nav { display: flex; gap: 24px; }
+        .navbar-nav a { color: rgba(255,255,255,0.65); font-size: 13px; }
+        .navbar-nav a.active { color: #fff; }
+        .navbar-right { color: rgba(255,255,255,0.65); font-size: 13px; }
+        .breadcrumb { padding: 12px 24px; font-size: 13px; color: #999; background: #fff; border-bottom: 1px solid #e8e8e8; }
+        .breadcrumb span { color: #333; }
+        .main { padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+        /* 筛选 */
+        .filter-card { background: #fff; border: 1px solid #e8e8e8; border-radius: 2px; padding: 16px 20px; }
+        .filter-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
+        .filter-item { display: flex; flex-direction: column; gap: 4px; }
+        .filter-item label { font-size: 12px; color: #666; }
+        .filter-item select, .filter-item input { height: 32px; padding: 0 10px; border: 1px solid #d9d9d9; border-radius: 2px; font-size: 13px; color: #333; outline: none; background: #fff; min-width: 130px; }
+        .btn { height: 32px; padding: 0 16px; border-radius: 2px; border: 1px solid #d9d9d9; background: #fff; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+        .btn-primary { background: #1890ff; color: #fff; border-color: #1890ff; }
+        .btn-primary:hover { background: #40a9ff; border-color: #40a9ff; }
+        .btn:hover { border-color: #1890ff; color: #1890ff; }
+        /* KPI */
+        .kpi-row { display: flex; gap: 12px; }
+        .kpi-card { flex: 1; background: #fff; border: 1px solid #e8e8e8; border-radius: 2px; padding: 14px 18px; border-top: 3px solid; }
+        .kpi-label { font-size: 12px; color: #999; margin-bottom: 6px; }
+        .kpi-value { font-size: 20px; font-weight: 700; }
+        .kpi-sub { font-size: 11px; color: #999; margin-top: 4px; }
+        .kpi-sub .up { color: #52c41a; }
+        .kpi-sub .dn { color: #f5222d; }
+        /* 表格 */
+        .section { background: #fff; border: 1px solid #e8e8e8; border-radius: 2px; }
+        .section-head { padding: 12px 16px 12px; font-size: 14px; font-weight: 600; color: #333; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; }
+        .toolbar { padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f0f0f0; background: #fafafa; }
+        .toolbar-left { font-size: 13px; color: #666; }
+        .toolbar-right { display: flex; gap: 8px; }
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        thead tr { background: #fafafa; }
+        th { padding: 10px 12px; text-align: right; font-weight: 600; font-size: 12px; color: #666; border-bottom: 1px solid #e8e8e8; white-space: nowrap; }
+        th.left { text-align: left; }
+        th.center { text-align: center; }
+        td { padding: 10px 12px; text-align: right; border-bottom: 1px solid #f0f0f0; font-size: 13px; white-space: nowrap; }
+        td.left { text-align: left; }
+        td.center { text-align: center; }
+        tbody tr:hover { background: #e6f7ff; }
+        .tr-total { background: #fffbe6; font-weight: 700; border-top: 2px solid #e8e8e8; }
+        .num-pos { color: #52c41a; }
+        .num-neg { color: #f5222d; }
+        .num-blue { color: #1890ff; }
+        /* 状态标签 */
+        .tag { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 11px; white-space: nowrap; }
+        .tag-active { background: #e6f7ff; color: #0050b3; }
+        .tag-done { background: #f6ffed; color: #389e0d; }
+        .tag-closed { background: #f0f0f0; color: #888; }
+        .tag-delay { background: #fff1f0; color: #cf1322; }
+        .tag-pending { background: #fffbe6; color: #d46b08; }
+        /* 预算进度条 */
+        .progress-wrap { display: flex; align-items: center; gap: 8px; }
+        .progress-bar { flex: 1; min-width: 80px; height: 8px; background: #f0f0f0; border-radius: 4px; overflow: hidden; }
+        .progress-fill { height: 100%; border-radius: 4px; }
+        .progress-fill.ok { background: #52c41a; }
+        .progress-fill.warn { background: #fa8c16; }
+        .progress-fill.over { background: #f5222d; }
+        .progress-pct { font-size: 11px; color: #666; min-width: 36px; text-align: right; }
+        /* 利润率色条 */
+        .profit-positive { color: #52c41a; font-weight: 600; }
+        .profit-negative { color: #f5222d; font-weight: 600; }
+        .profit-warn { color: #fa8c16; font-weight: 600; }
+        /* 分页 */
+        .pagination { display: flex; align-items: center; justify-content: flex-end; padding: 12px 16px; gap: 4px; border-top: 1px solid #f0f0f0; }
+        .pagination span { font-size: 12px; color: #666; margin-right: 8px; }
+        .page-btn { height: 28px; min-width: 28px; padding: 0 8px; border: 1px solid #d9d9d9; background: #fff; border-radius: 2px; cursor: pointer; font-size: 12px; }
+        .page-btn.active { background: #1890ff; color: #fff; border-color: #1890ff; }
+        .back-link { margin-bottom: 4px; display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
+        /* 详情面板 */
+        .detail-panel { background: #fff; border: 1px solid #e8e8e8; border-radius: 2px; }
+        .detail-header { padding: 14px 20px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; }
+        .detail-header h3 { margin: 0; font-size: 15px; font-weight: 600; }
+        .detail-body { padding: 0; }
+        .detail-tab { display: flex; border-bottom: 1px solid #f0f0f0; padding: 0 16px; background: #fafafa; }
+        .dtab { padding: 10px 16px; font-size: 13px; cursor: pointer; color: #666; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+        .dtab.active { color: #1890ff; border-bottom-color: #1890ff; font-weight: 600; }
+        /* 项目成本明细 */
+        .cost-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px 20px; }
+        .cost-item { }
+        .cost-item-label { font-size: 12px; color: #999; margin-bottom: 4px; }
+        .cost-item-value { font-size: 16px; font-weight: 600; color: #333; }
+        .cost-item-sub { font-size: 11px; color: #999; margin-top: 2px; }
+    </style>
+</head>
+<body>
+<div class="navbar">
+    <div class="navbar-brand">金融级账务核心系统</div>
+    <div class="navbar-nav">
+        <a href="#">账务处理</a>
+        <a href="#" class="active">账簿查询</a>
+        <a href="#">期末处理</a>
+        <a href="#">报表中心</a>
+        <a href="#">系统管理</a>
     </div>
-    <script src="resources/scripts/axure/ios.js"></script>
-  </body>
+    <div class="navbar-right">admin &nbsp;|&nbsp; 退出</div>
+</div>
+<div class="breadcrumb">账簿查询 / 辅助核算 / <span>项目核算</span></div>
+
+<div class="main">
+    <a href="index.html" class="back-link">← 返回目录</a>
+
+    <!-- 筛选 -->
+    <div class="filter-card">
+        <div class="filter-row">
+            <div class="filter-item">
+                <label>会计年度</label>
+                <select><option>2026</option><option>2025</option></select>
+            </div>
+            <div class="filter-item">
+                <label>统计截止期</label>
+                <select><option>2026-03（当前）</option><option>2026-02</option><option>2026-01</option></select>
+            </div>
+            <div class="filter-item">
+                <label>项目类型</label>
+                <select><option>全部类型</option><option>软件实施</option><option>硬件集成</option><option>咨询服务</option><option>运维服务</option></select>
+            </div>
+            <div class="filter-item">
+                <label>项目状态</label>
+                <select><option>全部</option><option>进行中</option><option>已完工</option><option>已结案</option><option>延期</option></select>
+            </div>
+            <div class="filter-item">
+                <label>项目经理</label>
+                <select><option>全部</option><option>张三</option><option>李四</option><option>王五</option><option>赵六</option></select>
+            </div>
+            <div class="filter-item">
+                <label>项目名称</label>
+                <input type="text" placeholder="搜索项目名称或编号" style="min-width:180px" />
+            </div>
+            <div style="display:flex;align-items:flex-end;gap:8px;">
+                <button class="btn btn-primary">🔍 查询</button>
+                <button class="btn">重置</button>
+                <button class="btn">📤 导出</button>
+                <button class="btn">🖨 打印</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- KPI 汇总 -->
+    <div class="kpi-row">
+        <div class="kpi-card" style="border-top-color:#1890ff">
+            <div class="kpi-label">在途项目数</div>
+            <div class="kpi-value" style="color:#1890ff">12</div>
+            <div class="kpi-sub">进行中 <b>8</b>，延期 <b style="color:#f5222d">2</b>，已完工待结案 <b>2</b></div>
+        </div>
+        <div class="kpi-card" style="border-top-color:#52c41a">
+            <div class="kpi-label">累计合同收入</div>
+            <div class="kpi-value" style="color:#52c41a">38,620,000</div>
+            <div class="kpi-sub">已确认收入 <b>24,860,000</b>（<span class="up">64.4%</span>）</div>
+        </div>
+        <div class="kpi-card" style="border-top-color:#fa8c16">
+            <div class="kpi-label">累计实际成本</div>
+            <div class="kpi-value" style="color:#fa8c16">18,220,000</div>
+            <div class="kpi-sub">预算总成本 <b>22,100,000</b>，执行率 <span class="dn">82.4%</span></div>
+        </div>
+        <div class="kpi-card" style="border-top-color:#722ed1">
+            <div class="kpi-label">综合毛利率</div>
+            <div class="kpi-value" style="color:#722ed1">35.2%</div>
+            <div class="kpi-sub"><span class="up">▲ 1.8pp</span> 较上年同期</div>
+        </div>
+        <div class="kpi-card" style="border-top-color:#f5222d">
+            <div class="kpi-label">超预算项目</div>
+            <div class="kpi-value" style="color:#f5222d">2</div>
+            <div class="kpi-sub">需关注预算执行率 &gt; 100%</div>
+        </div>
+    </div>
+
+    <!-- 项目列表 -->
+    <div class="section">
+        <div class="toolbar">
+            <div class="toolbar-left">共 <b>15</b> 个项目 &nbsp;|&nbsp; 截至：2026-03-13</div>
+            <div class="toolbar-right">
+                <button class="btn">新建项目</button>
+                <button class="btn">批量导入</button>
+                <button class="btn">导出报表</button>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th class="left">项目编号</th>
+                        <th class="left" style="min-width:160px">项目名称</th>
+                        <th class="left">类型</th>
+                        <th class="left">项目经理</th>
+                        <th class="center">状态</th>
+                        <th>合同金额</th>
+                        <th>已确认收入</th>
+                        <th>预算成本</th>
+                        <th>实际成本</th>
+                        <th style="min-width:120px">预算执行率</th>
+                        <th>毛利额</th>
+                        <th>毛利率</th>
+                        <th class="center">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="left"><a>PRJ-2025-001</a></td>
+                        <td class="left">中国银行核心账务系统建设</td>
+                        <td class="left">软件实施</td>
+                        <td class="left">张三</td>
+                        <td class="center"><span class="tag tag-active">进行中</span></td>
+                        <td>8,500,000</td>
+                        <td class="num-blue">5,100,000</td>
+                        <td>5,200,000</td>
+                        <td>4,380,000</td>
+                        <td>
+                            <div class="progress-wrap">
+                                <div class="progress-bar"><div class="progress-fill ok" style="width:84%"></div></div>
+                                <span class="progress-pct">84.2%</span>
+                            </div>
+                        </td>
+                        <td class="num-pos">720,000</td>
+                        <td class="profit-positive">14.1%</td>
+                        <td class="center"><a>详情</a> &nbsp;<a>明细</a></td>
+                    </tr>
+                    <tr>
+                        <td class="left"><a>PRJ-2025-002</a></td>
+                        <td class="left">招商银行资金清算平台升级</td>
+                        <td class="left">软件实施</td>
+                        <td class="left">李四</td>
+                        <td class="center"><span class="tag tag-active">进行中</span></td>
+                        <td>6,200,000</td>
+                        <td class="num-blue">3,720,000</td>
+                        <td>3,800,000</td>
+                        <td>3,110,000</td>
+                        <td>
+                            <div class="progress-wrap">
+                                <div class="progress-bar"><div class="progress-fill ok" style="width:81.8%"></div></div>
+                                <span class="progress-pct">81.8%</span>
+                            </div>
+                        </td>
+                        <td class="num-pos">610,000</td>
+                        <td class="profit-positive">16.4%</td>
+                        <td class="center"><a>详情</a> &nbsp;<a>明细</a></td>
+                    </tr>
+                    <tr>
+                        <td class="left"><a>PRJ-2025-003</a></td>
+                        <td class="left">中石化ERP财务模块集成</td>
+                        <td class="left">硬件集成</td>
+                        <td class="left">王五</td>
+                        <td class="center"><span class="tag tag-delay">延期</span></td>
+                        <td>4,800,000</td>
+                        <td class="num-blue">2,400,000</td>
+                        <td>2,500,000</td>
+                        <td class="num-neg">2,680,000</td>
+                        <td>
+                            <div class="progress-wrap">
+                                <div class="progress-bar"><div class="progress-fill over" style="width:100%"></div></div>
+                                <span class="progress-pct num-neg">107.2%</span>
+                            </div>
+                        </td>
+                        <td class="num-neg">-280,000</td>
+                        <td class="profit-negative">-11.7%</td>
+                        <td class="center"><a>详情</a> &nbsp;<a>明细</a></td>
+                    </tr>
+                    <tr>
+                        <td class="left"><a>PRJ-2025-004</a></td>
+                        <td class="left">平安集团财务共享中心建设</td>
+                        <td class="left">咨询服务</td>
+                        <td class="left">赵六</td>
+                        <td class="center"><span class="tag tag-done">已完工</span></td>
+                        <td>3,200,000</td>
+                        <td class="num-blue">3,200,000</td>
+                        <td>1,800,000</td>
+                        <td>1,650,000</td>
+                        <td>
+                            <div class="progress-wrap">
+                                <div class="progress-bar"><div class="progress-fill ok" style="width:91.7%"></div></div>
+                                <span class="progress-pct">91.7%</span>
+                            </div>
+                        </td>
+                        <td class="num-pos">1,550,000</td>
+                        <td class="profit-positive">48.4%</td>
+                        <td class="center"><a>详情</a> &nbsp;<a>明细</a></td>
+                    </tr>
+                    <tr>
+                        <td class="left"><a>PRJ-2025-005</a></td>
+                        <td class="left">华为供应链金融对账系统</td>
+                        <td class="left">软件实施</td>
+                        <td class="left">张三</td>
+                        <td class="center"><span class="tag tag-active">进行中</span></td>
+                        <td>5,600,000</td>
+                        <td class="num-blue">2,240,000</td>
+                        <td>3,100,000</td>
+                        <td>2,020,000</td>
+                        <td>
+                            <div class="progress-wrap">
+                                <div class="progress-bar"><div class="progress-fill ok" style="width:65.2%"></div></div>
+                                <span class="progress-pct">65.2%</span>
+                            </div>
+                        </td>
+                        <td class="num-pos">220,000</td>
+                        <td class="profit-positive">9.8%</td>
+                        <td class="center"><a>详情</a> &nbsp;<a>明细</a></td>
+                    </tr>
+                    <tr>
+                        <td class="left"><a>PRJ-2025-006</a></td>
+                        <td class="left">中移动账务核心系统运维</td>
+                        <td class="left">运维服务</td>
+                        <td class="left">李四</td>
+                        <td class="center"><span class="tag tag-active">进行中</span></td>
+                        <td>2,400,000</td>
+                        <td class="num-blue">600,000</td>
+                        <td>1,200,000</td>
+                        <td>280,000</td>
+                        <td>
+                            <div class="progress-wrap">
+                                <div class="progress-bar"><div class="progress-fill ok" style="width:23.3%"></div></div>
+                                <span class="progress-pct">23.3%</span>
+                            </div>
+                        </td>
+                        <td class="num-pos">320,000</td>
+                        <td class="profit-positive">53.3%</td>
+                        <td class="center"><a>详情</a> &nbsp;<a>明细</a></td>
+                    </tr>
+                    <tr>
+                        <td class="left"><a>PRJ-2026-001</a></td>
+                        <td class="left">建设银行国际结算系统咨询</td>
+                        <td class="left">咨询服务</td>
+                        <td class="left">王五</td>
+                        <td class="center"><span class="tag tag-pending">筹备中</span></td>
+                        <td>1,800,000</td>
+                        <td class="num-blue">—</td>
+                        <td>900,000</td>
+                        <td>42,000</td>
+                        <td>
+                            <div class="progress-wrap">
+                                <div class="progress-bar"><div class="progress-fill ok" style="width:4.7%"></div></div>
+                                <span class="progress-pct">4.7%</span>
+                            </div>
+                        </td>
+                        <td class="num-pos">—</td>
+                        <td class="profit-warn">—</td>
+                        <td class="center"><a>详情</a> &nbsp;<a>明细</a></td>
+                    </tr>
+                    <tr>
+                        <td class="left"><a>PRJ-2024-018</a></td>
+                        <td class="left">农业银行网点财务系统改造</td>
+                        <td class="left">硬件集成</td>
+                        <td class="left">赵六</td>
+                        <td class="center"><span class="tag tag-closed">已结案</span></td>
+                        <td>3,800,000</td>
+                        <td class="num-blue">3,800,000</td>
+                        <td>2,200,000</td>
+                        <td class="num-neg">2,350,000</td>
+                        <td>
+                            <div class="progress-wrap">
+                                <div class="progress-bar"><div class="progress-fill over" style="width:100%"></div></div>
+                                <span class="progress-pct num-neg">106.8%</span>
+                            </div>
+                        </td>
+                        <td class="num-pos">1,450,000</td>
+                        <td class="profit-warn">38.2%</td>
+                        <td class="center"><a>详情</a> &nbsp;<a>明细</a></td>
+                    </tr>
+                    <tr class="tr-total">
+                        <td class="left" colspan="5">合计（15个项目）</td>
+                        <td>38,620,000</td>
+                        <td>24,860,000</td>
+                        <td>22,100,000</td>
+                        <td>18,220,000</td>
+                        <td>
+                            <div class="progress-wrap">
+                                <div class="progress-bar"><div class="progress-fill warn" style="width:82%"></div></div>
+                                <span class="progress-pct">82.4%</span>
+                            </div>
+                        </td>
+                        <td class="num-pos">8,750,000</td>
+                        <td class="profit-positive">35.2%</td>
+                        <td></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="pagination">
+            <span>共 15 条</span>
+            <button class="page-btn">«</button>
+            <button class="page-btn active">1</button>
+            <button class="page-btn">»</button>
+        </div>
+    </div>
+
+    <!-- 项目成本科目明细（以中国银行项目为例） -->
+    <div class="detail-panel">
+        <div class="detail-header">
+            <h3>项目成本明细 &nbsp;<span style="font-size:13px;font-weight:normal;color:#999">PRJ-2025-001 中国银行核心账务系统建设</span></h3>
+            <div style="display:flex;gap:8px;">
+                <button class="btn">下载明细</button>
+                <button class="btn">查看凭证</button>
+            </div>
+        </div>
+        <div class="detail-tab">
+            <div class="dtab active">成本科目汇总</div>
+            <div class="dtab">逐笔流水</div>
+            <div class="dtab">人工工时</div>
+            <div class="dtab">预算执行对比</div>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th class="left">成本科目</th>
+                        <th class="left">科目编码</th>
+                        <th>预算金额</th>
+                        <th>本月发生</th>
+                        <th>累计发生</th>
+                        <th style="min-width:120px">预算执行率</th>
+                        <th>剩余预算</th>
+                        <th class="center">预警</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="left">人员成本</td>
+                        <td class="left">5001.01</td>
+                        <td>3,000,000</td>
+                        <td>280,000</td>
+                        <td>2,520,000</td>
+                        <td>
+                            <div class="progress-wrap">
+                                <div class="progress-bar"><div class="progress-fill ok" style="width:84%"></div></div>
+                                <span class="progress-pct">84.0%</span>
+                            </div>
+                        </td>
+                        <td class="num-pos">480,000</td>
+                        <td class="center">—</td>
+                    </tr>
+                    <tr>
+                        <td class="left">外包服务费</td>
+                        <td class="left">5001.02</td>
+                        <td>800,000</td>
+                        <td>60,000</td>
+                        <td>680,000</td>
+                        <td>
+                            <div class="progress-wrap">
+                                <div class="progress-bar"><div class="progress-fill warn" style="width:85%"></div></div>
+                                <span class="progress-pct">85.0%</span>
+                            </div>
+                        </td>
+                        <td class="num-pos">120,000</td>
+                        <td class="center">—</td>
+                    </tr>
+                    <tr>
+                        <td class="left">差旅费</td>
+                        <td class="left">5001.03</td>
+                        <td>180,000</td>
+                        <td>18,500</td>
+                        <td>186,000</td>
+                        <td>
+                            <div class="progress-wrap">
+                                <div class="progress-bar"><div class="progress-fill over" style="width:100%"></div></div>
+                                <span class="progress-pct num-neg">103.3%</span>
+                            </div>
+                        </td>
+                        <td class="num-neg">-6,000</td>
+                        <td class="center"><span style="color:#f5222d;font-size:12px">⚠ 超支</span></td>
+                    </tr>
+                    <tr>
+                        <td class="left">设备材料</td>
+                        <td class="left">5001.04</td>
+                        <td>680,000</td>
+                        <td>32,000</td>
+                        <td>512,000</td>
+                        <td>
+                            <div class="progress-wrap">
+                                <div class="progress-bar"><div class="progress-fill ok" style="width:75.3%"></div></div>
+                                <span class="progress-pct">75.3%</span>
+                            </div>
+                        </td>
+                        <td class="num-pos">168,000</td>
+                        <td class="center">—</td>
+                    </tr>
+                    <tr>
+                        <td class="left">项目管理费</td>
+                        <td class="left">5001.05</td>
+                        <td>540,000</td>
+                        <td>28,000</td>
+                        <td>482,000</td>
+                        <td>
+                            <div class="progress-wrap">
+                                <div class="progress-bar"><div class="progress-fill warn" style="width:89.3%"></div></div>
+                                <span class="progress-pct">89.3%</span>
+                            </div>
+                        </td>
+                        <td class="num-pos">58,000</td>
+                        <td class="center"><span style="color:#fa8c16;font-size:12px">⚡ 预警</span></td>
+                    </tr>
+                    <tr class="tr-total">
+                        <td class="left">成本合计</td>
+                        <td class="left"></td>
+                        <td>5,200,000</td>
+                        <td>418,500</td>
+                        <td>4,380,000</td>
+                        <td>
+                            <div class="progress-wrap">
+                                <div class="progress-bar"><div class="progress-fill ok" style="width:84.2%"></div></div>
+                                <span class="progress-pct">84.2%</span>
+                            </div>
+                        </td>
+                        <td class="num-pos">820,000</td>
+                        <td class="center">—</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div style="padding:14px 20px;display:flex;gap:32px;border-top:1px solid #f0f0f0;background:#fafafa;font-size:13px;flex-wrap:wrap">
+            <div><span style="color:#999">合同金额：</span><b>8,500,000 元</b></div>
+            <div><span style="color:#999">已确认收入：</span><b style="color:#1890ff">5,100,000 元（60.0%）</b></div>
+            <div><span style="color:#999">实际成本：</span><b style="color:#fa8c16">4,380,000 元</b></div>
+            <div><span style="color:#999">当期毛利：</span><b style="color:#52c41a">720,000 元（14.1%）</b></div>
+            <div><span style="color:#999">项目经理：</span><b>张三</b></div>
+            <div><span style="color:#999">合同工期：</span><b>2025-06-01 至 2026-08-31</b></div>
+        </div>
+    </div>
+</div>
+</body>
 </html>

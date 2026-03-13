@@ -1,149 +1,160 @@
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
 <head>
-    <title>Untitled Document</title>
+    <title>账务系统原型 - 导航首页</title>
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta http-equiv="content-type" content="text/html; charset=utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link type="text/css" href="resources/css/reset.css" rel="Stylesheet" />
-    <link type="text/css" href="resources/css/default.css" rel="Stylesheet" />
-    <link rel="shortcut icon" href="resources/images/favicon_play.ico" />
-    <link href='https://fonts.googleapis.com/css?family=Source+Sans+Pro:400,600' rel='stylesheet'>
-
-    <script type="text/javascript">
-        if (location.href.toString().indexOf('file://localhost/') == 0) {
-            location.href = location.href.toString().replace('file://localhost/', 'file:///');
-        }
-    </script>
-
-    <!--<link type="text/css" rel="Stylesheet" href="plugins/sitemap/styles/sitemap.css" />
-    <link type="text/css" rel="Stylesheet" href="plugins/page_notes/styles/page_notes.css" />
-    <link type="text/css" rel="Stylesheet" href="plugins/debug/styles/debug.css" />
-    <link type="text/css" rel="Stylesheet" href="plugins/handoff/styles/handoff.css" />
-    <link type="text/css" rel="Stylesheet" href="plugins/handoff/styles/codemirror.css" />-->
+    <style>
+        * { margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 40px 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { text-align: center; color: white; margin-bottom: 60px; }
+        .header h1 { font-size: 48px; margin-bottom: 16px; }
+        .header p { font-size: 18px; opacity: 0.9; }
+        .content { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; }
+        .category { background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transition: transform 0.3s, box-shadow 0.3s; }
+        .category:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(0,0,0,0.2); }
+        .category-title { background: #667eea; color: white; padding: 20px; font-size: 18px; font-weight: bold; }
+        .category-body { padding: 20px; }
+        .page-list { list-style: none; }
+        .page-list li { margin-bottom: 12px; }
+        .page-list a { color: #667eea; text-decoration: none; display: flex; align-items: center; padding: 8px 0; transition: color 0.2s; }
+        .page-list a:hover { color: #764ba2; text-decoration: underline; }
+        .page-list a::before { content: "→"; margin-right: 8px; opacity: 0; transition: opacity 0.2s; }
+        .page-list a:hover::before { opacity: 1; }
+        .badge { display: inline-block; background: #52c41a; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; margin-left: 8px; }
+        .badge.new { background: #ff4d4f; }
+        .footer { text-align: center; color: white; margin-top: 60px; opacity: 0.8; }
+    </style>
 </head>
-<body scroll="no" class="hashover" style="overflow: hidden;">
-    <div id="topPanel">
-        <div id="interfaceControlFrame">
-            <div id="interfaceControlFrameLeft">
-                <div id="interfaceControlFrameMinimizeContainer">
-                    <a title="Collapse" id="interfaceControlFrameMinimizeButton">
-                        <div id="minimizeArrow" class="minimizeButtonHover minimizeIcon"></div>
-                        <div id="minimizeX" class="minimizeButton minimizeIcon"></div>
-                    </a>
-                </div>
-                <div id="interfaceControlFrameCloseContainer">
-                    <a title="Close" id="interfaceControlFrameCloseButton">CLOSE</a>
-                </div>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>金融级账务核心系统</h1>
+            <p>完整的UI原型设计 - 交互演示</p>
+        </div>
 
-                <div id="sitemapControlFrameContainer" title="Project Pages">
-                    <div id="projectControlFrameHeaderContainer">
-                        <ul id="projectControlFrameHeader"></ul>
-                    </div>
-                    
-                    <div id="interfacePageNameContainer">
-                        <div id="interfacePageNameButton" class='pageNameHeader'>
-                            &nbsp;
-                        </div>
-                    </div>
-                </div>
-
-
-                <div id="interfaceAdaptiveViewsContainer" title="Adaptive Views">
-                    <div id="interfaceAdaptiveViewsIconButton">&nbsp;</div>
-                    <div id="interfaceAdaptiveViewsButton" class='adaptiveViewHeader'>
-                        &nbsp;
-                    </div>
-                    <div id="adaptiveViewsDropdown" class="caret"></div>
-                </div>
-            </div>
-            
-            <div id="interfaceControlFrameContainer">
-                <div id="handoffControlFrameHeaderContainer">
-                    <ul id="handoffControlFrameHeader"></ul>
-                </div>
-                <div id="interfaceControlFrameLogoContainer">
-                    <div id="previewNotice">
-                        Local Preview
-                    </div>
-                </div>
-            </div>
-
-            <div id="interfaceControlFrameRight">
-                <div id="publishContainer">
-                    <a id="publishButton">Share Prototype</a>
-                </div>
-                
-                <div id="inspectControlFrameHeaderContainer">
-                    <ul id="inspectControlFrameHeader">
-                        <li id="overflowBtn">
-                            <a id="overflowMenuButton" title="View Options"></a>
-                        </li>
+        <div class="content">
+            <!-- 核心记账 -->
+            <div class="category">
+                <div class="category-title">💰 核心记账</div>
+                <div class="category-body">
+                    <ul class="page-list">
+                        <li><a href="凭证录入.html">凭证录入</a></li>
+                        <li><a href="凭证明细.html">凭证明细</a></li>
+                        <li><a href="凭证详情.html">凭证详情</a></li>
+                        <li><a href="凭证附件.html">凭证附件</a></li>
+                        <li><a href="记账流水.html">记账流水</a></li>
                     </ul>
                 </div>
-
-                <div id="separatorContainer">
-                    <div class="separator"></div>
-                </div>
-
-                <div id="overflowMadeWith"><a href="https://www.axure.com" id="axureLogo" target="_blank"></a></div>
-
             </div>
 
-        </div>
-    </div>
-    <div id="popupContainer">
-        <div id='interfaceAdaptiveViewsListContainer'>
-        </div>
-
-        <div id='interfaceScaleListContainer'>
-        </div>
-
-        <div id='accountLoginContainer'>
-        </div>
-
-        <div id='overflowMenuContainer'>
-        </div>
-    </div>
-    <div id="outerContainer">
-        <div id="clippingBounds">
-            <div id="clippingBoundsScrollContainer"></div>
-        </div>
-
-        <div id="mHideSidebar"></div>
-        <div id="lsplitbar" class="splitbar"></div>
-
-        <div id="mainPanel">
-            <div id="mainPanelContainer" style="position: relative; width:100%; height: 100%;">
-                <div id="clipFrameScroll" style="position: relative; width:100%; height: 100%; background-color: #ffffff;">
-                    <iframe id="mainFrame" name="mainFrame" width="100%" height="100%" src="about:blank" frameborder="0" style="display: block;position:absolute;" webkitallowfullscreen mozallowfullscreen allowfullscreen></iframe>
+            <!-- 会计科目 -->
+            <div class="category">
+                <div class="category-title">📊 会计科目</div>
+                <div class="category-body">
+                    <ul class="page-list">
+                        <li><a href="会计科目.html">科目列表</a></li>
+                        <li><a href="会计科目-树形结构.html">科目树形结构</a></li>
+                        <li><a href="会计科目详情.html">科目详情</a></li>
+                        <li><a href="辅助核算项.html">辅助核算项</a></li>
+                        <li><a href="辅助核算项详情.html">辅助核算项详情</a></li>
+                    </ul>
                 </div>
             </div>
-        </div>
 
-        <div id="rsplitbar" class="splitbar"></div>
+            <!-- 账户管理 -->
+            <div class="category">
+                <div class="category-title">👤 账户管理</div>
+                <div class="category-body">
+                    <ul class="page-list">
+                        <li><a href="客户分户账户.html">客户分户账户</a></li>
+                        <li><a href="客户分户账户详情.html">客户账户详情</a></li>
+                        <li><a href="客户分户账户开户.html">客户开户</a></li>
+                        <li><a href="客户开户模板.html">开户模板</a></li>
+                        <li><a href="客户开户模板详情.html">模板详情</a></li>
+                        <li><a href="自动开户.html">自动开户 <span class="badge new">NEW</span></a></li>
+                    </ul>
+                </div>
+            </div>
 
-    </div>
+            <!-- 记账规则 -->
+            <div class="category">
+                <div class="category-title">⚙️ 记账规则</div>
+                <div class="category-body">
+                    <ul class="page-list">
+                        <li><a href="记账凭证规则.html">记账凭证规则</a></li>
+                        <li><a href="记账凭证规则详情1.html">规则详情 - 规则条件</a></li>
+                        <li><a href="记账凭证规则详情2.html">规则详情 - 分录配置</a></li>
+                        <li><a href="缓冲入账规则.html">缓冲入账规则</a></li>
+                        <li><a href="缓冲入账规则详情.html">缓冲规则详情</a></li>
+                        <li><a href="缓冲明细.html">缓冲明细</a></li>
+                    </ul>
+                </div>
+            </div>
 
-    <div id="maximizePanelContainer" class="maximizePanelContainer">
-        <div id="maximizePanelOver">
-            <div id="maximizePanel" title="Expand" class="maximizePanelOver">
-                <div id="maximizeButton" class="maximizeButton maximizeIcon"></div>
+            <!-- 账户余额 -->
+            <div class="category">
+                <div class="category-title">💳 账户余额</div>
+                <div class="category-body">
+                    <ul class="page-list">
+                        <li><a href="内部分户账户.html">内部分户账户</a></li>
+                        <li><a href="内部分户余额明细.html">内部分户余额明细</a></li>
+                        <li><a href="客户分户余额明细.html">客户余额明细</a></li>
+                        <li><a href="客户子账户余额明细.html">子账户余额明细</a></li>
+                        <li><a href="客户分户子账户.html">客户子账户</a></li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- 财务报表 -->
+            <div class="category">
+                <div class="category-title">📈 财务报表</div>
+                <div class="category-body">
+                    <ul class="page-list">
+                        <li><a href="总账.html">总账</a></li>
+                        <li><a href="明细账.html">明细账</a></li>
+                        <li><a href="资产负债表.html">资产负债表</a></li>
+                        <li><a href="利润表.html">利润表</a></li>
+                        <li><a href="期末结转.html">期末结转</a></li>
+                        <li><a href="期末结转规则.html">期末结转规则 <span class="badge new">NEW</span></a></li>
+                        <li><a href="期末结转执行.html">期末结转执行 <span class="badge new">NEW</span></a></li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- 字典和事务 -->
+            <div class="category">
+                <div class="category-title">🔧 字典和事务</div>
+                <div class="category-body">
+                    <ul class="page-list">
+                        <li><a href="字典数据.html">字典数据</a></li>
+                        <li><a href="字典详情页.html">字典详情</a></li>
+                        <li><a href="字典项编辑页.html">字典项编辑</a></li>
+                        <li><a href="事务管理.html">事务管理</a></li>
+                        <li><a href="期末结转模板.html">期末结转模板</a></li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- 系统配置 -->
+            <div class="category">
+                <div class="category-title">⚡ 系统配置</div>
+                <div class="category-body">
+                    <ul class="page-list">
+                        <li><a href="系统设置.html">系统设置 <span class="badge new">NEW</span></a></li>
+                        <li><a href="部门核算.html">部门核算</a></li>
+                        <li><a href="项目核算.html">项目核算</a></li>
+                    </ul>
+                </div>
             </div>
         </div>
+
+        <div class="footer">
+            <p>版本: 1.0 | 更新时间: 2026-03-11 | 原型设计工具: Axure RP</p>
+        </div>
     </div>
-
-    <div id="mobileControlFrameContainer"></div>
-
-<!-- 9.0.0.3661 -->
-<script src="resources/scripts/jquery-3.2.1.min.js"></script>
-<script src="resources/scripts/axure/jquery.nicescroll.min.js"></script>
-<script src="resources/scripts/axutils.js"></script>
-<script src="resources/scripts/messagecenter.js"></script>
-<script src="resources/scripts/player/axplayer.js"></script>
-<script src="resources/scripts/player/init.js"></script>
-
-
 </body>
 </html>

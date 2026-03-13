@@ -1,0 +1,66 @@
+name: data-visualization
+description: "data visualization scaffold (dashboards, analysis reports, dataset explorers) with chart/table defaults"
+kind: web
+priority: 10
+
+access:
+  type: all_of
+  conditions:
+    - type: flag
+      name: flag-everything-everywhere
+      variation: "true"
+    - type: any_of
+      conditions:
+        - type: stack
+          name: PNPM_WORKSPACE
+        - type: dot_replit_version
+          version: "2.0.0"
+
+example: |
+  ```javascript
+  const result = await createArtifact({
+      artifactType: "data-visualization",
+      slug: "sales-dashboard",
+      previewPath: "/sales-dashboard/",
+      title: "Sales Dashboard"
+  });
+
+  // Install data-viz packages, patch CSS for chart colors + print styles
+  // Write OpenAPI spec, run codegen, launch design subagent, implement api-server handlers
+  // See common-bootstrap.md for full workflow
+  await startAsyncSubagent({
+      task: "Build the dashboard following the data-visualization skill workflow",
+      fromPlan: true,
+      relevantFiles: [
+          ".local/skills/data-visualization/SKILL.md",
+          ".local/skills/data-visualization/references/common-bootstrap.md",
+          "artifacts/sales-dashboard/src/App.tsx",
+          "artifacts/sales-dashboard/src/index.css"
+      ]
+  });
+
+  await presentArtifact({artifactId: result.artifactId});
+  ```
+
+  Creates a data visualization app using the react-vite scaffold with OpenAPI codegen workflow. Recharts is included in the scaffold; additional packages (react-csv, papaparse, @tanstack/react-table, d3-scale-chromatic) are installed during bootstrap.
+
+service_configs:
+  - name: web
+    development:
+      run: pnpm --filter @workspace/__SLUG__ run dev
+    production:
+      serve: static
+      build:
+        - pnpm
+        - --filter
+        - "@workspace/__SLUG__"
+        - run
+        - build
+      publicDir: artifacts/__SLUG__/dist/public
+      rewrites:
+        - from: "/*"
+          to: /index.html
+
+initial_open_files:
+  - src/App.tsx
+  - src/index.css
