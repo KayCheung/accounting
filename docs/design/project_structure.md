@@ -137,19 +137,23 @@ accounting/                                                 # 主项目根目录
   │           └── domain/
   │               └── BalanceCalculationTest.java
   ├── docs/                                                  # 设计文档
-  │   ├── sql/
-  │   │   └── 1-init-schema.sql
+  │   ├── ai-rules/                                          # 持续生效的规约
+  │   ├── sql/                                               # 数据库脚本
+  │   │   └── 0-database-schema.sql               
   │   ├── design/
-  │   │   ├── flowchart/
+  │   │   ├── flowchart/                                     # 流程图
   │   │   │   ├── system_architecture.mmd
   │   │   │   ├── accounting_flow.mmd
   │   │   │   └── end_of_day_process.mmd
-  │   │   └── project_structure.md
-  │   └── api/
-  ├── scripts/                                               # 脚本文件
+  │   │   ├── images/                                        # 流程图
+  │   │   ├── prototypes/                                    # 原型
+  │   │   ├── domain-model.md                                # 领域模型
+  │   │   └── project_structure.md                           # 项目结构
+  │   └── prompt/                                            # 提示词
+  ├── examples/                                              # 范例
   └── README.md
 ```
 **【强制原则】**：
    - 这是一个多模块项目，所有生成的 Java 文件必须严格遵守上述对应的包（Package）路径。
    - **docs 目录下除了 `FIN-Core_Blueprint.md` 文件可以修改，其他所有文件为只读文件，禁止修改**
-   - `docs/FIN-Core_Blueprint.md` 文件为任务执行索引文件，每执行完一个任务，更新对应的任务为已执行
+   - `docs/prompt/FIN-Core_Blueprint.md` 文件为任务执行索引文件，每执行完一个任务，更新对应的任务为已执行
