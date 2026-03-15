@@ -1,8 +1,11 @@
 # FIN-Core · AI 编程助手规范（合并版）
 
-> 本文件为 `general.md` / `java.md` / `accounting.md` 三层规范的合并版本。
-> 供不支持多文件引用的工具（Windsurf / Copilot 等）直接粘贴使用。
-> 如工具支持多文件引用（如 Cursor `.cursor/rules/`），请使用拆分版以节省上下文。
+> **使用场景**：本文件为不支持 Sub Agent 的工具的兜底方案。
+>
+> - 支持 Sub Agent 的工具（Claude Code / Cursor）：请使用 `docs/ai-rules/agents/` 下对应 Agent 文件，规范更精准、上下文更节省。
+> - 不支持 Sub Agent 的工具（Windsurf / Copilot / Kiro / Trae / Codex 等）：将本文件内容粘贴到系统提示词，作为全角色通用规范使用。
+>
+> 本文件为 `general.md` / `java.md` / `accounting.md` 三层规范的合并版本，不含 Agent 协作链路逻辑。
 
 ---
 
@@ -61,7 +64,7 @@ accounting/
 ├── accounting-admin/        # 管理后台 BFF 层
 └── docs/
     ├── sql/                 # DDL 脚本（只读，Entity 生成唯一基准）
-    ├── design/              # 业务架构图、流程图、原型、领域模型（只读）
+    ├── design/              # 业务架构图、流程图（只读）
     ├── ai-rules/            # AI 规范文件（本目录）
     └── prompt/              # Step 详细文件 + FIN-Core_Blueprint.md
 ```
@@ -83,8 +86,6 @@ accounting/
 | 期末结转流程图 | `docs/design/flowchart/period_end_transfer_flow.mmd` |
 | 事务回滚流程图 | `docs/design/flowchart/transaction_rollback_flow.mmd` |
 | 进度锚点 | `docs/prompt/FIN-Core_Blueprint.md` |
-
-
 
 ---
 

@@ -1,48 +1,31 @@
-# FIN-Core · AI 编程助手规范
+# FIN-Core · 项目规范
 
-> 本文件为 AI 编程助手（Claude Code / Cursor / Windsurf 等）的常驻上下文。
-> 精简版，只包含角色、背景、核心约束与按需读取指令。
-> 完整规范见 `docs/ai-rules/`，各 Step 详细任务见 `docs/prompt/step-XX-xxx.md`。
-
----
-
-## 角色
-
-你是一名**资深 Java 金融账务架构师**，全程使用中文交互、注释、设计说明。
-
-详细能力定义见 → `docs/ai-rules/general.md`
+> 本文件为项目级全局规范，适用于所有 AI 编程助手。
+> 具体开发规范已下沉至各 Sub Agent 文件，按角色调用对应 Agent 即可。
 
 ---
 
-## 执行规则
+## Sub Agent 调用入口
 
-- 开始任何 Step 前，**必须先读取** `docs/prompt/step-XX-xxx.md` 获取该 Step 的详细要求
-- 代码生成前，必须先读取 `docs/design/domain-model.md` 和 `docs/design/` 下相关流程图
-- `docs/` 目录所有原始资源**只读，严禁修改**，唯一例外：`docs/prompt/FIN-Core_Blueprint.md`
-- 每个 Step 完成并得到用户**明确确认**后，方可推进下一步
-- 若指令与 DDL 或既定架构冲突，**主动询问**，严禁自行修改
+| 任务类型 | 调用 Agent | 说明 |
+|----------|-----------|------|
+| 业务需求梳理 | `@BA` | 输出需求文档，是协作链路起点 |
+| 交互原型设计 | `@Prototype` | 输入：`@BA` 需求文档 |
+| 后端开发 | `@Java` | 输入：`@BA` 需求文档 + Step 文件 |
+| 前端开发 | `@Frontend` | 输入：`@Prototype` 页面规格 |
+| 测试 | `@Test` | 输入：`@BA` 需求文档 + 后端/前端产物 |
+| Code Review / 进度更新 | `@TL` | 输入：Git diff + 测试报告 |
+
+Agent 详细规范见 `docs/ai-rules/agents/`，使用说明见 `docs/ai-rules/agents/README.md`。
 
 ---
 
-## 核心约束（必须遵守）
+## 全局执行规则
 
-### 财务律法
-- 严禁负数运算，严禁 SQL 计算余额（`SET balance = balance + ?`）
-- 余额计算：同向相加 / 反向相减（前置校验 `oldBalance >= amount`）
-- 每张凭证必须满足 `ΣDebit == ΣCredit`，先证后账
-- 过账逻辑严禁硬编码科目号，必须动态解析 `t_accounting_rule`
-
-### 事务与锁
-- 严禁 `@Transactional`，必须使用 `TransactionTemplate`
-- 多账户加锁必须按 `account_no` **升序** `SELECT FOR UPDATE`
-- 分布式锁 Key 必须包含 `tenantId` 前缀
-
-### 代码规范
-- 金额使用 `BigDecimal`，String 构造，`compareTo()` 比较
-- `accounting-api` 模块严禁引入持久层依赖
-- 禁止省略代码，`// TODO` 必须注明原因
-
-完整约束见 → `docs/ai-rules/java.md` 和 `docs/ai-rules/accounting.md`
+- 每个 Step 开始前必须读取 `docs/prompt/step-XX-xxx.md` 获取详细任务
+- `docs/` 目录所有原始资源**只读，严禁修改**
+- 唯一可写文件：`docs/prompt/FIN-Core_Blueprint.md`（由 `@TL` 维护）
+- 每个 Step 完成并得到用户明确确认后，方可推进下一步
 
 ---
 
@@ -51,12 +34,15 @@
 - **系统**：金融账务核心，支持多级科目树、双子账户、三种入账模式
 - **技术栈**：Java 17 + Spring Boot 3.x + MyBatis-Plus + Redisson + RocketMQ + MySQL 5.7
 - **模块**：`accounting-api`（契约层）/ `accounting-core`（业务层）/ `accounting-job`（任务层）/ `accounting-admin`（BFF 层）
-
-完整背景见 → `docs/ai-rules/general.md`
+- **完整背景**：`docs/ai-rules/general.md`
 
 ---
 
-## TL Code Review 模式
+## 核心约束速查（完整规范见各 Agent 文件）
 
-当用户说「Review 代码」或「CR」时，读取 `docs/review/code-review.md` 并按其规范执行。
-当用户说「Review 提示词」或「PR」时，读取 `docs/review/prompt-review.md` 并按其规范执行。
+```
+财务律法：严禁负数运算 / SQL 计算余额 / 硬编码科目号
+事务规范：严禁 @Transactional → 必须 TransactionTemplate
+并发控制：多账户加锁必须 account_no 升序 / 锁 Key 含 tenantId
+架构隔离：accounting-api 严禁引入持久层依赖
+```
