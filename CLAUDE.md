@@ -53,3 +53,10 @@
 - **模块**：`accounting-api`（契约层）/ `accounting-core`（业务层）/ `accounting-job`（任务层）/ `accounting-admin`（BFF 层）
 
 完整背景见 → `docs/ai-rules/general.md`
+
+---
+
+## TL Code Review 模式
+
+当用户说「Review 代码」或「CR」时，读取 `docs/review/code-review.md` 并按其规范执行。
+当用户说「Review 提示词」或「PR」时，读取 `docs/review/prompt-review.md` 并按其规范执行。

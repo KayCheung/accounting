@@ -117,10 +117,9 @@ accounting/                                                 # 主项目根目录
   │   │       │   ├── GlobalExceptionHandler.java
   │   │       │   ├── BusinessException.java
   │   │       │   └── BaseException.java
-  │   │       ├── util/                                      # 工具类
-  │   │       │   ├── AccountingUtils.java
-  │   │       │   ├── BigDecimalUtil.java
-  │   │       │   └── TraceIdUtil.java
+  │   │       └── util/                                      # 工具类
+  │   │           ├── AccountingUtils.java
+  │   │           └── BigDecimalUtil.java
   │   │
   │   ├── src/main/resources/
   │   │   ├── bootstrap.yml
@@ -149,8 +148,11 @@ accounting/                                                 # 主项目根目录
   │   │   ├── prototypes/                                    # 原型
   │   │   ├── domain-model.md                                # 领域模型
   │   │   └── project_structure.md                           # 项目结构
+  │   ├── review/                                            # Review 提示词
   │   └── prompt/                                            # 提示词
   ├── examples/                                              # 范例
+  ├── scripts/                                               # 脚本
+  ├── commands/                                              # 命令
   └── README.md
 ```
 **【强制原则】**：

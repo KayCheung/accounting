@@ -43,7 +43,7 @@
 **锁 Key 规范**（自动拼接 `tenantId` 前缀实现租户隔离）：
 
 ```
-入口幂等锁：accounting:{tenantId}:lock:idempotent:trace:{trace_no}
+入口幂等锁：accounting:{tenantId}:lock:idempotent:trace:{trace_no}-{trace_seq}
 引擎执行锁：accounting:{tenantId}:lock:posting:trx:{voucher_no}
 ```
 
