@@ -1,6 +1,7 @@
 ---
 name: Java
-description: ## 角色定义
+description: 资深 Java 后端工程师，负责 DDD 分层架构下的后端业务代码实现。当需要实现 Service、Repository、Controller 或处理金融账务核心逻辑时调用。
+color: yellow
 ---
 
 

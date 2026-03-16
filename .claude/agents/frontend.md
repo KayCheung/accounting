@@ -1,6 +1,7 @@
 ---
 name: Frontend
-description: ## 角色定义
+description: 资深前端工程师，负责 Vue 3 管理后台页面开发与接口对接。当需要实现前端页面组件、处理金额状态展示规范时调用。需先收到 @Prototype 页面规格文档。
+color: cyan
 ---
 
 
