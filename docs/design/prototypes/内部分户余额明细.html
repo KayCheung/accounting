@@ -1,53 +1,708 @@
-﻿<!DOCTYPE html>
-<html>
-  <head>
-    <title>内部分户余额明细</title>
-    <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
-    <meta http-equiv="content-type" content="text/html; charset=utf-8"/>
-    <link href="resources/css/axure_rp_page.css" type="text/css" rel="stylesheet"/>
-    <link href="data/styles.css" type="text/css" rel="stylesheet"/>
-    <link href="files/内部分户余额明细/styles.css" type="text/css" rel="stylesheet"/>
-    <script src="resources/scripts/jquery-3.2.1.min.js"></script>
-    <script src="resources/scripts/axure/axQuery.js"></script>
-    <script src="resources/scripts/axure/globals.js"></script>
-    <script src="resources/scripts/axutils.js"></script>
-    <script src="resources/scripts/axure/annotation.js"></script>
-    <script src="resources/scripts/axure/axQuery.std.js"></script>
-    <script src="resources/scripts/axure/doc.js"></script>
-    <script src="resources/scripts/messagecenter.js"></script>
-    <script src="resources/scripts/axure/events.js"></script>
-    <script src="resources/scripts/axure/recording.js"></script>
-    <script src="resources/scripts/axure/action.js"></script>
-    <script src="resources/scripts/axure/expr.js"></script>
-    <script src="resources/scripts/axure/geometry.js"></script>
-    <script src="resources/scripts/axure/flyout.js"></script>
-    <script src="resources/scripts/axure/model.js"></script>
-    <script src="resources/scripts/axure/repeater.js"></script>
-    <script src="resources/scripts/axure/sto.js"></script>
-    <script src="resources/scripts/axure/utils.temp.js"></script>
-    <script src="resources/scripts/axure/variables.js"></script>
-    <script src="resources/scripts/axure/drag.js"></script>
-    <script src="resources/scripts/axure/move.js"></script>
-    <script src="resources/scripts/axure/visibility.js"></script>
-    <script src="resources/scripts/axure/style.js"></script>
-    <script src="resources/scripts/axure/adaptive.js"></script>
-    <script src="resources/scripts/axure/tree.js"></script>
-    <script src="resources/scripts/axure/init.temp.js"></script>
-    <script src="resources/scripts/axure/legacy.js"></script>
-    <script src="resources/scripts/axure/viewer.js"></script>
-    <script src="resources/scripts/axure/math.js"></script>
-    <script src="resources/scripts/axure/jquery.nicescroll.min.js"></script>
-    <script src="data/document.js"></script>
-    <script src="files/内部分户余额明细/data.js"></script>
-    <script type="text/javascript">
-      $axure.utils.getTransparentGifPath = function() { return 'resources/images/transparent.gif'; };
-      $axure.utils.getOtherPath = function() { return 'resources/Other.html'; };
-      $axure.utils.getReloadPath = function() { return 'resources/reload.html'; };
-    </script>
-  </head>
-  <body>
-    <div id="base" class="">
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <title>内部分户余额明细</title>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: #f0f2f5;
+      color: #333;
+      min-width: 1280px;
+    }
+
+    /* ── 顶部导航 ── */
+    .topbar {
+      background: #fff;
+      border-bottom: 1px solid #e8e8e8;
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    }
+    .topbar-left { display: flex; align-items: center; gap: 16px; }
+    .logo { font-size: 18px; font-weight: 700; color: #1890ff; letter-spacing: 1px; }
+    .nav-divider { width: 1px; height: 20px; background: #e8e8e8; }
+    .breadcrumb { font-size: 13px; color: #8c8c8c; display: flex; align-items: center; gap: 6px; }
+    .breadcrumb a { color: #595959; text-decoration: none; }
+    .breadcrumb a:hover { color: #1890ff; }
+    .breadcrumb-sep { color: #bfbfbf; }
+    .breadcrumb-current { color: #262626; font-weight: 500; }
+    .topbar-right { display: flex; align-items: center; gap: 16px; font-size: 13px; color: #595959; }
+    .user-avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff; display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 600; cursor: pointer;
+    }
+
+    /* ── 主内容 ── */
+    .main { padding: 24px; }
+
+    /* ── 按钮 ── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      height: 32px; padding: 0 16px; border-radius: 4px;
+      font-size: 13px; font-weight: 500; cursor: pointer;
+      border: 1px solid transparent; transition: all .2s; gap: 5px;
+      white-space: nowrap;
+    }
+    .btn-primary { background: #1890ff; color: #fff; border-color: #1890ff; }
+    .btn-primary:hover { background: #40a9ff; border-color: #40a9ff; }
+    .btn-default { background: #fff; color: #595959; border-color: #d9d9d9; }
+    .btn-default:hover { color: #1890ff; border-color: #1890ff; }
+    .btn-link { background: none; border: none; color: #1890ff; padding: 0 4px; height: auto; font-size: 13px; cursor: pointer; }
+    .btn-link:hover { color: #40a9ff; }
+    .btn-sm { height: 26px; padding: 0 10px; font-size: 12px; }
+    .btn-back {
+      display: inline-flex; align-items: center; gap: 6px;
+      color: #595959; font-size: 13px; text-decoration: none;
+      border: 1px solid #d9d9d9; border-radius: 4px; padding: 5px 12px;
+      background: #fff; cursor: pointer; transition: all .2s;
+    }
+    .btn-back:hover { color: #1890ff; border-color: #1890ff; }
+
+    /* ── 账户信息卡 ── */
+    .account-card {
+      background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+      border-radius: 10px;
+      padding: 24px 28px;
+      margin-bottom: 16px;
+      color: #fff;
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      box-shadow: 0 4px 14px rgba(24,144,255,.35);
+    }
+    .account-card-main {
+      flex: 1;
+      border-right: 1px solid rgba(255,255,255,.2);
+      padding-right: 28px;
+    }
+    .account-card-label { font-size: 12px; opacity: .75; margin-bottom: 4px; }
+    .account-card-value { font-size: 14px; font-weight: 500; }
+    .account-card-value.large {
+      font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums;
+      letter-spacing: .5px;
+    }
+    .account-card-stats {
+      display: flex;
+      gap: 0;
+      padding-left: 28px;
+    }
+    .account-stat {
+      text-align: center;
+      padding: 0 24px;
+      border-right: 1px solid rgba(255,255,255,.2);
+    }
+    .account-stat:last-child { border-right: none; }
+    .account-stat-label { font-size: 12px; opacity: .75; margin-bottom: 6px; }
+    .account-stat-value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .account-stat-value.debit { color: #ffccc7; }
+    .account-stat-value.credit { color: #b7eb8f; }
+    .account-stat-value.init { color: #ffe58f; }
+    .account-card-badge {
+      display: inline-block; padding: 2px 10px; border-radius: 10px;
+      font-size: 12px; font-weight: 600; background: rgba(255,255,255,.2);
+      border: 1px solid rgba(255,255,255,.4); margin-top: 6px;
+    }
+
+    /* ── 筛选区 ── */
+    .filter-card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 20px 24px 12px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    }
+    .filter-row { display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: flex-end; }
+    .filter-item { display: flex; flex-direction: column; gap: 6px; }
+    .filter-label { font-size: 13px; color: #595959; font-weight: 500; }
+    .filter-input, .filter-select {
+      height: 32px; border: 1px solid #d9d9d9; border-radius: 4px;
+      padding: 0 11px; font-size: 13px; color: #333; background: #fff;
+      outline: none; transition: border-color .2s; min-width: 160px;
+    }
+    .filter-input:focus, .filter-select:focus { border-color: #1890ff; box-shadow: 0 0 0 2px rgba(24,144,255,.12); }
+    .filter-input::placeholder { color: #bfbfbf; }
+    .filter-input.date { min-width: 150px; }
+    .filter-actions { display: flex; gap: 8px; align-items: flex-end; margin-left: auto; }
+
+    /* ── 表格卡片 ── */
+    .table-card {
+      background: #fff; border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06); overflow: hidden;
+    }
+    .table-toolbar {
+      padding: 14px 24px; border-bottom: 1px solid #f0f0f0;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .table-summary { font-size: 13px; color: #595959; }
+    .table-summary strong { color: #262626; }
+    .table-toolbar-right { display: flex; gap: 8px; align-items: center; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th {
+      background: #fafafa; color: #595959; font-weight: 600;
+      padding: 12px 14px; text-align: left;
+      border-bottom: 1px solid #f0f0f0; white-space: nowrap;
+    }
+    tbody tr { border-bottom: 1px solid #f5f5f5; transition: background .15s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #f5f9ff; }
+    tbody td { padding: 11px 14px; color: #262626; vertical-align: middle; }
+    .td-mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: 12px; color: #595959; }
+    .td-seq { color: #8c8c8c; }
+    .td-amount { font-variant-numeric: tabular-nums; text-align: right; font-weight: 600; }
+    .td-amount.debit-amt { color: #f5222d; }
+    .td-amount.credit-amt { color: #1890ff; }
+    .td-amount.balance-amt { color: #262626; }
+    .td-amount.zero { color: #bfbfbf; font-weight: 400; }
+
+    /* ── 标签/徽章 ── */
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 500;
+    }
+    .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .badge-success { background: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; }
+    .badge-success::before { background: #52c41a; }
+    .badge-processing { background: #e6f7ff; color: #1890ff; border: 1px solid #91d5ff; }
+    .badge-processing::before { background: #1890ff; animation: pulse 1.5s ease-in-out infinite; }
+    .badge-error { background: #fff2f0; color: #ff4d4f; border: 1px solid #ffccc7; }
+    .badge-error::before { background: #ff4d4f; }
+    .badge-warning { background: #fffbe6; color: #faad14; border: 1px solid #ffe58f; }
+    .badge-warning::before { background: #faad14; }
+    .badge-default { background: #fafafa; color: #8c8c8c; border: 1px solid #d9d9d9; }
+    .badge-default::before { background: #bfbfbf; }
+
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    .tag { display: inline-block; padding: 1px 8px; border-radius: 3px; font-size: 12px; border: 1px solid; }
+    .tag-blue { background: #e6f7ff; color: #1890ff; border-color: #91d5ff; }
+    .tag-red  { background: #fff2f0; color: #f5222d; border-color: #ffa39e; }
+    .tag-green{ background: #f6ffed; color: #52c41a; border-color: #b7eb8f; }
+    .tag-gray { background: #fafafa; color: #8c8c8c; border-color: #d9d9d9; }
+
+    /* ── 方向 ── */
+    .dir-d { color: #f5222d; font-weight: 700; }
+    .dir-c { color: #1890ff; font-weight: 700; }
+
+    /* ── 汇总行 ── */
+    .summary-row td {
+      background: #fffbe6;
+      font-weight: 600;
+      color: #262626;
+      border-top: 2px solid #ffe58f;
+    }
+
+    /* ── 凭证号可点 ── */
+    .voucher-link { color: #1890ff; cursor: pointer; text-decoration: none; }
+    .voucher-link:hover { color: #40a9ff; text-decoration: underline; }
+
+    /* ── 分页 ── */
+    .pagination-wrap {
+      padding: 16px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-top: 1px solid #f0f0f0;
+    }
+    .pagination-info { font-size: 13px; color: #8c8c8c; }
+    .pagination { display: flex; align-items: center; gap: 6px; }
+    .page-btn {
+      min-width: 32px; height: 32px; border: 1px solid #d9d9d9;
+      border-radius: 4px; background: #fff; color: #595959;
+      font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+      padding: 0 8px; transition: all .2s;
+    }
+    .page-btn:hover { color: #1890ff; border-color: #1890ff; }
+    .page-btn.active { color: #fff; background: #1890ff; border-color: #1890ff; }
+    .page-btn:disabled { color: #bfbfbf; cursor: not-allowed; border-color: #e8e8e8; }
+    .page-size-select { height: 32px; border: 1px solid #d9d9d9; border-radius: 4px; padding: 0 8px; font-size: 13px; background: #fff; cursor: pointer; }
+
+    /* ── 明细弹窗 ── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.45); z-index: 1000;
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: #fff; border-radius: 8px;
+      box-shadow: 0 6px 40px rgba(0,0,0,.18);
+      width: 720px; max-width: 95vw; max-height: 90vh; overflow-y: auto;
+    }
+    .modal-header {
+      padding: 18px 24px; border-bottom: 1px solid #f0f0f0;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .modal-title { font-size: 16px; font-weight: 600; color: #262626; }
+    .modal-close { font-size: 18px; color: #8c8c8c; cursor: pointer; background: none; border: none; line-height: 1; }
+    .modal-close:hover { color: #262626; }
+    .modal-body { padding: 24px; }
+    .modal-footer { padding: 14px 24px; border-top: 1px solid #f0f0f0; display: flex; justify-content: flex-end; gap: 10px; }
+
+    .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 32px; }
+    .detail-item-label { font-size: 12px; color: #8c8c8c; margin-bottom: 4px; }
+    .detail-item-value { font-size: 14px; color: #262626; font-weight: 500; }
+    .detail-divider { grid-column: 1 / -1; border: none; border-top: 1px dashed #f0f0f0; margin: 4px 0; }
+    .detail-section-title { grid-column: 1 / -1; font-size: 13px; font-weight: 600; color: #595959; border-left: 3px solid #1890ff; padding-left: 8px; margin-top: 4px; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 32px; right: 32px; z-index: 9999;
+      background: #262626; color: #fff; padding: 10px 20px; border-radius: 6px;
+      font-size: 13px; box-shadow: 0 4px 12px rgba(0,0,0,.3);
+      transition: opacity .3s; opacity: 0; pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── 顶部导航 ── -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="logo">账务核心</div>
+    <div class="nav-divider"></div>
+    <div class="breadcrumb">
+      <a href="index.html">首页</a>
+      <span class="breadcrumb-sep">›</span>
+      <a href="内部分户账户.html">内部分户账户</a>
+      <span class="breadcrumb-sep">›</span>
+      <span class="breadcrumb-current">余额明细</span>
     </div>
-    <script src="resources/scripts/axure/ios.js"></script>
-  </body>
+  </div>
+  <div class="topbar-right">
+    <span>会计日期：2025-03-13</span>
+    <div class="nav-divider"></div>
+    <div class="user-avatar">管理</div>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- 返回 + 账户信息卡 -->
+  <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;">
+    <a class="btn-back" href="内部分户账户.html">← 返回账户列表</a>
+  </div>
+
+  <div class="account-card">
+    <div class="account-card-main">
+      <div class="account-card-label">账户名称</div>
+      <div class="account-card-value" style="font-size:18px;font-weight:700;margin-bottom:6px;">银行存款-工行内部账户</div>
+      <div class="account-card-label" style="margin-top:8px;">账户编号</div>
+      <div class="account-card-value" style="font-family:monospace;font-size:14px;margin-bottom:10px;">100201-INT-001</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;">
+        <div>
+          <div class="account-card-label">所属科目</div>
+          <div class="account-card-value">100201 · 银行存款-工商银行</div>
+        </div>
+        <div>
+          <div class="account-card-label">账户类型</div>
+          <div class="account-card-value">资产账户 &nbsp;<span style="opacity:.7;font-size:12px;">借方</span></div>
+        </div>
+        <div>
+          <div class="account-card-label">账户状态</div>
+          <div><span class="badge badge-success" style="border-color:rgba(255,255,255,.4);background:rgba(255,255,255,.15);color:#fff;">正常</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="account-card-stats">
+      <div class="account-stat">
+        <div class="account-stat-label">当前余额（元）</div>
+        <div class="account-stat-value">3,820,150.50</div>
+      </div>
+      <div class="account-stat">
+        <div class="account-stat-label">期初余额（元）</div>
+        <div class="account-stat-value init">3,000,000.00</div>
+      </div>
+      <div class="account-stat">
+        <div class="account-stat-label">本期借方发生额</div>
+        <div class="account-stat-value debit">1,200,000.00</div>
+      </div>
+      <div class="account-stat">
+        <div class="account-stat-label">本期贷方发生额</div>
+        <div class="account-stat-value credit">380,000.00</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 筛选 -->
+  <div class="filter-card">
+    <div class="filter-row">
+      <div class="filter-item">
+        <label class="filter-label">会计日期</label>
+        <input class="filter-input date" id="f-date-from" type="date" value="2025-03-01"/>
+      </div>
+      <div class="filter-item">
+        <label class="filter-label" style="opacity:0;">至</label>
+        <input class="filter-input date" id="f-date-to" type="date" value="2025-03-13"/>
+      </div>
+      <div class="filter-item">
+        <label class="filter-label">凭证号</label>
+        <input class="filter-input" id="f-voucher" type="text" placeholder="请输入凭证号"/>
+      </div>
+      <div class="filter-item">
+        <label class="filter-label">业务摘要</label>
+        <input class="filter-input" id="f-summary" type="text" placeholder="请输入摘要关键字" style="min-width:200px;"/>
+      </div>
+      <div class="filter-item">
+        <label class="filter-label">借贷方向</label>
+        <select class="filter-select" id="f-dir">
+          <option value="">全部</option>
+          <option value="DEBIT">借方</option>
+          <option value="CREDIT">贷方</option>
+        </select>
+      </div>
+      <div class="filter-item">
+        <label class="filter-label">记账状态</label>
+        <select class="filter-select" id="f-status">
+          <option value="">全部</option>
+          <option value="POSTED">已过账</option>
+          <option value="PROCESSING">记账中</option>
+          <option value="FAILED">失败</option>
+          <option value="ROLLBACK">已冲销</option>
+        </select>
+      </div>
+      <div class="filter-actions">
+        <button class="btn btn-primary" onclick="doSearch()">🔍 搜索</button>
+        <button class="btn btn-default" onclick="doReset()">重置</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 数据表格 -->
+  <div class="table-card">
+    <div class="table-toolbar">
+      <div class="table-summary">共 <strong id="total-count">15</strong> 条明细</div>
+      <div class="table-toolbar-right">
+        <button class="btn btn-default btn-sm" onclick="exportData()">📥 导出明细</button>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:50px;">序号</th>
+          <th style="width:200px;">明细编号</th>
+          <th style="width:160px;">凭证号</th>
+          <th style="width:110px;">会计日期</th>
+          <th style="width:220px;">业务摘要</th>
+          <th style="width:80px;">借贷方向</th>
+          <th style="width:140px;">借方金额（元）</th>
+          <th style="width:140px;">贷方金额（元）</th>
+          <th style="width:150px;">交易前余额（元）</th>
+          <th style="width:150px;">交易后余额（元）</th>
+          <th style="width:90px;">记账状态</th>
+          <th style="width:110px;">操作</th>
+        </tr>
+      </thead>
+      <tbody id="table-body"></tbody>
+      <tfoot id="summary-foot"></tfoot>
+    </table>
+    <div class="pagination-wrap">
+      <div class="pagination-info">
+        每页
+        <select class="page-size-select" onchange="changePageSize(this.value)">
+          <option value="10" selected>10</option>
+          <option value="20">20</option>
+          <option value="50">50</option>
+        </select>
+        条，共 <span id="page-total-text">15 条，第 1/2 页</span>
+      </div>
+      <div class="pagination" id="pagination"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── 明细弹窗 ── -->
+<div class="modal-overlay" id="detail-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">余额明细详情</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="detail-grid">
+        <div class="detail-section-title">明细标识</div>
+        <div class="detail-item">
+          <div class="detail-item-label">明细编号</div>
+          <div class="detail-item-value td-mono" id="d-detail-no"></div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-item-label">凭证号</div>
+          <div class="detail-item-value td-mono" id="d-voucher-no"></div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-item-label">会计日期</div>
+          <div class="detail-item-value" id="d-acct-date"></div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-item-label">记账状态</div>
+          <div class="detail-item-value" id="d-status"></div>
+        </div>
+        <hr class="detail-divider"/>
+        <div class="detail-section-title">金额信息</div>
+        <div class="detail-item">
+          <div class="detail-item-label">借贷方向</div>
+          <div class="detail-item-value" id="d-direction"></div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-item-label">发生金额（元）</div>
+          <div class="detail-item-value" id="d-amount"></div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-item-label">交易前余额（元）</div>
+          <div class="detail-item-value" id="d-before"></div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-item-label">交易后余额（元）</div>
+          <div class="detail-item-value" id="d-after"></div>
+        </div>
+        <hr class="detail-divider"/>
+        <div class="detail-section-title">业务信息</div>
+        <div class="detail-item" style="grid-column:1/-1;">
+          <div class="detail-item-label">业务摘要</div>
+          <div class="detail-item-value" id="d-summary"></div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-item-label">业务线</div>
+          <div class="detail-item-value" id="d-biz-line"></div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-item-label">交易场景</div>
+          <div class="detail-item-value" id="d-scene"></div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-item-label">外部业务单号</div>
+          <div class="detail-item-value td-mono" id="d-biz-no"></div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-item-label">事务编号</div>
+          <div class="detail-item-value td-mono" id="d-tx-no"></div>
+        </div>
+        <hr class="detail-divider"/>
+        <div class="detail-section-title">时间信息</div>
+        <div class="detail-item">
+          <div class="detail-item-label">创建时间</div>
+          <div class="detail-item-value" id="d-created-at"></div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-item-label">过账时间</div>
+          <div class="detail-item-value" id="d-posted-at"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-default" onclick="closeModal()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ──────────── 数据 ────────────
+const STATUS_MAP = {
+  POSTED:     { label:'已过账', cls:'badge-success' },
+  PROCESSING: { label:'记账中', cls:'badge-processing' },
+  FAILED:     { label:'失败',   cls:'badge-error' },
+  ROLLBACK:   { label:'已冲销', cls:'badge-default' },
+};
+
+const allData = [
+  { id:1,  detailNo:'DTL-20250313-000015', voucherNo:'VCH-20250313-0047', acctDate:'2025-03-13', summary:'工行存款收入-企业日常运营', dir:'DEBIT',  debit:80000.00,  credit:0,         before:3740150.50, after:3820150.50, status:'POSTED',     bizLine:'自营业务', scene:'日常结算', bizNo:'BIZ2025031300087', txNo:'TX-20250313-0021', createdAt:'2025-03-13 08:02:11', postedAt:'2025-03-13 08:02:14' },
+  { id:2,  detailNo:'DTL-20250312-000031', voucherNo:'VCH-20250312-0038', acctDate:'2025-03-12', summary:'向供应商付款-合同号SC20250312001', dir:'CREDIT', debit:0,          credit:50000.00,  before:3790150.50, after:3740150.50, status:'POSTED',     bizLine:'供应链', scene:'供应商付款', bizNo:'BIZ2025031200045', txNo:'TX-20250312-0018', createdAt:'2025-03-12 16:33:20', postedAt:'2025-03-12 16:33:25' },
+  { id:3,  detailNo:'DTL-20250312-000028', voucherNo:'VCH-20250312-0031', acctDate:'2025-03-12', summary:'收到客户还款-贷款本金', dir:'DEBIT',  debit:120000.00, credit:0,         before:3670150.50, after:3790150.50, status:'POSTED',     bizLine:'贷款业务', scene:'还款入账', bizNo:'BIZ2025031200039', txNo:'TX-20250312-0015', createdAt:'2025-03-12 14:10:05', postedAt:'2025-03-12 14:10:09' },
+  { id:4,  detailNo:'DTL-20250311-000019', voucherNo:'VCH-20250311-0025', acctDate:'2025-03-11', summary:'清算往来-跨行转账支出', dir:'CREDIT', debit:0,          credit:200000.00, before:3870150.50, after:3670150.50, status:'POSTED',     bizLine:'清算业务', scene:'跨行清算', bizNo:'BIZ2025031100062', txNo:'TX-20250311-0030', createdAt:'2025-03-11 11:45:33', postedAt:'2025-03-11 11:45:38' },
+  { id:5,  detailNo:'DTL-20250311-000012', voucherNo:'VCH-20250311-0018', acctDate:'2025-03-11', summary:'收到利息收入-银行存款利息', dir:'DEBIT',  debit:5000.50,   credit:0,         before:3865150.00, after:3870150.50, status:'POSTED',     bizLine:'自营业务', scene:'利息入账', bizNo:'BIZ2025031100050', txNo:'TX-20250311-0021', createdAt:'2025-03-11 09:00:00', postedAt:'2025-03-11 09:00:04' },
+  { id:6,  detailNo:'DTL-20250310-000041', voucherNo:'VCH-20250310-0055', acctDate:'2025-03-10', summary:'贷款发放-自营贷款A客户', dir:'CREDIT', debit:0,          credit:80000.00,  before:3945150.00, after:3865150.00, status:'POSTED',     bizLine:'贷款业务', scene:'贷款发放', bizNo:'BIZ2025031000091', txNo:'TX-20250310-0042', createdAt:'2025-03-10 15:22:10', postedAt:'2025-03-10 15:22:15' },
+  { id:7,  detailNo:'DTL-20250310-000035', voucherNo:'VCH-20250310-0047', acctDate:'2025-03-10', summary:'收到客户还款-逾期贷款收回', dir:'DEBIT',  debit:50000.00,  credit:0,         before:3895150.00, after:3945150.00, status:'POSTED',     bizLine:'贷款业务', scene:'逾期回款', bizNo:'BIZ2025031000078', txNo:'TX-20250310-0039', createdAt:'2025-03-10 11:05:44', postedAt:'2025-03-10 11:05:48' },
+  { id:8,  detailNo:'DTL-20250307-000022', voucherNo:'VCH-20250307-0030', acctDate:'2025-03-07', summary:'日终资金归集-系统自动归集', dir:'DEBIT',  debit:300000.00, credit:0,         before:3595150.00, after:3895150.00, status:'POSTED',     bizLine:'清算业务', scene:'日终归集', bizNo:'BIZ2025030700055', txNo:'TX-20250307-0028', createdAt:'2025-03-07 23:00:05', postedAt:'2025-03-07 23:00:11' },
+  { id:9,  detailNo:'DTL-20250306-000018', voucherNo:'VCH-20250306-0024', acctDate:'2025-03-06', summary:'平台服务费支出-第三方支付', dir:'CREDIT', debit:0,          credit:5000.00,   before:3600150.00, after:3595150.00, status:'POSTED',     bizLine:'自营业务', scene:'费用支出', bizNo:'BIZ2025030600041', txNo:'TX-20250306-0019', createdAt:'2025-03-06 14:30:22', postedAt:'2025-03-06 14:30:27' },
+  { id:10, detailNo:'DTL-20250305-000031', voucherNo:'VCH-20250305-0039', acctDate:'2025-03-05', summary:'收到客户还款-贷款本金', dir:'DEBIT',  debit:200000.00, credit:0,         before:3400150.00, after:3600150.00, status:'POSTED',     bizLine:'贷款业务', scene:'还款入账', bizNo:'BIZ2025030500067', txNo:'TX-20250305-0033', createdAt:'2025-03-05 10:18:09', postedAt:'2025-03-05 10:18:14' },
+  { id:11, detailNo:'DTL-20250304-000025', voucherNo:'VCH-20250304-0033', acctDate:'2025-03-04', summary:'贷款发放-B客户自营贷款', dir:'CREDIT', debit:0,          credit:150000.00, before:3550150.00, after:3400150.00, status:'ROLLBACK',   bizLine:'贷款业务', scene:'贷款发放', bizNo:'BIZ2025030400055', txNo:'TX-20250304-0027', createdAt:'2025-03-04 09:45:00', postedAt:'2025-03-04 09:45:05' },
+  { id:12, detailNo:'DTL-20250303-000019', voucherNo:'VCH-20250303-0026', acctDate:'2025-03-03', summary:'收到利息收入-存款利息', dir:'DEBIT',  debit:4800.00,   credit:0,         before:3545350.00, after:3550150.00, status:'POSTED',     bizLine:'自营业务', scene:'利息入账', bizNo:'BIZ2025030300044', txNo:'TX-20250303-0021', createdAt:'2025-03-03 09:00:00', postedAt:'2025-03-03 09:00:04' },
+  { id:13, detailNo:'DTL-20250303-000008', voucherNo:'VCH-20250303-0012', acctDate:'2025-03-03', summary:'资金调拨-工行至建行', dir:'CREDIT', debit:0,          credit:100000.00, before:3645350.00, after:3545350.00, status:'POSTED',     bizLine:'清算业务', scene:'跨行清算', bizNo:'BIZ2025030300018', txNo:'TX-20250303-0010', createdAt:'2025-03-03 08:15:30', postedAt:'2025-03-03 08:15:35' },
+  { id:14, detailNo:'DTL-20250302-000041', voucherNo:'VCH-20250302-0052', acctDate:'2025-03-02', summary:'贷款发放-C客户', dir:'CREDIT', debit:0,          credit:200000.00, before:3845350.00, after:3645350.00, status:'PROCESSING', bizLine:'贷款业务', scene:'贷款发放', bizNo:'BIZ2025030200079', txNo:'TX-20250302-0041', createdAt:'2025-03-02 14:55:11', postedAt:'' },
+  { id:15, detailNo:'DTL-20250301-000007', voucherNo:'VCH-20250301-0009', acctDate:'2025-03-01', summary:'期初余额录入-月初结转', dir:'DEBIT',  debit:845350.00, credit:0,         before:3000000.00, after:3845350.00, status:'POSTED',     bizLine:'系统', scene:'期初录入', bizNo:'SYS2025030100001', txNo:'TX-20250301-0003', createdAt:'2025-03-01 00:00:01', postedAt:'2025-03-01 00:00:03' },
+];
+
+let filteredData = [...allData];
+let currentPage = 1;
+let pageSize = 10;
+
+// ──────────── 渲染表格 ────────────
+function renderTable() {
+  const start = (currentPage - 1) * pageSize;
+  const rows = filteredData.slice(start, start + pageSize);
+  const tbody = document.getElementById('table-body');
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:48px;color:#8c8c8c;">暂无数据</td></tr>`;
+    document.getElementById('summary-foot').innerHTML = '';
+    renderPagination();
+    return;
+  }
+
+  tbody.innerHTML = rows.map((r, i) => {
+    const st = STATUS_MAP[r.status] || { label: r.status, cls: 'badge-default' };
+    const debitStr  = r.debit  > 0 ? `<span class="td-amount debit-amt">${fmt(r.debit)}</span>`  : `<span class="td-amount zero">—</span>`;
+    const creditStr = r.credit > 0 ? `<span class="td-amount credit-amt">${fmt(r.credit)}</span>` : `<span class="td-amount zero">—</span>`;
+    const dirLabel  = r.dir === 'DEBIT'
+      ? `<span class="dir-d">借</span>`
+      : `<span class="dir-c">贷</span>`;
+    const rollbackMark = r.status === 'ROLLBACK' ? ' <span class="tag tag-gray" style="font-size:11px;">已冲销</span>' : '';
+
+    return `<tr>
+      <td class="td-seq">${start + i + 1}</td>
+      <td class="td-mono" style="font-size:11px;">${r.detailNo}</td>
+      <td><a class="voucher-link td-mono" onclick="openDetail(${r.id})">${r.voucherNo}${rollbackMark}</a></td>
+      <td style="color:#595959;font-size:12px;">${r.acctDate}</td>
+      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.summary}">${r.summary}</td>
+      <td>${dirLabel}</td>
+      <td>${debitStr}</td>
+      <td>${creditStr}</td>
+      <td class="td-amount balance-amt">${fmt(r.before)}</td>
+      <td class="td-amount balance-amt">${fmt(r.after)}</td>
+      <td><span class="badge ${st.cls}">${st.label}</span></td>
+      <td><button class="btn btn-link" onclick="openDetail(${r.id})">详情</button></td>
+    </tr>`;
+  }).join('');
+
+  // 汇总行
+  const totalDebit  = filteredData.reduce((s, r) => s + r.debit, 0);
+  const totalCredit = filteredData.reduce((s, r) => s + r.credit, 0);
+  document.getElementById('summary-foot').innerHTML = `
+    <tr class="summary-row">
+      <td colspan="6" style="text-align:right;padding:10px 14px;">合计（${filteredData.length} 条）：</td>
+      <td class="td-amount debit-amt">${fmt(totalDebit)}</td>
+      <td class="td-amount credit-amt">${fmt(totalCredit)}</td>
+      <td colspan="4" style="padding:10px 14px;font-size:12px;color:#8c8c8c;">净额：<strong style="color:${totalDebit-totalCredit>=0?'#f5222d':'#1890ff'}">${totalDebit >= totalCredit ? '+' : ''}${fmt(totalDebit - totalCredit)}</strong></td>
+    </tr>`;
+
+  document.getElementById('total-count').textContent = filteredData.length;
+  renderPagination();
+}
+
+function fmt(n) {
+  return n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+// ──────────── 分页 ────────────
+function renderPagination() {
+  const total = filteredData.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  document.getElementById('page-total-text').textContent = `${total} 条，第 ${currentPage}/${totalPages} 页`;
+
+  const pg = document.getElementById('pagination');
+  let html = `<button class="page-btn" ${currentPage<=1?'disabled':''} onclick="gotoPage(1)">«</button>`;
+  html    += `<button class="page-btn" ${currentPage<=1?'disabled':''} onclick="gotoPage(${currentPage-1})">‹</button>`;
+
+  const range = [];
+  for (let p = Math.max(1, currentPage-2); p <= Math.min(totalPages, currentPage+2); p++) range.push(p);
+  if (range[0] > 1) html += `<button class="page-btn" onclick="gotoPage(1)">1</button>${range[0]>2?'<span style="padding:0 4px;color:#8c8c8c;">…</span>':''}`;
+  range.forEach(p => { html += `<button class="page-btn${p===currentPage?' active':''}" onclick="gotoPage(${p})">${p}</button>`; });
+  if (range[range.length-1] < totalPages) html += `${range[range.length-1]<totalPages-1?'<span style="padding:0 4px;color:#8c8c8c;">…</span>':''}<button class="page-btn" onclick="gotoPage(${totalPages})">${totalPages}</button>`;
+
+  html += `<button class="page-btn" ${currentPage>=totalPages?'disabled':''} onclick="gotoPage(${currentPage+1})">›</button>`;
+  html += `<button class="page-btn" ${currentPage>=totalPages?'disabled':''} onclick="gotoPage(${totalPages})">»</button>`;
+  pg.innerHTML = html;
+}
+
+function gotoPage(p) { currentPage = p; renderTable(); }
+function changePageSize(s) { pageSize = parseInt(s); currentPage = 1; renderTable(); }
+
+// ──────────── 搜索 ────────────
+function doSearch() {
+  const voucherNo = document.getElementById('f-voucher').value.trim().toLowerCase();
+  const summary   = document.getElementById('f-summary').value.trim().toLowerCase();
+  const dir       = document.getElementById('f-dir').value;
+  const status    = document.getElementById('f-status').value;
+  const dateFrom  = document.getElementById('f-date-from').value;
+  const dateTo    = document.getElementById('f-date-to').value;
+
+  filteredData = allData.filter(r => {
+    if (voucherNo && !r.voucherNo.toLowerCase().includes(voucherNo)) return false;
+    if (summary   && !r.summary.toLowerCase().includes(summary))     return false;
+    if (dir       && r.dir !== dir)                                   return false;
+    if (status    && r.status !== status)                             return false;
+    if (dateFrom  && r.acctDate < dateFrom)                           return false;
+    if (dateTo    && r.acctDate > dateTo)                             return false;
+    return true;
+  });
+  currentPage = 1;
+  renderTable();
+  showToast(`找到 ${filteredData.length} 条明细`);
+}
+
+function doReset() {
+  document.getElementById('f-voucher').value   = '';
+  document.getElementById('f-summary').value   = '';
+  document.getElementById('f-dir').value       = '';
+  document.getElementById('f-status').value    = '';
+  document.getElementById('f-date-from').value = '2025-03-01';
+  document.getElementById('f-date-to').value   = '2025-03-13';
+  filteredData = [...allData];
+  currentPage  = 1;
+  renderTable();
+  showToast('已重置筛选条件');
+}
+
+// ──────────── 详情弹窗 ────────────
+function openDetail(id) {
+  const r = allData.find(x => x.id === id);
+  if (!r) return;
+  const st  = STATUS_MAP[r.status] || { label: r.status, cls: 'badge-default' };
+  const dir = r.dir === 'DEBIT' ? '<span class="dir-d">借方</span>' : '<span class="dir-c">贷方</span>';
+  const amt = r.dir === 'DEBIT' ? r.debit : r.credit;
+
+  document.getElementById('d-detail-no').textContent  = r.detailNo;
+  document.getElementById('d-voucher-no').textContent = r.voucherNo;
+  document.getElementById('d-acct-date').textContent  = r.acctDate;
+  document.getElementById('d-status').innerHTML       = `<span class="badge ${st.cls}">${st.label}</span>`;
+  document.getElementById('d-direction').innerHTML    = dir;
+  document.getElementById('d-amount').innerHTML       = `<strong style="font-size:16px;">${fmt(amt)}</strong> 元`;
+  document.getElementById('d-before').textContent     = fmt(r.before) + ' 元';
+  document.getElementById('d-after').textContent      = fmt(r.after)  + ' 元';
+  document.getElementById('d-summary').textContent    = r.summary;
+  document.getElementById('d-biz-line').textContent   = r.bizLine;
+  document.getElementById('d-scene').textContent      = r.scene;
+  document.getElementById('d-biz-no').textContent     = r.bizNo;
+  document.getElementById('d-tx-no').textContent      = r.txNo;
+  document.getElementById('d-created-at').textContent = r.createdAt;
+  document.getElementById('d-posted-at').textContent  = r.postedAt || '—';
+
+  document.getElementById('detail-modal').classList.add('show');
+}
+
+function closeModal() {
+  document.getElementById('detail-modal').classList.remove('show');
+}
+document.getElementById('detail-modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal();
+});
+
+// ──────────── 其他 ────────────
+function exportData() { showToast('正在导出明细数据，请稍候…'); }
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(t._t);
+  t._t = setTimeout(() => { t.style.opacity = '0'; }, 2500);
+}
+
+// ──────────── 初始化 ────────────
+renderTable();
+</script>
+</body>
 </html>
