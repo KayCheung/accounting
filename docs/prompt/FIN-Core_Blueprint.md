@@ -7,21 +7,28 @@
 
 ## Phase 1：契约、规范与架构
 
-- [ ] **Step 1** · Governance & Constraints｜开发契约与规范
+- [X] **Step 1** · Governance & Constraints｜开发契约与规范
   → 详见 `docs/prompt/step-01-governance.md`
 
 ---
 
 ## Phase 2：工程基础
 
-- [ ] **Step 2** · Project Initialization｜工程从零初始化
+- [X] **Step 2** · Project Initialization｜工程从零初始化
   → 详见 `docs/prompt/step-02-project-init.md`
 
 - [ ] **Step 3** · Code Generation｜持久层批量生成
   → 详见 `docs/prompt/step-03-codegen.md`
+  → Java-A（账户域 7 张表）：`docs/prompt/step-03-java-a.md`
+  → Java-B（凭证域 + 规则域 9 张表）：`docs/prompt/step-03-java-b.md`
+  → Java-C（科目域 + 流水域 + 支撑域 11 张表）：`docs/prompt/step-03-java-c.md`
 
 - [ ] **Step 4** · Middleware Integration｜中间件集成
   → 详见 `docs/prompt/step-04-middleware.md`
+  → task-1（RocketMQ 封装）：`docs/prompt/tasks/step-04-task-1-mq.md`
+  → task-2（本地消息表）：`docs/prompt/tasks/step-04-task-2-outbox.md`
+  → task-3（Redis / 分布式锁 / 字典缓存）：`docs/prompt/tasks/step-04-task-3-redis.md`
+  → task-4（Prometheus + 告警）：`docs/prompt/tasks/step-04-task-4-monitor.md`
 
 - [ ] **Step 5** · Domain Alignment｜领域模型对齐
   → 详见 `docs/prompt/step-05-alignment.md`
