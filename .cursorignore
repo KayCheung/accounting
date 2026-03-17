@@ -1,0 +1,4 @@
+# 忽略其他 Vibe Coding 文件
+.claude
+.kiro
+.trae
