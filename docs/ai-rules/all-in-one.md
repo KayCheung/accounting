@@ -181,6 +181,12 @@ amount.equals(other)
  */
 ```
 
+## MyBatis-Plus Mapper XML 规范
+
+- 使用 MyBatis-Plus 时，**无需创建 `*Mapper.xml` 文件**
+- 若无自定义 SQL，禁止创建空的 XML 文件（避免无意义文件污染工程）
+- 仅当需要编写复杂自定义查询（如多表 JOIN、动态 SQL）时，才创建对应 XML 并放置于 `src/main/resources/mapper/` 目录
+
 ---
 
 # 第三层：账务领域规范
@@ -255,7 +261,7 @@ List<Account> locked = accountRepo.selectForUpdate(sorted);
 分录：PENDING(1) → POSTED(2)
 事务：PROCESSING → SUCCESS / FAILED
 账户：NORMAL(1) → FROZEN(2) → CANCELLED(3)（余额=0）
-本地消息：PENDING(1) → SENDING(2) → SENT(3) / FAILED(4)
+本地消息：PENDING(1) → SENT(2) / FAILED(3)
 ```
 
 ---

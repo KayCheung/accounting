@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kltb.accounting.core.infrastructure.persistence.mapper.AccountMapper">
+
+    <!-- EXPLAIN verified: type=const, key=uk_account_no -->
+    <select id="selectForUpdate" resultType="com.kltb.accounting.core.infrastructure.persistence.entity.AccountPO">
+        SELECT id, subject_code, owner_id, owner_type, account_no, account_name,
+               account_type, currency, balance_direction, opening_balance, balance,
+               status, risk_status, request_no, open_date, inactive_date, version,
+               create_time, update_time, is_delete, tenant_id
+        FROM t_account
+        WHERE account_no = #{accountNo}
+          AND is_delete = 0
+        FOR UPDATE
+    </select>
+
+    <!-- P1-2: 显式 ORDER BY 保证加锁顺序，防止死锁 -->
+    <select id="selectForUpdateBatch" resultType="com.kltb.accounting.core.infrastructure.persistence.entity.AccountPO">
+        SELECT id, subject_code, owner_id, owner_type, account_no, account_name,
+               account_type, currency, balance_direction, opening_balance, balance,
+               status, risk_status, request_no, open_date, inactive_date, version,
+               create_time, update_time, is_delete, tenant_id
+        FROM t_account
+        WHERE account_no IN
+        <foreach collection="accountNos" item="no" open="(" separator="," close=")">
+            #{no}
+        </foreach>
+        ORDER BY account_no ASC
+        FOR UPDATE
+    </select>
+
+    <!-- 账户 + 子账户联查 ResultMap -->
+    <resultMap id="accountWithSubAccountsMap"
+               type="com.kltb.accounting.core.infrastructure.persistence.dto.AccountWithSubAccountsDTO">
+        <id property="id" column="id"/>
+        <result property="subjectCode" column="subject_code"/>
+        <result property="ownerId" column="owner_id"/>
+        <result property="ownerType" column="owner_type"/>
+        <result property="accountNo" column="account_no"/>
+        <result property="accountName" column="account_name"/>
+        <result property="accountType" column="account_type"/>
+        <result property="currency" column="currency"/>
+        <result property="balanceDirection" column="balance_direction"/>
+        <result property="openingBalance" column="opening_balance"/>
+        <result property="balance" column="balance"/>
+        <result property="status" column="status"/>
+        <result property="riskStatus" column="risk_status"/>
+        <result property="requestNo" column="request_no"/>
+        <result property="openDate" column="open_date"/>
+        <result property="inactiveDate" column="inactive_date"/>
+        <result property="version" column="version"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="isDelete" column="is_delete"/>
+        <result property="tenantId" column="tenant_id"/>
+        <collection property="subAccounts"
+                    ofType="com.kltb.accounting.core.infrastructure.persistence.entity.SubAccountPO">
+            <id property="id" column="sub_id"/>
+            <result property="accountNo" column="sub_account_no"/>
+            <result property="balanceType" column="sub_balance_type"/>
+            <result property="balanceDirection" column="sub_balance_direction"/>
+            <result property="balance" column="sub_balance"/>
+            <result property="version" column="sub_version"/>
+            <result property="createTime" column="sub_create_time"/>
+            <result property="updateTime" column="sub_update_time"/>
+            <result property="isDelete" column="sub_is_delete"/>
+            <result property="tenantId" column="sub_tenant_id"/>
+        </collection>
+    </resultMap>
+
+    <!-- EXPLAIN verified: type=const, key=uk_account_no -->
+    <select id="selectWithSubAccounts" resultMap="accountWithSubAccountsMap">
+        SELECT a.id, a.subject_code, a.owner_id, a.owner_type, a.account_no, a.account_name,
+               a.account_type, a.currency, a.balance_direction, a.opening_balance, a.balance,
+               a.status, a.risk_status, a.request_no, a.open_date, a.inactive_date, a.version,
+               a.create_time, a.update_time, a.is_delete, a.tenant_id,
+               s.id AS sub_id, s.account_no AS sub_account_no,
+               s.balance_type AS sub_balance_type, s.balance_direction AS sub_balance_direction,
+               s.balance AS sub_balance, s.version AS sub_version,
+               s.create_time AS sub_create_time, s.update_time AS sub_update_time,
+               s.is_delete AS sub_is_delete, s.tenant_id AS sub_tenant_id
+        FROM t_account a
+        LEFT JOIN t_sub_account s ON a.account_no = s.account_no AND s.is_delete = 0
+        WHERE a.account_no = #{accountNo}
+          AND a.is_delete = 0
+    </select>
+
+    <!-- 按科目汇总账户余额（总分核对用-分户侧）
+         注：t_account 是实时余额表（无会计日期维度），直接汇总所有活跃账户的当前余额。
+         与 t_account_balance 的按日汇总对比，用于验证总账与分户的一致性。 -->
+    <select id="sumBalancesBySubject" resultType="java.util.HashMap">
+        SELECT subject_code,
+               SUM(balance) AS total_balance,
+               COUNT(*) AS account_count
+        FROM t_account
+        WHERE status = 1
+          AND is_delete = 0
+        GROUP BY subject_code
+    </select>
+
+    <!-- 批量查询账户余额（余额核对用） -->
+    <select id="selectBalancesByAccountNos" resultType="java.util.HashMap">
+        SELECT account_no,
+               balance
+        FROM t_account
+        WHERE account_no IN
+        <foreach collection="accountNos" item="no" open="(" separator="," close=")">
+            #{no}
+        </foreach>
+          AND is_delete = 0
+    </select>
+
+</mapper>

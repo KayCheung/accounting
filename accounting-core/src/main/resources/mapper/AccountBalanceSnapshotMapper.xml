@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kltb.accounting.core.infrastructure.persistence.mapper.AccountBalanceSnapshotMapper">
+
+    <insert id="batchInsertSnapshot">
+        INSERT IGNORE INTO t_account_balance_snapshot
+            (snapshot_date, snapshot_type, snapshot_time, subject_code, account_no,
+             currency, balance_direction, balance, ext_json,
+             create_time, update_time, is_delete, tenant_id)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.snapshotDate}, #{item.snapshotType.code}, #{item.snapshotTime},
+             #{item.subjectCode}, #{item.accountNo}, #{item.currency},
+             #{item.balanceDirection.code}, #{item.balance}, #{item.extJson},
+             NOW(), NOW(), 0, #{item.tenantId})
+        </foreach>
+    </insert>
+
+</mapper>

@@ -106,7 +106,15 @@ Service 方法 Javadoc 必须包含：
 
 ---
 
-## 八、分页封装规范
+## 八、MyBatis-Plus Mapper XML 规范
+
+- 使用 MyBatis-Plus 时，**无需创建 `*Mapper.xml` 文件**
+- 若无自定义 SQL，禁止创建空的 XML 文件（避免无意义文件污染工程）
+- 仅当需要编写复杂自定义查询（如多表 JOIN、动态 SQL）时，才创建对应 XML 并放置于 `src/main/resources/mapper/` 目录
+
+---
+
+## 九、分页封装规范
 
 ```java
 Page<XxxPO> page = repository.page(

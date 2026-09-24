@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kltb.accounting.core.infrastructure.persistence.mapper.TransactionMapper">
+
+    <!-- 查询事务耗时统计（Step 12 P0-3） -->
+    <select id="selectDurationStats" resultType="java.util.Map">
+        SELECT
+            ROUND(AVG(
+                UNIX_TIMESTAMP(finish_time) * 1000 - UNIX_TIMESTAMP(create_time) * 1000
+            )) AS avg_duration_ms,
+            ROUND(MAX(
+                UNIX_TIMESTAMP(finish_time) * 1000 - UNIX_TIMESTAMP(create_time) * 1000
+            )) AS max_duration_ms,
+            ROUND(MIN(
+                UNIX_TIMESTAMP(finish_time) * 1000 - UNIX_TIMESTAMP(create_time) * 1000
+            )) AS min_duration_ms
+        FROM t_transaction
+        WHERE is_delete = 0
+        AND status = 2
+        AND finish_time IS NOT NULL
+        <if test="startDate != null">
+        AND accounting_date &gt;= #{startDate}
+        </if>
+        <if test="endDate != null">
+        AND accounting_date &lt;= #{endDate}
+        </if>
+        <if test="businessCode != null and businessCode != ''">
+        AND business_code = #{businessCode}
+        </if>
+    </select>
+
+</mapper>

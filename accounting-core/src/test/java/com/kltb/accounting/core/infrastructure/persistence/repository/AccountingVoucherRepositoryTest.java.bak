@@ -1,0 +1,237 @@
+package com.kltb.accounting.core.infrastructure.persistence.repository;
+
+import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
+import com.kltb.accounting.core.domain.enums.RuleStatusEnum;
+import com.kltb.accounting.core.domain.enums.VoucherEntryStatusEnum;
+import com.kltb.accounting.core.domain.enums.VoucherStatusEnum;
+import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingRuleAuxiliaryPO;
+import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingRuleDetailPO;
+import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingRulePO;
+import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherAttachmentPO;
+import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherAuxiliaryPO;
+import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherEntryPO;
+import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherPO;
+import com.kltb.accounting.core.infrastructure.persistence.entity.BufferPostingDetailPO;
+import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountingRuleAuxiliaryMapper;
+import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountingRuleDetailMapper;
+import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountingRuleMapper;
+import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountingVoucherAttachmentMapper;
+import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountingVoucherAuxiliaryMapper;
+import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountingVoucherEntryMapper;
+import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountingVoucherMapper;
+import com.kltb.accounting.core.infrastructure.persistence.mapper.BufferPostingDetailMapper;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+/**
+ * AccountingVoucherRepository & AccountingRuleRepository 单元测试
+ */
+@ExtendWith(MockitoExtension.class)
+class AccountingVoucherRepositoryTest {
+
+    @Mock
+    private AccountingVoucherMapper voucherMapper;
+
+    @Mock
+    private AccountingVoucherEntryMapper entryMapper;
+
+    @Mock
+    private AccountingVoucherAuxiliaryMapper auxiliaryMapper;
+
+    @Mock
+    private AccountingVoucherAttachmentMapper attachmentMapper;
+
+    @InjectMocks
+    private AccountingVoucherRepository voucherRepository;
+
+    @Test
+    @DisplayName("selectByVoucherNo: 按凭证号查询凭证")
+    void selectByVoucherNo_shouldReturnVoucher() {
+        AccountingVoucherPO po = new AccountingVoucherPO()
+                .setVoucherNo("VCH001")
+                .setStatus(VoucherStatusEnum.PENDING)
+                .setAmount(new BigDecimal("1000.000000"));
+        when(voucherMapper.selectWithEntries("VCH001")).thenReturn(po);
+
+        AccountingVoucherPO result = voucherRepository.selectByVoucherNo("VCH001");
+
+        assertThat(result).isNotNull();
+        assertThat(result.getVoucherNo()).isEqualTo("VCH001");
+    }
+
+    @Test
+    @DisplayName("selectEntriesByVoucherNo: 按凭证号查询分录列表")
+    void selectEntriesByVoucherNo_shouldReturnEntries() {
+        AccountingVoucherEntryPO e1 = new AccountingVoucherEntryPO()
+                .setVoucherNo("VCH001").setRowNum(1).setDebitCredit(DebitCreditEnum.DEBIT);
+        AccountingVoucherEntryPO e2 = new AccountingVoucherEntryPO()
+                .setVoucherNo("VCH001").setRowNum(2).setDebitCredit(DebitCreditEnum.CREDIT);
+        when(entryMapper.selectByVoucherNo("VCH001")).thenReturn(Arrays.asList(e1, e2));
+
+        List<AccountingVoucherEntryPO> result = voucherRepository.selectEntriesByVoucherNo("VCH001");
+
+        assertThat(result).hasSize(2);
+        assertThat(result).extracting(AccountingVoucherEntryPO::getDebitCredit)
+                .containsExactly(DebitCreditEnum.DEBIT, DebitCreditEnum.CREDIT);
+    }
+
+    @Test
+    @DisplayName("selectPendingPosting: 查询待过账分录")
+    void selectPendingPosting_shouldReturnPendingEntries() {
+        AccountingVoucherEntryPO entry = new AccountingVoucherEntryPO()
+                .setVoucherNo("VCH001")
+                .setStatus(VoucherEntryStatusEnum.NOT_POSTED);
+        when(entryMapper.selectPendingPosting("VCH001")).thenReturn(Collections.singletonList(entry));
+
+        List<AccountingVoucherEntryPO> result = voucherRepository.selectPendingPosting("VCH001");
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getStatus()).isEqualTo(VoucherEntryStatusEnum.NOT_POSTED);
+    }
+
+    @Test
+    @DisplayName("selectAuxiliaryByEntryId: 按分录ID查询辅助核算项")
+    void selectAuxiliaryByEntryId_shouldReturnAuxiliaries() {
+        AccountingVoucherAuxiliaryPO aux = new AccountingVoucherAuxiliaryPO()
+                .setEntryId("ENT001")
+                .setAuxType("DEPT")
+                .setAuxCode("DEPT01");
+        when(auxiliaryMapper.selectByEntryId("ENT001")).thenReturn(Collections.singletonList(aux));
+
+        List<AccountingVoucherAuxiliaryPO> result = voucherRepository.selectAuxiliaryByEntryId("ENT001");
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getAuxCode()).isEqualTo("DEPT01");
+    }
+
+    @Test
+    @DisplayName("selectAttachmentsByVoucherNo: 按凭证号查询附件")
+    void selectAttachmentsByVoucherNo_shouldReturnAttachments() {
+        AccountingVoucherAttachmentPO att = new AccountingVoucherAttachmentPO()
+                .setVoucherNo("VCH001")
+                .setFilePath("/oss/attachments/VCH001.pdf");
+        when(attachmentMapper.selectByVoucherNo("VCH001")).thenReturn(Collections.singletonList(att));
+
+        List<AccountingVoucherAttachmentPO> result = voucherRepository.selectAttachmentsByVoucherNo("VCH001");
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getFilePath()).isEqualTo("/oss/attachments/VCH001.pdf");
+    }
+
+    @Test
+    @DisplayName("insert + update: 凭证生命周期操作")
+    void insertAndUpdateVoucher() {
+        AccountingVoucherPO po = new AccountingVoucherPO().setVoucherNo("VCH_NEW");
+
+        voucherRepository.insert(po);
+        verify(voucherMapper).insert(po);
+
+        po.setStatus(VoucherStatusEnum.POSTED);
+        when(voucherMapper.updateById(po)).thenReturn(1);
+
+        boolean updated = voucherRepository.updateById(po);
+        assertThat(updated).isTrue();
+    }
+}
+
+@ExtendWith(MockitoExtension.class)
+class AccountingRuleRepositoryTest {
+
+    @Mock
+    private AccountingRuleMapper ruleMapper;
+
+    @Mock
+    private AccountingRuleDetailMapper ruleDetailMapper;
+
+    @Mock
+    private AccountingRuleAuxiliaryMapper ruleAuxiliaryMapper;
+
+    @Mock
+    private BufferPostingDetailMapper bufferPostingDetailMapper;
+
+    @InjectMocks
+    private AccountingRuleRepository ruleRepository;
+
+    @Test
+    @DisplayName("selectByBusinessKey: 按业务键查询规则")
+    void selectByBusinessKey_shouldReturnRule() {
+        AccountingRulePO po = new AccountingRulePO()
+                .setBusinessCode("PAY")
+                .setTradingCode("WITHDRAW")
+                .setPayChannel("WECHAT")
+                .setStatus(RuleStatusEnum.ENABLED);
+        when(ruleMapper.selectByBusinessKey("PAY", "WITHDRAW", "WECHAT")).thenReturn(po);
+
+        AccountingRulePO result = ruleRepository.selectByBusinessKey("PAY", "WITHDRAW", "WECHAT");
+
+        assertThat(result).isNotNull();
+        assertThat(result.getStatus()).isEqualTo(RuleStatusEnum.ENABLED);
+    }
+
+    @Test
+    @DisplayName("selectEnabledRules: 查询已启用的规则")
+    void selectEnabledRules_shouldReturnEnabledRules() {
+        AccountingRulePO r1 = new AccountingRulePO().setRuleName("R1").setStatus(RuleStatusEnum.ENABLED);
+        AccountingRulePO r2 = new AccountingRulePO().setRuleName("R2").setStatus(RuleStatusEnum.ENABLED);
+        when(ruleMapper.selectEnabledRules()).thenReturn(Arrays.asList(r1, r2));
+
+        List<AccountingRulePO> result = ruleRepository.selectEnabledRules();
+
+        assertThat(result).hasSize(2);
+        assertThat(result).allMatch(r -> r.getStatus() == RuleStatusEnum.ENABLED);
+    }
+
+    @Test
+    @DisplayName("selectDetailsWithAuxiliary: 按规则ID查询明细含辅助核算项")
+    void selectDetailsWithAuxiliary_shouldReturnDetails() {
+        AccountingRuleDetailPO d1 = new AccountingRuleDetailPO().setRuleId(1L).setRowNum(1);
+        AccountingRuleDetailPO d2 = new AccountingRuleDetailPO().setRuleId(1L).setRowNum(2);
+        when(ruleDetailMapper.selectWithAuxiliary(1L)).thenReturn(Arrays.asList(d1, d2));
+
+        List<AccountingRuleDetailPO> result = ruleRepository.selectDetailsWithAuxiliary(1L);
+
+        assertThat(result).hasSize(2);
+        assertThat(result).extracting(AccountingRuleDetailPO::getRowNum).containsExactly(1, 2);
+    }
+
+    @Test
+    @DisplayName("selectBufferBySharding: 按分片值查询缓冲记账明细")
+    void selectBufferBySharding_shouldReturnDetails() {
+        BufferPostingDetailPO detail = new BufferPostingDetailPO()
+                .setSharding(1L)
+                .setAccountNo("ACC001");
+        when(bufferPostingDetailMapper.selectBySharding(1L, null)).thenReturn(Collections.singletonList(detail));
+
+        List<BufferPostingDetailPO> result = ruleRepository.selectBufferBySharding(1L, null);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getAccountNo()).isEqualTo("ACC001");
+    }
+
+    @Test
+    @DisplayName("selectBufferBySharding: 按分片+状态过滤")
+    void selectBufferBySharding_withStatus_shouldFilter() {
+        BufferPostingDetailPO detail = new BufferPostingDetailPO()
+                .setSharding(2L);
+        when(bufferPostingDetailMapper.selectBySharding(2L, 1)).thenReturn(Collections.singletonList(detail));
+
+        List<BufferPostingDetailPO> result = ruleRepository.selectBufferBySharding(2L, 1);
+
+        assertThat(result).hasSize(1);
+    }
+}

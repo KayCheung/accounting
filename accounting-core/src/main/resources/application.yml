@@ -1,0 +1,140 @@
+# accounting-core/src/main/resources/application.yml
+# FIN-Core 核心配置文件
+# 敏感配置（数据库密码、Redis 密码）应通过 Nacos 配置中心注入，本地开发使用 application-local.yml 覆盖
+
+spring:
+  application:
+    name: accounting-core
+  # 激活 Spring profile，值由 Maven profile 过滤注入（local/test/prod）
+  profiles:
+    active: @profiles.active@
+  config:
+    import:
+      # 从 Nacos 拉取动态配置，失败不阻塞启动（optional:）
+      # Nacos 配置地址由环境变量注入，local 环境为空则不连接 Nacos
+      - optional:nacos:accounting-core.yml?refresh=true
+  cloud:
+    nacos:
+      config:
+        # Nacos 服务地址，例如 10.36.1.100:8848
+        server-addr: ${NACOS_HOST:10.36.6.252}:${NACOS_PORT:8848}
+        username: dev
+        password: dev@kltb@2026
+        namespace: ${NACOS_NAMESPACE:dev}
+        group: DEFAULT_GROUP
+        file-extension: yml
+
+  # ==================== 数据源配置 ====================
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    # 生产环境通过 Nacos 注入，此处为占位符
+    url: ${DB_URL:jdbc:mysql://test-mysql.kltb.com.cn:3306/accounting?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowMultiQueries=true}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:dev@1234}
+    hikari:
+      # 连接池最大连接数（金融场景建议 20~50）
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      connection-test-query: SELECT 1
+
+  # ==================== Flyway 数据库版本管理 ====================
+  flyway:
+    enabled: false
+
+  # ==================== Redis 配置（Redisson 接管，此处仅保留基础配置） ====================
+  data:
+    redis:
+      host: ${REDIS_HOST:test-redis.kltb.com.cn}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:dev@1234}
+      database: 0
+
+  # ==================== Jackson 全局配置 ====================
+  jackson:
+    # 时区
+    time-zone: GMT+8
+    # 日期格式
+    date-format: yyyy-MM-dd HH:mm:ss
+    # 序列化时忽略 null 值
+    default-property-inclusion: non_null
+    serialization:
+      # 禁止将 Date 序列化为时间戳
+      write-dates-as-timestamps: false
+    deserialization:
+      # 忽略未知字段，提升兼容性
+      fail-on-unknown-properties: false
+
+# ==================== MyBatis-Plus 配置 ====================
+mybatis-plus:
+  # 实体类包扫描
+  type-aliases-package: com.kltb.accounting.core.infrastructure.persistence.entity
+  global-config:
+    db-config:
+      # 逻辑删除字段名
+      logic-delete-field: isDelete
+      # 未删除值
+      logic-not-delete-value: 0
+      # 已删除值：使用动态时间戳（在代码层面通过 System.currentTimeMillis() 赋值）
+      # 注意：MyBatis-Plus 全局 logic-delete-value 不支持动态值，
+      # 因此此处设置为 1 作为占位，实际删除逻辑在 BaseMapper 扩展中覆盖
+      logic-delete-value: 1
+      # 主键策略：使用数据库自增
+      id-type: auto
+  configuration:
+    # 开启驼峰命名映射
+    map-underscore-to-camel-case: true
+    # 日志（开发环境可开启，生产关闭）
+    log-impl: ${MYBATIS_LOG:org.apache.ibatis.logging.nologging.NoLoggingImpl}
+
+# ==================== Actuator 健康检查 ====================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# ==================== SpringDoc OpenAPI ====================
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+
+# ==================== 服务端口 ====================
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+# ==================== ONS Producer 配置 ====================
+# ==================== 业务异步线程池（支持 Nacos 动态刷新） ====================
+accounting:
+  thread-pool:
+    business-async:
+      core-pool-size: ${BIZ_THREAD_POOL_CORE:4}
+      max-pool-size: ${BIZ_THREAD_POOL_MAX:8}
+      queue-capacity: ${BIZ_THREAD_POOL_QUEUE:256}
+      keep-alive-seconds: ${BIZ_THREAD_POOL_KEEPALIVE:60}
+  messaging:
+    ons:
+      # 是否启用 ONS Producer。默认 false，避免本地无配置时启动失败
+      enabled: ${ONS_ENABLED:false}
+      # ONS 接入地址，例如：http://onsaddr-internet.aliyun.com:80
+      endpoint: ${ONS_ENDPOINT:}
+      # 生产者 ID（Group），例如：PID_xxx
+      producer-id: ${ONS_PRODUCER_ID:}
+      # 阿里云访问凭证
+      access-key: ${ONS_ACCESS_KEY:}
+      secret-key: ${ONS_SECRET_KEY:}
+      # 实例 ID（可选）
+      instance-id: ${ONS_INSTANCE_ID:}
+      # 发送超时（毫秒）
+      send-msg-timeout-millis: ${ONS_SEND_TIMEOUT_MILLIS:3000}

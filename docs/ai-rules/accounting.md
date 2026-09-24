@@ -101,8 +101,8 @@ List<Account> locked = accountRepo.selectForUpdate(sorted);
   任意状态可叠加止入 / 止出风控标志（互不影响主状态）
 
 本地消息状态：
-  PENDING(1) ──[发送中]──▶ SENDING(2) ──[成功]──▶ SENT(3)
-                                         └──[重试超限]──▶ FAILED(4)
+  PENDING(1) ──[补偿发送成功]──▶ SENT(2)
+                 └──[重试超限]──▶ FAILED(3)
 ```
 
 ---

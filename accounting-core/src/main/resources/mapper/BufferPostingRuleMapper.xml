@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kltb.accounting.core.infrastructure.persistence.mapper.BufferPostingRuleMapper">
+
+    <!-- EXPLAIN verified: type=ref, key=idx_business_code -->
+    <select id="selectOverlappingRules" resultType="com.kltb.accounting.core.infrastructure.persistence.entity.BufferPostingRulePO">
+        SELECT id, rule_name, buffer_mode, business_code, trading_code, pay_channel,
+               subject_code, account_no, debit_credit, status, effective_time, expiration_time,
+               create_time, update_time, is_delete, tenant_id
+        FROM t_buffer_posting_rule
+        WHERE business_code = #{businessCode}
+          AND trading_code = #{tradingCode}
+          AND pay_channel = #{payChannel}
+          AND is_delete = 0
+          AND status = 2
+          AND effective_time &lt; #{expirationTime}
+          AND expiration_time &gt; #{effectiveTime}
+          AND id != #{excludeId}
+    </select>
+
+    <!-- P1-6 修复：subject_code/account_no 含 NULL/空串双重判断 -->
+    <select id="selectMatchingRules" resultType="com.kltb.accounting.core.infrastructure.persistence.entity.BufferPostingRulePO">
+        SELECT id, rule_name, buffer_mode, business_code, trading_code, pay_channel,
+               subject_code, account_no, debit_credit, status, effective_time, expiration_time,
+               create_time, update_time, is_delete, tenant_id
+        FROM t_buffer_posting_rule
+        WHERE business_code = #{businessCode}
+          AND trading_code = #{tradingCode}
+          AND pay_channel = #{payChannel}
+          AND debit_credit = #{debitCredit}
+          AND effective_time &lt;= #{accountingDate}
+          AND expiration_time &gt;= #{accountingDate}
+          AND (subject_code IS NULL OR subject_code = '' OR subject_code = #{subjectCode})
+          AND (account_no IS NULL OR account_no = '' OR account_no = #{accountNo})
+          AND is_delete = 0
+        ORDER BY id ASC
+        LIMIT 1
+    </select>
+
+</mapper>

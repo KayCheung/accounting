@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kltb.accounting.core.infrastructure.persistence.mapper.AccountBalanceMapper">
+
+    <insert id="batchUpsertBalance">
+        INSERT INTO t_account_balance
+            (accounting_date, subject_code, account_no, currency,
+             balance_direction, begin_balance, debit_amount, credit_amount, end_balance,
+             create_time, update_time, is_delete, tenant_id)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.accountingDate}, #{item.subjectCode}, #{item.accountNo}, #{item.currency},
+             #{item.balanceDirection.code}, #{item.beginBalance}, #{item.debitAmount}, #{item.creditAmount}, #{item.endBalance},
+             NOW(), NOW(), 0, #{item.tenantId})
+        </foreach>
+        ON DUPLICATE KEY UPDATE
+            debit_amount = VALUES(debit_amount),
+            credit_amount = VALUES(credit_amount),
+            end_balance = VALUES(end_balance),
+            balance_direction = VALUES(balance_direction),
+            update_time = NOW()
+    </insert>
+
+    <!-- 按科目汇总日余额（总分核对用） -->
+    <select id="sumBalancesBySubject" resultType="java.util.HashMap">
+        SELECT subject_code,
+               SUM(end_balance) AS total_balance,
+               SUM(debit_amount) AS total_debit,
+               SUM(credit_amount) AS total_credit,
+               COUNT(*) AS account_count
+        FROM t_account_balance
+        WHERE accounting_date = #{accountingDate}
+          AND is_delete = 0
+        GROUP BY subject_code
+    </select>
+
+</mapper>

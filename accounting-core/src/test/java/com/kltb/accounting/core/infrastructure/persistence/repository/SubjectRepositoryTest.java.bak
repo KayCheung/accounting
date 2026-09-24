@@ -1,0 +1,215 @@
+package com.kltb.accounting.core.infrastructure.persistence.repository;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.kltb.accounting.core.domain.enums.AvailableStatusEnum;
+import com.kltb.accounting.core.infrastructure.persistence.dto.SubjectTreeNodeDTO;
+import com.kltb.accounting.core.infrastructure.persistence.entity.AccountSubjectPO;
+import com.kltb.accounting.core.infrastructure.persistence.entity.AccountTemplatePO;
+import com.kltb.accounting.core.infrastructure.persistence.entity.DictionaryPO;
+import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountSubjectAuxiliaryMapper;
+import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountSubjectMapper;
+import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountTemplateMapper;
+import com.kltb.accounting.core.infrastructure.persistence.mapper.DictionaryMapper;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+/**
+ * SubjectRepository & DictionaryRepository 单元测试
+ */
+@ExtendWith(MockitoExtension.class)
+class SubjectRepositoryTest {
+
+    @Mock
+    private AccountSubjectMapper subjectMapper;
+
+    @Mock
+    private AccountSubjectAuxiliaryMapper subjectAuxiliaryMapper;
+
+    @Mock
+    private AccountTemplateMapper templateMapper;
+
+    @InjectMocks
+    private SubjectRepository subjectRepository;
+
+    @Test
+    @DisplayName("selectTreeByParent: 按父科目ID查询子科目")
+    void selectTreeByParent_shouldReturnChildren() {
+        AccountSubjectPO child1 = new AccountSubjectPO().setSubjectCode("101001").setSubjectLevel(2);
+        AccountSubjectPO child2 = new AccountSubjectPO().setSubjectCode("101002").setSubjectLevel(2);
+        when(subjectMapper.selectTreeByParent(1L)).thenReturn(Arrays.asList(child1, child2));
+
+        List<AccountSubjectPO> result = subjectRepository.selectTreeByParent(1L);
+
+        assertThat(result).hasSize(2);
+        assertThat(result).extracting(AccountSubjectPO::getSubjectCode).containsExactly("101001", "101002");
+    }
+
+    @Test
+    @DisplayName("selectLeafForPosting: 查询可记账的末级科目")
+    void selectLeafForPosting_shouldReturnLeafSubjects() {
+        AccountSubjectPO leaf = new AccountSubjectPO()
+                .setSubjectCode("1001")
+                .setLeaf(true)
+                .setAllowPost(true)
+                .setStatus(AvailableStatusEnum.ENABLED);
+        when(subjectMapper.selectLeafForPosting()).thenReturn(Collections.singletonList(leaf));
+
+        List<AccountSubjectPO> result = subjectRepository.selectLeafForPosting();
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getLeaf()).isTrue();
+        assertThat(result.get(0).getAllowPost()).isTrue();
+    }
+
+    @Test
+    @DisplayName("selectSubjectTree: 递归构建科目树")
+    void selectSubjectTree_shouldBuildFullTree() {
+        // 模拟三级科目树: 100 (level=1) -> 10001 (level=2) -> 1000101 (level=3)
+        AccountSubjectPO root = new AccountSubjectPO()
+                .setId(1L).setSubjectCode("100").setSubjectLevel(1).setParentSubjectId(0L)
+                .setLeaf(false).setSubjectName("资产类");
+        AccountSubjectPO mid = new AccountSubjectPO()
+                .setId(2L).setSubjectCode("10001").setSubjectLevel(2).setParentSubjectId(1L)
+                .setLeaf(false).setSubjectName("银行存款");
+        AccountSubjectPO leaf = new AccountSubjectPO()
+                .setId(3L).setSubjectCode("1000101").setSubjectLevel(3).setParentSubjectId(2L)
+                .setLeaf(true).setAllowPost(true).setSubjectName("工行存款");
+
+        when(subjectMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(Arrays.asList(root, mid, leaf));
+
+        List<SubjectTreeNodeDTO> tree = subjectRepository.selectSubjectTree(0L);
+
+        assertThat(tree).hasSize(1);
+        assertThat(tree.get(0).getSubject().getSubjectCode()).isEqualTo("100");
+        assertThat(tree.get(0).getChildren()).hasSize(1);
+        assertThat(tree.get(0).getChildren().get(0).getSubject().getSubjectCode()).isEqualTo("10001");
+        assertThat(tree.get(0).getChildren().get(0).getChildren()).hasSize(1);
+        assertThat(tree.get(0).getChildren().get(0).getChildren().get(0).getSubject().getSubjectCode()).isEqualTo("1000101");
+    }
+
+    @Test
+    @DisplayName("selectSubjectTree: 空表返回空列表")
+    void selectSubjectTree_empty_shouldReturnEmptyList() {
+        when(subjectMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(Collections.emptyList());
+
+        List<SubjectTreeNodeDTO> tree = subjectRepository.selectSubjectTree(0L);
+
+        assertThat(tree).isEmpty();
+    }
+
+    @Test
+    @DisplayName("selectByCode: 按科目编码查询")
+    void selectByCode_shouldReturnSubject() {
+        AccountSubjectPO po = new AccountSubjectPO()
+                .setSubjectCode("1001").setLeaf(true).setAllowPost(true);
+        when(subjectMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(po);
+
+        AccountSubjectPO result = subjectRepository.selectByCode("1001");
+
+        assertThat(result).isNotNull();
+        assertThat(result.getSubjectCode()).isEqualTo("1001");
+    }
+
+    @Test
+    @DisplayName("selectTemplateByBusinessKey: 按业务键查询开户模板")
+    void selectTemplateByBusinessKey_shouldReturnTemplate() {
+        AccountTemplatePO po = new AccountTemplatePO()
+                .setBusinessCode("PAY")
+                .setSubjectCode("1001")
+                .setAutoOpen(true);
+        when(templateMapper.selectByBusinessKey("PAY", 2, "1001")).thenReturn(po);
+
+        AccountTemplatePO result = subjectRepository.selectTemplateByBusinessKey("PAY", 2, "1001");
+
+        assertThat(result).isNotNull();
+        assertThat(result.getAutoOpen()).isTrue();
+    }
+}
+
+@ExtendWith(MockitoExtension.class)
+class DictionaryRepositoryTest {
+
+    @Mock
+    private DictionaryMapper dictionaryMapper;
+
+    @InjectMocks
+    private DictionaryRepository dictionaryRepository;
+
+    @Test
+    @DisplayName("selectByType: 按类型查询字典项")
+    void selectByType_shouldReturnDictItems() {
+        DictionaryPO d1 = new DictionaryPO().setDictCode("ASSET").setSortOrder(1);
+        DictionaryPO d2 = new DictionaryPO().setDictCode("LIABILITY").setSortOrder(2);
+        when(dictionaryMapper.selectByType("subject_category")).thenReturn(Arrays.asList(d1, d2));
+
+        List<DictionaryPO> result = dictionaryRepository.selectByType("subject_category");
+
+        assertThat(result).hasSize(2);
+        assertThat(result).extracting(DictionaryPO::getDictCode).containsExactly("ASSET", "LIABILITY");
+    }
+
+    @Test
+    @DisplayName("selectByGroupKey: 按分组键查询")
+    void selectByGroupKey_shouldReturnGroupedItems() {
+        DictionaryPO d1 = new DictionaryPO().setDictCode("WECHAT").setGroupKey("pay_channel");
+        when(dictionaryMapper.selectByGroupKey("pay_channel")).thenReturn(Collections.singletonList(d1));
+
+        List<DictionaryPO> result = dictionaryRepository.selectByGroupKey("pay_channel");
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getDictCode()).isEqualTo("WECHAT");
+    }
+
+    @Test
+    @DisplayName("selectByTypeAndCode: 按类型+编码查询单个")
+    void selectByTypeAndCode_shouldReturnSingleDict() {
+        DictionaryPO po = new DictionaryPO()
+                .setDictType("pay_channel").setDictCode("ALIPAY");
+        when(dictionaryMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(po);
+
+        DictionaryPO result = dictionaryRepository.selectByTypeAndCode("pay_channel", "ALIPAY");
+
+        assertThat(result).isNotNull();
+        assertThat(result.getDictCode()).isEqualTo("ALIPAY");
+    }
+
+    @Test
+    @DisplayName("selectByTypes: 批量查询并按类型分组")
+    void selectByTypes_shouldReturnGroupedMap() {
+        DictionaryPO d1 = new DictionaryPO().setDictType("pay_channel").setDictCode("WECHAT");
+        DictionaryPO d2 = new DictionaryPO().setDictType("pay_channel").setDictCode("ALIPAY");
+        DictionaryPO d3 = new DictionaryPO().setDictType("funds_type").setDictCode("PRINCIPAL");
+        when(dictionaryMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(Arrays.asList(d1, d2, d3));
+
+        Map<String, List<DictionaryPO>> result = dictionaryRepository.selectByTypes(
+                Arrays.asList("pay_channel", "funds_type"));
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get("pay_channel")).hasSize(2);
+        assertThat(result.get("funds_type")).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("selectByTypes: 空参数返回空Map")
+    void selectByTypes_emptyTypes_shouldReturnEmptyMap() {
+        Map<String, List<DictionaryPO>> result = dictionaryRepository.selectByTypes(Collections.emptyList());
+
+        assertThat(result).isEmpty();
+    }
+}

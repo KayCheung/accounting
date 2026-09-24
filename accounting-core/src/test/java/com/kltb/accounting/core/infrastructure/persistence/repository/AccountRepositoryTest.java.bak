@@ -1,0 +1,167 @@
+package com.kltb.accounting.core.infrastructure.persistence.repository;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.kltb.accounting.core.domain.enums.AccountStatusEnum;
+import com.kltb.accounting.core.domain.enums.BalanceDirectionEnum;
+import com.kltb.accounting.core.domain.enums.BalanceTypeEnum;
+import com.kltb.accounting.core.domain.enums.OwnerTypeEnum;
+import com.kltb.accounting.core.infrastructure.persistence.dto.AccountWithSubAccountsDTO;
+import com.kltb.accounting.core.infrastructure.persistence.entity.AccountPO;
+import com.kltb.accounting.core.infrastructure.persistence.entity.SubAccountPO;
+import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountMapper;
+import com.kltb.accounting.core.infrastructure.persistence.mapper.SubAccountMapper;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.math.BigDecimal;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+/**
+ * AccountRepository 单元测试
+ */
+@ExtendWith(MockitoExtension.class)
+class AccountRepositoryTest {
+
+    @Mock
+    private AccountMapper accountMapper;
+
+    @Mock
+    private SubAccountMapper subAccountMapper;
+
+    @InjectMocks
+    private AccountRepository accountRepository;
+
+    @Test
+    @DisplayName("selectForUpdate: 按账户编号加锁查询")
+    void selectForUpdate_shouldCallMapper() {
+        AccountPO po = new AccountPO().setAccountNo("ACC001").setStatus(AccountStatusEnum.NORMAL);
+        when(accountMapper.selectForUpdate("ACC001")).thenReturn(po);
+
+        AccountPO result = accountRepository.selectForUpdate("ACC001");
+
+        assertThat(result).isNotNull();
+        assertThat(result.getAccountNo()).isEqualTo("ACC001");
+    }
+
+    @Test
+    @DisplayName("selectForUpdate: 不存在的账户返回null")
+    void selectForUpdate_notExist_shouldReturnNull() {
+        when(accountMapper.selectForUpdate("NOEXIST")).thenReturn(null);
+
+        AccountPO result = accountRepository.selectForUpdate("NOEXIST");
+
+        assertThat(result).isNull();
+    }
+
+    @Test
+    @DisplayName("selectByOwnerId: 返回该所有者下所有账户")
+    void selectByOwnerId_shouldReturnAccounts() {
+        AccountPO acc1 = new AccountPO().setAccountNo("ACC001").setOwnerId("USER1");
+        AccountPO acc2 = new AccountPO().setAccountNo("ACC002").setOwnerId("USER1");
+        when(accountMapper.selectByOwnerId("USER1")).thenReturn(Arrays.asList(acc1, acc2));
+
+        List<AccountPO> result = accountRepository.selectByOwnerId("USER1");
+
+        assertThat(result).hasSize(2);
+        assertThat(result).extracting(AccountPO::getAccountNo).containsExactly("ACC001", "ACC002");
+    }
+
+    @Test
+    @DisplayName("selectByOwnerId: 无数据时返回空列表")
+    void selectByOwnerId_empty_shouldReturnEmptyList() {
+        when(accountMapper.selectByOwnerId("NONE")).thenReturn(Collections.emptyList());
+
+        List<AccountPO> result = accountRepository.selectByOwnerId("NONE");
+
+        assertThat(result).isNotNull().isEmpty();
+    }
+
+    @Test
+    @DisplayName("selectWithSubAccounts: 联查账户+子账户结构")
+    void selectWithSubAccounts_shouldReturnWithSubAccounts() {
+        SubAccountPO available = new SubAccountPO()
+                .setAccountNo("ACC001")
+                .setBalanceType(BalanceTypeEnum.AVAILABLE)
+                .setBalanceDirection(BalanceDirectionEnum.DEBIT)
+                .setBalance(new BigDecimal("1000.000000"));
+        SubAccountPO frozen = new SubAccountPO()
+                .setAccountNo("ACC001")
+                .setBalanceType(BalanceTypeEnum.FROZEN)
+                .setBalanceDirection(BalanceDirectionEnum.DEBIT)
+                .setBalance(new BigDecimal("200.000000"));
+
+        AccountWithSubAccountsDTO dto = new AccountWithSubAccountsDTO();
+        dto.setAccountNo("ACC001");
+        dto.setOwnerId("USER1");
+        dto.setOwnerType(OwnerTypeEnum.PERSONAL);
+        dto.setStatus(AccountStatusEnum.NORMAL);
+        dto.setSubAccounts(Arrays.asList(available, frozen));
+
+        when(accountMapper.selectWithSubAccounts("ACC001")).thenReturn(dto);
+
+        AccountWithSubAccountsDTO result = accountRepository.selectWithSubAccounts("ACC001");
+
+        assertThat(result).isNotNull();
+        assertThat(result.getAccountNo()).isEqualTo("ACC001");
+        assertThat(result.getSubAccounts()).hasSize(2);
+        assertThat(result.getSubAccounts())
+                .extracting(SubAccountPO::getBalanceType)
+                .containsExactly(BalanceTypeEnum.AVAILABLE, BalanceTypeEnum.FROZEN);
+    }
+
+    @Test
+    @DisplayName("selectByAccountNo: 通过 MyBatis-Plus 条件查询")
+    void selectByAccountNo_shouldUseLambdaQueryWrapper() {
+        AccountPO po = new AccountPO().setAccountNo("ACC001").setStatus(AccountStatusEnum.NORMAL);
+        when(accountMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(po);
+
+        AccountPO result = accountRepository.selectByAccountNo("ACC001");
+
+        assertThat(result).isNotNull();
+        assertThat(result.getAccountNo()).isEqualTo("ACC001");
+        verify(accountMapper).selectOne(any(LambdaQueryWrapper.class));
+    }
+
+    @Test
+    @DisplayName("insert: 插入新账户")
+    void insert_shouldCallMapperInsert() {
+        AccountPO po = new AccountPO().setAccountNo("ACC_NEW").setStatus(AccountStatusEnum.NORMAL);
+
+        accountRepository.insert(po);
+
+        verify(accountMapper).insert(po);
+    }
+
+    @Test
+    @DisplayName("updateById: 更新成功返回true")
+    void updateById_success_shouldReturnTrue() {
+        AccountPO po = new AccountPO().setId(1L).setBalance(new BigDecimal("500.000000"));
+        when(accountMapper.updateById(po)).thenReturn(1);
+
+        boolean result = accountRepository.updateById(po);
+
+        assertThat(result).isTrue();
+    }
+
+    @Test
+    @DisplayName("updateById: 乐观锁冲突返回false")
+    void updateById_versionConflict_shouldReturnFalse() {
+        AccountPO po = new AccountPO().setId(1L);
+        when(accountMapper.updateById(po)).thenReturn(0);
+
+        boolean result = accountRepository.updateById(po);
+
+        assertThat(result).isFalse();
+    }
+}

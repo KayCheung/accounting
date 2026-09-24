@@ -1,0 +1,46 @@
+# accounting-core/src/main/resources/application-local.yml
+# 本地开发环境配置，覆盖 application.yml 中的占位符
+# 此文件禁止提交到生产分支
+
+spring:
+  datasource:
+    url: jdbc:mysql://test-mysql.kltb.com.cn:3306/accounting?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowMultiQueries=true
+    username: root
+    password: dev@1234
+
+  data:
+    redis:
+      host: test-redis.kltb.com.cn
+      port: 6379
+      password: dev@1234
+
+  # ==================== Flyway 数据库版本管理 ====================
+  flyway:
+    enabled: true
+    # 迁移脚本位置
+    locations: classpath:db/migration
+    # 基准版本（首次执行时跳过已存在的表）
+    baseline-on-migrate: true
+    baseline-version: 0
+    # 禁止生产环境 clean（防止误删数据）
+    clean-disabled: true
+    # 编码
+    encoding: UTF-8
+    # 校验失败时不自动修复（生产安全）
+    validate-on-migrate: true
+
+mybatis-plus:
+  configuration:
+    # 本地开发开启 SQL 日志
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+logging:
+  level:
+    com.kltb.accounting: DEBUG
+
+# ==================== ONS Producer（本地默认关闭） ====================
+accounting:
+  messaging:
+    ons:
+      enabled: false
+

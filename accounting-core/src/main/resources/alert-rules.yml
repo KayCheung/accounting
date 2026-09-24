@@ -1,0 +1,66 @@
+# accounting-core/src/main/resources/alert-rules.yml
+# Prometheus 告警规则配置（P0 + P1 两级）
+#
+# 使用说明：
+# 1. 将此文件部署到 Prometheus 服务器的 rules 目录，或在 prometheus.yml 中配置 file_sd_configs 指向此文件。
+# 2. 告警阈值可根据实际生产环境调整，但需遵守：
+#    - P0 告警 for 值不超过 1 分钟，确保快速响应
+#    - P1 告警 for 值不超过 5 分钟，避免误报
+
+groups:
+  # ==================== P0 级告警（立即介入，影响资金安全） ====================
+  - name: accounting-p0
+    rules:
+      - alert: PostingFailureRateHigh
+        expr: >
+          rate(accounting_posting_total{status="failed"}[5m])
+          /
+          rate(accounting_posting_total[5m])
+          > 0.001
+        for: 1m
+        labels:
+          severity: P0
+        annotations:
+          summary: "记账失败率超过 0.1%"
+          description: "当前记账失败率 {{ $value | humanizePercentage }}，已触发 P0 告警，需立即介入排查。"
+
+      - alert: EodFailed
+        expr: accounting_eod_status == 0
+        for: 0m
+        labels:
+          severity: P0
+        annotations:
+          summary: "日切失败，需立即人工介入"
+          description: "日切状态异常，账务数据可能不一致，请立即人工核查。"
+
+      - alert: TrialBalanceFailed
+        expr: accounting_trial_balance_status == 0
+        for: 0m
+        labels:
+          severity: P0
+        annotations:
+          summary: "试算平衡不通过，账务数据异常"
+          description: "试算平衡校验失败，借贷不平，账务数据存在不一致风险。"
+          # 注意：accounting_trial_balance_status 指标由 Step 17（日切与试算平衡）中补充定义，
+          # 此告警规则将在该指标生效后生效。在此之前该规则会产生持续的 false positive。
+
+  # ==================== P1 级告警（30 分钟内响应） ====================
+  - name: accounting-p1
+    rules:
+      - alert: BufferQueueBacklog
+        expr: accounting_buffer_pending_count > 10000
+        for: 5m
+        labels:
+          severity: P1
+        annotations:
+          summary: "缓冲队列积压超过 1 万条"
+          description: "缓冲队列当前积压 {{ $value }} 条，已超过 5 分钟，可能存在消费瓶颈。"
+
+      - alert: LocalMessageFailed
+        expr: accounting_local_message_failed_count > 0
+        for: 5m
+        labels:
+          severity: P1
+        annotations:
+          summary: "本地消息表存在失败消息，MQ 投递异常"
+          description: "本地消息表失败数量 {{ $value }}，MQ 补偿投递已达上限，需排查 MQ 集群状态。"
