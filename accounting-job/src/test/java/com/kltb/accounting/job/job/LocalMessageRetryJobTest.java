@@ -116,7 +116,6 @@ class LocalMessageRetryJobTest {
     private static class TestableLocalMessageRetryJob extends LocalMessageRetryJob {
 
         private final LocalDateTime fixedNow;
-        private final LocalMessageRetryJob.ShardContext shardContext;
 
         private TestableLocalMessageRetryJob(LocalMessageService localMessageService,
                                              OnsProducerTemplate onsProducerTemplate,
@@ -125,7 +124,6 @@ class LocalMessageRetryJobTest {
                                              int shardTotal) {
             super(localMessageService, onsProducerTemplate);
             this.fixedNow = fixedNow;
-            this.shardContext = new LocalMessageRetryJob.ShardContext(shardIndex, shardTotal);
         }
 
         @Override
@@ -133,9 +131,5 @@ class LocalMessageRetryJobTest {
             return fixedNow;
         }
 
-        @Override
-        LocalMessageRetryJob.ShardContext resolveShardContext() {
-            return shardContext;
-        }
     }
 }
