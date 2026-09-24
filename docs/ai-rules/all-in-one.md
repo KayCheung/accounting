@@ -1,8 +1,11 @@
 # FIN-Core · AI 编程助手规范（合并版）
 
-> 本文件为 `general.md` / `java.md` / `accounting.md` 三层规范的合并版本。
-> 供不支持多文件引用的工具（Windsurf / Copilot 等）直接粘贴使用。
-> 如工具支持多文件引用（如 Cursor `.cursor/rules/`），请使用拆分版以节省上下文。
+> **使用场景**：本文件为不支持 Sub Agent 的工具的兜底方案。
+>
+> - 支持 Sub Agent 的工具（Claude Code / Cursor）：请使用 `docs/ai-rules/agents/` 下对应 Agent 文件，规范更精准、上下文更节省。
+> - 不支持 Sub Agent 的工具（Windsurf / Copilot / Kiro / Trae / Codex 等）：将本文件内容粘贴到系统提示词，作为全角色通用规范使用。
+>
+> 本文件为 `general.md` / `java.md` / `accounting.md` 三层规范的合并版本，不含 Agent 协作链路逻辑。
 
 ---
 
@@ -61,7 +64,7 @@ accounting/
 ├── accounting-admin/        # 管理后台 BFF 层
 └── docs/
     ├── sql/                 # DDL 脚本（只读，Entity 生成唯一基准）
-    ├── design/              # 业务架构图、流程图、原型、领域模型（只读）
+    ├── design/              # 业务架构图、流程图（只读）
     ├── ai-rules/            # AI 规范文件（本目录）
     └── prompt/              # Step 详细文件 + FIN-Core_Blueprint.md
 ```
@@ -83,8 +86,6 @@ accounting/
 | 期末结转流程图 | `docs/design/flowchart/period_end_transfer_flow.mmd` |
 | 事务回滚流程图 | `docs/design/flowchart/transaction_rollback_flow.mmd` |
 | 进度锚点 | `docs/prompt/FIN-Core_Blueprint.md` |
-
-
 
 ---
 
@@ -282,3 +283,48 @@ List<Account> locked = accountRepo.selectForUpdate(sorted);
 | 架构 | `accounting-api` 引入持久层 / 科目号硬编码 |
 | 文件 | 修改 `docs/` 只读文件（`FIN-Core_Blueprint.md` 除外） |
 | 代码质量 | 省略实现 / 未理解业务就生成代码 |
+
+---
+
+## 规范变动识别机制（所有 Agent 必须遵守）
+
+### 触发条件
+
+在任何对话中，检测到以下任一信号时，**必须立即停止当前任务**，不得继续生成代码：
+
+- 用户指令与 `docs/ai-rules/` 中的现有规范存在矛盾
+- 对话中出现变动性措辞：「改为」「不用了」「换成」「调整一下」「去掉」「新增约束」「架构变了」等
+- 生成代码过程中发现规范文件与实际需求不一致
+- 用户提出的方案与已确定的技术栈、架构设计、财务律法存在冲突
+
+### 停下后的固定输出格式
+
+检测到变动信号后，立即输出以下内容，**不得跳过任何一项，不得继续生成代码**：
+
+```
+## 检测到规范变动，任务暂停
+
+### 变动内容
+[一句话描述发现了什么变动]
+
+### 影响范围
+- 涉及规范文件：[docs/ai-rules/xxx.md 的哪个章节]
+- 涉及 Step 文件：[哪些 Step 文件需要同步调整]
+- 涉及已生成代码：[哪些已完成代码可能需要返工，如无则填"无"]
+
+### 当前规范（变动前）
+[引用现有规范原文]
+
+### 建议更新为
+[建议的新规范内容]
+
+---
+请确认以上变动是否正确，是否需要同步更新到 AI Rules？
+确认后我将继续执行当前任务。
+```
+
+### 规范更新责任
+
+- 用户确认变动后，通知 `@TL` 执行规范文件更新
+- **其他 Agent 不得自行修改任何 `docs/ai-rules/` 文件**
+- `@TL` 更新完成并告知后，当前任务方可继续

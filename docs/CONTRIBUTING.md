@@ -96,39 +96,31 @@
 
 ### 4.1 会话基本原则
 
+- **单会话单 Agent**：每次会话只调用一个 Agent，不混用
 - **单会话单 Step**：每个 Step 独立开启新会话，避免上下文污染
-- **单会话单角色**：每次会话只做自己负责的子任务，不跨越边界
-- **上下文超限信号**：当 AI 开始遗忘早期约束或输出矛盾内容时，立即开新会话并重新注入规范
+- **上下文超限信号**：当 AI 开始遗忘早期约束或输出矛盾内容时，立即开新会话重新调用 Agent
 
-### 4.2 每次会话的注入结构
+### 4.2 Sub Agent 调用方式
 
-开启新会话时，按以下顺序注入内容：
+**Claude Code（官方 Sub Agent）**：
 
-```
-1. CLAUDE.md 全文（或 docs/ai-rules/all-in-one.md）
-2. 当前执行人声明
-3. 当前任务四段式 Prompt
-```
+直接在对话中 `@` 调用，Agent 会自动携带专属规范：
 
-### 4.3 执行人声明模板
+```bash
+# 简单任务（人工传递产物）
+@BA 请分析字典管理模块的业务需求，参考 docs/prompt/step-06-dict-subject.md
 
-```markdown
-## 当前执行人
-我是 [角色]，负责 [负责模块]。
-本次任务：Step [N] · [Step 名称]
-详细任务见：docs/prompt/step-[N]-xxx.md
+# 复杂任务（自动传递链路）
+@BA 请分析字典管理需求，完成后自动启动后续链路，参考 docs/prompt/step-06-dict-subject.md
 ```
 
-示例：
+**Cursor / Windsurf / 其他工具**：
 
-```markdown
-## 当前执行人
-我是 BE-A，负责账户侧开发。
-本次任务：Step 8 · Account Auto-Opening（自动化开户）
-详细任务见：docs/prompt/step-08-account-opening.md
-```
+打开 `docs/ai-rules/agents/README.md` 查看各工具的具体使用方式。
 
-### 4.4 四段式 Prompt 模板
+### 4.3 四段式 Prompt 模板（调用 Agent 时使用）
+
+在 `@Agent` 后附上四段式 Prompt，精确控制任务边界：
 
 ```markdown
 【任务】
@@ -136,7 +128,7 @@
 
 【输入】
 - 领域模型：docs/design/domain-model.md（[相关域]部分）
-- 完整 DDL：docs/sql/[N]-xxx.sql（生成 PO/Mapper 时必读，其他时候读摘要即可）
+- 完整 DDL：docs/sql/[N]-xxx.sql（生成 PO/Mapper 时必读）
 - Step 详情：docs/prompt/step-[N]-xxx.md
 
 【输出】
@@ -148,34 +140,26 @@
 
 示例：
 
-```markdown
-【任务】
-实现自动化开户逻辑，包含账户存在性检查、模板匹配开户、并发幂等处理
+```
+@Java
+【任务】实现自动化开户逻辑，含账户存在性检查、模板匹配、并发幂等
 
 【输入】
-- 领域模型：docs/design/domain-model.md（账户域、科目域部分）
-- 完整 DDL：docs/sql/1-account.sql、docs/sql/4-subject.sql
-- Step 详情：docs/prompt/step-08-account-opening.md
+- docs/design/domain-model.md（账户域、科目域）
+- docs/sql/1-account.sql、docs/sql/4-subject.sql
+- docs/prompt/step-08-account-opening.md
 
-【输出】
-完整 Java 实现文件，含：
-- AccountOpeningService 及其实现
-- 相关 Repository 调用
-- 单元测试（含 100 并发幂等场景）
+【输出】AccountOpeningService 完整实现 + 单测（含 100 并发幂等场景）
 
-【不要做】
-- 不要生成 Controller 层
-- 不要修改 DDL 文件
-- 不要实现 Step 9 的流水入库逻辑
+【不要做】不生成 Controller 层，不修改 DDL，不实现 Step 9 逻辑
 ```
 
-### 4.5 复述确认技巧
+### 4.4 复述确认技巧
 
 发起复杂任务前，先让 AI 复述理解后再执行：
 
 ```
-请先复述你的执行计划（包含将要创建哪些文件、核心逻辑思路），
-确认无误后再开始生成代码。
+请先复述你的执行计划（将要创建哪些文件、核心逻辑思路），确认无误后再生成代码。
 ```
 
 ---
