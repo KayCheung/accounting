@@ -353,8 +353,48 @@
       - 凭证红冲弹窗（`ReversalDialog`）：红字强警示横幅（财务不可逆提醒）、原凭证回显、录入红冲记账人与红冲原因摘要，联动调用 `executeReversal`；
       - 手动执行过账确认弹窗：对未过账或失败凭证调用 `executePosting`；
       - 跨模块联动支持：监听 `route.query.voucherNo` 和 `route.query.traceNo` 自动填入并直达定位；
-      - 路由更新：`/business/voucher` 成功由占位符切换绑定至正式页面；
+  → 完成内容（Step 23.4.1 手工凭证录入与审核独立模块 — `business/manual-voucher`）：
+    - 架构物理隔离与核心设计：
+      - 彻底解耦法定凭证表：新建独立申请表 `t_manual_voucher_apply`、申请分录表 `t_manual_voucher_apply_entry` 及流转审计日志表 `t_manual_voucher_audit_log`；
+      - 杜绝脏数据污染核心凭证库：制单草稿、待初审、初审驳回、待复核、复核驳回期间全部数据沉淀在申请审批表内；
+      - 严格四阶段内控生命周期：创建制单（Maker） -> 初审把关（Auditor） -> 终审复核（Checker/Reviewer） -> 确认记账（Bookkeeper）；
+      - 记账正式转换原子性保证：复核通过后由记账员点击【确认记账】，在 TransactionTemplate 事务内正式生成凭证（`VOU...`）与分录（`ENT...`）落库 `t_accounting_voucher*`，回填 `reviewer_name` 与 `bookkeeper_name`，联动过账引擎实时过账并更新账户余额，最后回填申请单为已记账状态；
+      - 全生命周期实名可追溯：详细记录每一次流转动作、操作人姓名、操作角色、流转前/后状态、审批意见或驳回原因、操作时间戳。
+    - 后端服务与契约（`accounting-api` + `accounting-core`）：
+      - 契约定义：`ManualVoucherApplyStatusEnum`、`ManualVoucherApplySaveRequest`、`ManualVoucherApplyEntryRequest`、`ManualVoucherApplyAuditRequest`、`ManualVoucherApplyPostRequest`、`ManualVoucherApplyPageRequest`、`ManualVoucherApplyPageItemResponse`、`ManualVoucherAuditLogResponse`、`ManualVoucherApplyDetailResponse`；
+      - 仓储与实体：`ManualVoucherApplyPO`、`ManualVoucherApplyEntryPO`、`ManualVoucherAuditLogPO`、`ManualVoucherApplyMapper`、`ManualVoucherApplyEntryMapper`、`ManualVoucherAuditLogMapper`、`ManualVoucherApplyRepository`（内置自动建表自愈机制，防止缺少表导致的错误）；
+      - 业务编排服务：`ManualVoucherApplicationService` 实现制单草稿/提审、初审通过/驳回、复核通过/驳回、确认记账、修改重提、作废、分页多维检索、全景详情与大写金额转换、看板状态统计；
+      - RESTful 接口：`ManualVoucherController` 暴露完整端点群；
+      - 自动化单测覆盖：新建 `ManualVoucherApplicationServiceTest`（6 个测试用例 100% 通过，覆盖草稿保存、借贷平衡、初审通过/驳回、复核、记账落库转入与凭证号回填、作废操作）。
+    - 前端交互与页面（`accounting-ui/src/views/business/manual-voucher/index.vue`、`src/api/manualVoucher.ts`）：
+      - 侧边栏独立挂载导航：`/business/manual-voucher`（`手工凭证录入与审核`）；
+      - 6 维业务状态漏斗看板卡片：全部申请、待初审（黄）、待复核（蓝）、待记账（紫）、已记账（绿）、被驳回（红），支持点击快捷筛选；
+      - 检索卡片：支持申请单号、正式凭证号、制单人、审批状态、会计日期范围等多维检索；
+      - 主表格行展开（Expand Row）即时预览分录明细与底部借贷平衡看板；
+      - 规范操作列（`MoreFilled` “...” 紧凑下拉菜单，列宽 70px）；
+      - 制单填制弹窗（1000px）：凭证头栅格 + 动态借贷分录明细表格（增删行、借贷蓝橙徽标、末级科目搜索联动、正数金额绝对值校验、一键自动平衡差额、底部实时借贷平衡核验看板、保存草稿与提交初审双按钮）；
+      - 初审把关弹窗与终审复核弹窗：录入审核人姓名与审批意见，支持审核通过与驳回退回；
+      - 确认记账操作弹窗：强合规提示横幅、录入记账人姓名，确认后触发记账引擎并回显正式凭证号，支持一键穿透至凭证全景档案；
+      - 经典财务凭证印签预览详情弹窗（参考原型 `凭证详情.html`）：经典纸质凭证仿真样式、“记 账 凭 证”字号、年月日、分录借贷对照表、大写及小写合计金额、四方签章栏（会计主管、审核、记账、制单）及全量流转可追溯时间轴；
       - 验证通过：TypeScript 0 错误，`vite build` 打包 100% 成功，后端单测 100% 通过。
+  → 完成内容（Step 23.4.2 手工凭证全量增强 — 增量数据库脚本、辅助核算分摊与凭证附件支持）：
+    - 增量数据库脚本标准化交付：
+      - 增量 DDL 脚本规范落地：`docs/sql/9-manual-voucher-apply.sql` 与 `accounting-core/src/main/resources/db/migration/V9__manual_voucher_apply.sql`；
+      - 包含 5 张表完整结构定义：申请单主表（`t_manual_voucher_apply`）、分录明细表（`t_manual_voucher_apply_entry`）、辅助核算分摊表（`t_manual_voucher_apply_auxiliary`）、附件明细表（`t_manual_voucher_apply_attachment`）及流转审计日志表（`t_manual_voucher_audit_log`）；
+      - 仓储层自愈能力：`ManualVoucherApplyRepository.initTables()` 包含全部 5 张表的自动初始化检查。
+    - 辅助核算分摊（Auxiliary Accounting）全链路支持：
+      - 持久化模型与数据访问：新建 `ManualVoucherApplyAuxiliaryPO`、`ManualVoucherApplyAuxiliaryMapper`，仓储层提供批量插入、按申请单查询/删除等能力；
+      - 契约层 DTO：新建 `ManualVoucherApplyAuxiliaryRequest`、`ManualVoucherApplyAuxiliaryResponse`，支持关联分录行、科目、核算类别（部门/项目/客户/供应商）、项目编码与名称、增减方向（1-增, 2-减）及核算金额；
+      - 业务编排与转正落库：制单保存或重新编辑时原子落库；确认记账（`executeBookkeeping`）时将辅助核算分摊项自动转正入库至法定凭证表 `t_accounting_voucher_auxiliary`；
+      - 前端交互（制单 + 原型凭证详情）：制单弹窗支持动态增删维护分录辅助核算；凭证印签详情弹窗严格参考原型《凭证详情.html》行 448-585，高保真还原“辅助核算项”独立专业表格。
+    - 原始单据附件（Attachments）全链路支持：
+      - 持久化模型与数据访问：新建 `ManualVoucherApplyAttachmentPO`、`ManualVoucherApplyAttachmentMapper`，支持文件名称、存储路径/URL、文件大小（Bytes）；
+      - 契约层 DTO：新建 `ManualVoucherApplyAttachmentRequest`、`ManualVoucherApplyAttachmentResponse`，服务端自动解析文件类型徽标（PDF/JPG/PNG/XLSX）与可读大小格式化（如 1.00 MB）；
+      - 附件张数动态联动：申请单 `attachment_count` 随附件列表自动精准统计，并在正式记账转入法定凭证表 `t_accounting_voucher` 时同步落库至 `t_accounting_voucher_attachment`；
+      - 前端交互（录入 + 原型附件弹窗）：制单弹窗支持录入单据与“快速填入示范附件”；详情弹窗顶端显示“附单据 N 张”与“查看附件”按钮，严格参考原型《凭证附件.html》行 60-175 弹出附件档案管理弹窗，支持文件格式徽章展示、文件大小展示与查看/下载操作。
+    - 质量与测试验收：
+      - 单元测试覆盖：`ManualVoucherApplicationServiceTest` 新增 `testSaveAndBookkeepingWithAuxiliaryAndAttachment`，全套 7 个单测用例 100% 通过（0 失败 0 错误）；
+      - 前端工程验证：TypeScript 0 错误，`npm run build` 打包 100% 成功。
   → 待进行业务页面：日切与试算平衡 (`business/eod`)、缓冲记账监控 (`business/buffer-monitor`)
 
 ---

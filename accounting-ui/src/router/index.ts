@@ -76,6 +76,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '记账凭证管理' }
       },
       {
+        path: 'business/manual-voucher',
+        name: 'ManualVoucherBusiness',
+        component: () => import('@/views/business/manual-voucher/index.vue'),
+        meta: { title: '手工凭证录入与审核' }
+      },
+      {
         path: 'business/eod',
         name: 'EodBusiness',
         component: () => import('@/views/placeholder.vue'),

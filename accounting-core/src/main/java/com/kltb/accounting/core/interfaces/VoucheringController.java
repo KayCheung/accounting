@@ -81,7 +81,7 @@ public class VoucheringController {
      * GET /accounting/voucher/{voucherNo} — 查询凭证概要
      * 增加正则排除关键字防路由劫持
      */
-    @GetMapping("/{voucherNo:(?!page$|generate$|trace$|detail$).+}")
+    @GetMapping({"/info/{voucherNo}", "/{voucherNo:^(?!page$|generate$|trace$|detail$).+$}"})
     @Operation(summary = "查询凭证详情")
     @Parameter(name = "voucherNo", description = "凭证号")
     public ApiResponse<VoucherGenerateResponse> getVoucher(@PathVariable String voucherNo) {
