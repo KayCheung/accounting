@@ -331,7 +331,31 @@
       - 全景档案抽屉（`el-drawer`）：查看单笔冻结核心属性、摘要与快捷解冻/扣款/查余额动作；
       - 路由更新：`/business/freeze` 成功绑定至正式业务页面；
       - 验证通过：TypeScript 0 错误，`vite build` 打包 100% 成功，后端单测 100% 通过。
-  → 待进行业务页面：记账凭证管理 (`business/voucher`)、日切与试算平衡 (`business/eod`)、缓冲记账监控 (`business/buffer-monitor`)
+  → 完成内容（Step 23.4 记账凭证管理模块 — `business/voucher`）：
+    - 后端服务与契约：
+      - 新增综合分页查询契约 `VoucherPageQueryRequest`（支持凭证号模糊、跟踪号、事务号、状态、类型、业务线、会计日期区间、制单时间多维过滤）；
+      - 新增分页列表响应契约 `VoucherPageItemResponse`（含借贷分录数、借贷合计、平衡校验标识及分录预取列表）；
+      - 新增全景档案响应契约 `VoucherFullDetailResponse`、辅助核算项契约 `VoucherAuxiliaryResponse`、附件契约 `VoucherAttachmentResponse`；
+      - 仓储层防 N+1 增强：`AccountingVoucherRepository` 补充通用分页 `selectPage`、多凭证批量按凭证号预取分录 `selectEntriesByVoucherNos`、按凭证号查询全部辅助核算项 `selectAuxiliaryByVoucherNo`；
+      - `SubjectRepository` 扩展 `selectSubjectNameMap` 批量装配会计科目名称字典；
+      - `VoucheringAssembler` 扩展分页项转换 `toPageItem`、分录行转换 `toEntryResponse`、辅助核算转换 `toAuxiliaryResponse`、全景档案组装 `toFullDetail`；
+      - `VoucheringApplicationService` 扩展 `queryVoucherPage` 多维分页检索与 `getVoucherDetail` 全景档案装配；
+      - `VoucheringController` 路由防冲突治理与接口暴露：`GET /accounting/voucher/page`（前置排布）与 `GET /accounting/voucher/detail/{voucherNo}`，通配符增加正则防御；
+      - 自动化单测覆盖：新建 `VoucheringApplicationServiceTest`（5 个用例全部通过，覆盖空结果、多凭证批量分录预取、借贷平衡校验、全景档案、红冲可行性检查）。
+    - 前端交互与页面（`accounting-ui/src/views/business/voucher/index.vue`、`src/api/voucher.ts`）：
+      - 4 维核心凭证看板（凭证总数、待处理凭证、已过账凭证、红冲与异常凭证）；
+      - 多维检索表单（凭证号、跟踪号、事务号、状态、凭证类型、业务线、会计日期范围）；
+      - 主表格行展开（**Expand Row**）即时内嵌借贷分录明细：序号、借贷（借：蓝徽标；贷：橙徽标）、科目名称与编码、账户编号（一键复制与直达查余额）、金额（等宽千分位）、单边/缓冲标识、分录摘要；
+      - 展开行底部借贷平衡合计栏：动态统计借方笔数/金额与贷方笔数/金额，借贷平衡指示灯（🟢 借贷严格平衡）；
+      - 主表格列：凭证号（点击打开全景抽屉）、关联流水（跟踪号/事务号带复制）、凭证类型、交易类别、凭证金额、会计日期、借贷校验、状态 Tag、制单时间；
+      - 核心操作列：统一采用 `MoreFilled` “...” 紧凑下拉菜单（列宽 70px），集成详情档案、立即过账、凭证红冲、查看原凭证、复制凭证号；
+      - 凭证全景档案抽屉（`el-drawer`）：3 大 Tab（凭证分录与基本信息、辅助核算分摊项、审计链路与原始 JSON 报文）；
+      - 凭证红冲弹窗（`ReversalDialog`）：红字强警示横幅（财务不可逆提醒）、原凭证回显、录入红冲记账人与红冲原因摘要，联动调用 `executeReversal`；
+      - 手动执行过账确认弹窗：对未过账或失败凭证调用 `executePosting`；
+      - 跨模块联动支持：监听 `route.query.voucherNo` 和 `route.query.traceNo` 自动填入并直达定位；
+      - 路由更新：`/business/voucher` 成功由占位符切换绑定至正式页面；
+      - 验证通过：TypeScript 0 错误，`vite build` 打包 100% 成功，后端单测 100% 通过。
+  → 待进行业务页面：日切与试算平衡 (`business/eod`)、缓冲记账监控 (`business/buffer-monitor`)
 
 ---
 

@@ -1,6 +1,7 @@
 package com.kltb.accounting.core.infrastructure.persistence.repository;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherAttachmentPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherAuxiliaryPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherEntryPO;
@@ -278,5 +279,37 @@ public class AccountingVoucherRepository {
                                          com.kltb.accounting.core.domain.enums.VoucherStatusEnum status,
                                          String bookkeeperName) {
         return voucherMapper.updateStatusAndBookkeeper(voucherNo, status, bookkeeperName);
+    }
+
+    /**
+     * 凭证综合分页查询
+     */
+    public IPage<AccountingVoucherPO> selectPage(IPage<AccountingVoucherPO> page, LambdaQueryWrapper<AccountingVoucherPO> wrapper) {
+        return voucherMapper.selectPage(page, wrapper);
+    }
+
+    /**
+     * 批量查询多个凭证的分录列表（按凭证号列表预取，避免 N+1 问题）
+     */
+    public List<AccountingVoucherEntryPO> selectEntriesByVoucherNos(List<String> voucherNos) {
+        if (voucherNos == null || voucherNos.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return entryMapper.selectList(new LambdaQueryWrapper<AccountingVoucherEntryPO>()
+                .in(AccountingVoucherEntryPO::getVoucherNo, voucherNos)
+                .eq(AccountingVoucherEntryPO::getIsDelete, 0)
+                .orderByAsc(AccountingVoucherEntryPO::getRowNum));
+    }
+
+    /**
+     * 按凭证号查询所有辅助核算项
+     */
+    public List<AccountingVoucherAuxiliaryPO> selectAuxiliaryByVoucherNo(String voucherNo) {
+        if (voucherNo == null || voucherNo.isBlank()) {
+            return Collections.emptyList();
+        }
+        return auxiliaryMapper.selectList(new LambdaQueryWrapper<AccountingVoucherAuxiliaryPO>()
+                .eq(AccountingVoucherAuxiliaryPO::getVoucherNo, voucherNo)
+                .eq(AccountingVoucherAuxiliaryPO::getIsDelete, 0));
     }
 }

@@ -250,4 +250,21 @@ public class SubjectRepository {
         List<AccountSubjectPO> result = subjectMapper.selectAllowOpenAccountLeafSubjects();
         return result != null ? result : Collections.emptyList();
     }
+
+    /**
+     * 批量查询科目编码与名称映射字典
+     */
+    public Map<String, String> selectSubjectNameMap(Collection<String> subjectCodes) {
+        if (subjectCodes == null || subjectCodes.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<AccountSubjectPO> list = subjectMapper.selectList(new LambdaQueryWrapper<AccountSubjectPO>()
+                .in(AccountSubjectPO::getSubjectCode, subjectCodes)
+                .eq(AccountSubjectPO::getIsDelete, 0));
+        return list.stream().collect(Collectors.toMap(
+                AccountSubjectPO::getSubjectCode,
+                AccountSubjectPO::getSubjectName,
+                (k1, k2) -> k1
+        ));
+    }
 }

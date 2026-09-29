@@ -72,7 +72,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'business/voucher',
         name: 'VoucherBusiness',
-        component: () => import('@/views/placeholder.vue'),
+        component: () => import('@/views/business/voucher/index.vue'),
         meta: { title: '记账凭证管理' }
       },
       {
