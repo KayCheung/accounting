@@ -299,7 +299,21 @@
       - 账户状态管控弹窗：冻结、解冻、注销（严格校验零余额与无在途交易）、风控状态等级（止入/止出/双向）调整；
       - 路由更新：`/business/account` 绑定至正式账户管理页面；
       - 验证通过：TypeScript 0 错误，`vite build` 打包 100% 成功。
-  → 待进行业务页面：余额与明细查询 (`business/balance`)、资金冻结与扣款 (`business/freeze`)、记账凭证管理 (`business/voucher`)、日切与试算平衡 (`business/eod`)、缓冲记账监控 (`business/buffer-monitor`)
+  → 完成内容（Step 23.2 余额与明细查询模块 — `business/balance`）：
+    - 后端服务与测试：
+      - 验证 `BalanceQueryController` 三大查询接口（聚合余额、明细分页、冻结记录分页）；
+      - 补充 `BalanceQueryApplicationServiceTest` 单元测试（聚合余额组装、明细分页组装、冻结记录组装），单测覆盖并通过。
+    - 前端交互与页面（`accounting-ui/src/views/business/balance/index.vue`、`src/api/balance.ts`）：
+      - 顶部智能搜索卡片：支持账户编号输入与联想模糊建议、快速填入演示账号、支持从 URL `route.query.accountNo` 自动触发查询；
+      - 4 维关键资产看板（总余额、可用子账户余额、冻结子账户余额、缓冲待入账预估），结合账户状态与风控状态标签、数据更新时效展示；
+      - 交易变动明细多维检索：支持会计日期区间、交易类别（正常/调账/红/蓝）、借贷方向组合筛选，表格清晰展示交易前余额、交易金额（借方主色蓝/贷方琥珀橙）、交易后余额、凭证编号及摘要；
+      - 资金冻结记录检索：支持按冻结状态（冻结中/已解冻）筛选，清晰展示冻结编号、冻结金额、到期时间、交易时间与创建时间；
+      - 交易流水深层审计档案抽屉（`el-drawer`）：卡片式金额变动对账（前余额 ± 变动金额 = 后余额）、凭证分录元数据（凭证号、分录流水号、事务编号、系统跟踪号、业务线编码、交易编码）、原始 JSON 报文一键复制；
+      - 操作列统一采用 `MoreFilled` “...” 紧凑下拉菜单（列宽 70px）；
+      - 跨页面联动：账户管理模块（`business/account`）操作菜单中支持一键直达“余额与明细”并自动加载对应账户；
+      - 路由切换：`/business/balance` 成功切换绑定至正式查询页面；
+      - 验证通过：TypeScript 0 错误，`vite build` 打包 100% 成功，后端单测 100% 通过。
+  → 待进行业务页面：资金冻结与扣款 (`business/freeze`)、记账凭证管理 (`business/voucher`)、日切与试算平衡 (`business/eod`)、缓冲记账监控 (`business/buffer-monitor`)
 
 ---
 

@@ -60,7 +60,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'business/balance',
         name: 'BalanceBusiness',
-        component: () => import('@/views/placeholder.vue'),
+        component: () => import('@/views/business/balance/index.vue'),
         meta: { title: '余额与明细查询' }
       },
       {

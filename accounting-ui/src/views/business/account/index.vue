@@ -388,6 +388,9 @@
                   <el-dropdown-item command="detail" :icon="View">
                     全景档案
                   </el-dropdown-item>
+                  <el-dropdown-item command="balance" :icon="Wallet">
+                    余额与明细
+                  </el-dropdown-item>
                   <el-dropdown-item
                     v-if="row.status === 1"
                     command="freeze"
@@ -1014,6 +1017,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import type { FormInstance, FormRules } from 'element-plus'
 import {
   Search,
@@ -1028,7 +1032,8 @@ import {
   DocumentCopy,
   InfoFilled,
   Tickets,
-  MoreFilled
+  MoreFilled,
+  Wallet
 } from '@element-plus/icons-vue'
 import {
   getTemplatePage,
@@ -1063,6 +1068,7 @@ import { toast } from '@/utils/toast'
 
 // ==================== 状态定义 ====================
 
+const router = useRouter()
 const activeTab = ref<'customer' | 'internal'>('customer')
 const loading = ref(false)
 const total = ref(0)
@@ -1674,6 +1680,9 @@ function handleActionCommand(command: string, row: AccountPageItem) {
   switch (command) {
     case 'detail':
       openAccountDetail(row)
+      break
+    case 'balance':
+      router.push({ path: '/business/balance', query: { accountNo: row.accountNo } })
       break
     case 'freeze':
       openFreezeDialog(row)
