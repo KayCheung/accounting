@@ -1,10 +1,12 @@
 package com.kltb.accounting.core.interfaces;
 
 import com.kltb.accounting.api.request.FreezeDeductRequest;
+import com.kltb.accounting.api.request.FreezePageQueryRequest;
 import com.kltb.accounting.api.request.FundFreezeRequest;
 import com.kltb.accounting.api.request.FundUnfreezeRequest;
 import com.kltb.accounting.api.response.ApiResponse;
 import com.kltb.accounting.api.response.FreezeDetailResponse;
+import com.kltb.accounting.api.response.PageResponse;
 import com.kltb.accounting.core.application.FreezeApplicationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -49,20 +51,28 @@ public class FreezeController {
         return ApiResponse.ok();
     }
 
-    @GetMapping("/{freezeId}")
-    @Operation(summary = "查询冻结记录", description = "按冻结编号查询冻结记录详情")
-    public ApiResponse<FreezeDetailResponse> queryFreezeRecord(
-            @Parameter(name = "freezeId", description = "冻结编号") @PathVariable String freezeId) {
-        FreezeDetailResponse response = freezeApplicationService.queryFreezeRecord(freezeId);
+    @GetMapping("/page")
+    @Operation(summary = "冻结记录分页查询", description = "多维条件分页查询冻结记录（支持账户、单号、状态、时间范围）")
+    public ApiResponse<PageResponse<FreezeDetailResponse>> queryFreezePage(
+            @Valid FreezePageQueryRequest request) {
+        PageResponse<FreezeDetailResponse> response = freezeApplicationService.queryFreezePage(request);
         return ApiResponse.ok(response);
     }
 
     @GetMapping("/list")
     @Operation(summary = "冻结记录列表", description = "查询指定账户的冻结记录（可按状态过滤）")
     public ApiResponse<List<FreezeDetailResponse>> queryFreezeRecords(
-            @Parameter(name = "accountNo", description = "账户编号") @RequestParam String accountNo,
+            @Parameter(name = "accountNo", description = "账户编号") @RequestParam(required = false) String accountNo,
             @Parameter(name = "status", description = "状态：1-冻结, 2-已解冻") @RequestParam(required = false) Integer status) {
         List<FreezeDetailResponse> responses = freezeApplicationService.queryFreezeRecords(accountNo, status);
         return ApiResponse.ok(responses);
+    }
+
+    @GetMapping({"/detail/{freezeId}", "/{freezeId:^(?!page$|list$|fund$|unfreeze$|deduct$).+$}"})
+    @Operation(summary = "查询冻结记录", description = "按冻结编号查询冻结记录详情")
+    public ApiResponse<FreezeDetailResponse> queryFreezeRecord(
+            @Parameter(name = "freezeId", description = "冻结编号") @PathVariable String freezeId) {
+        FreezeDetailResponse response = freezeApplicationService.queryFreezeRecord(freezeId);
+        return ApiResponse.ok(response);
     }
 }

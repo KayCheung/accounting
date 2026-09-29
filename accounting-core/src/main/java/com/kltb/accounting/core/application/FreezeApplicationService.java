@@ -1,14 +1,20 @@
 package com.kltb.accounting.core.application;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.kltb.accounting.api.request.FreezeDeductRequest;
+import com.kltb.accounting.api.request.FreezePageQueryRequest;
 import com.kltb.accounting.api.request.FundFreezeRequest;
 import com.kltb.accounting.api.request.FundUnfreezeRequest;
 import com.kltb.accounting.api.response.FreezeDetailResponse;
+import com.kltb.accounting.api.response.PageResponse;
 import com.kltb.accounting.core.application.assembler.FreezeAssembler;
 import com.kltb.accounting.core.domain.service.FreezeDomainService;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountFreezeDetailPO;
+import com.kltb.accounting.core.infrastructure.persistence.repository.FreezeDetailRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -27,6 +33,7 @@ import java.util.List;
 public class FreezeApplicationService {
 
     private final FreezeDomainService freezeDomainService;
+    private final FreezeDetailRepository freezeDetailRepository;
     private final FreezeAssembler freezeAssembler;
 
     /**
@@ -75,5 +82,41 @@ public class FreezeApplicationService {
     public List<FreezeDetailResponse> queryFreezeRecords(String accountNo, Integer status) {
         List<AccountFreezeDetailPO> records = freezeDomainService.queryFreezeRecords(accountNo, status);
         return freezeAssembler.toListResponse(records);
+    }
+
+    /**
+     * 分页查询冻结记录
+     */
+    public PageResponse<FreezeDetailResponse> queryFreezePage(FreezePageQueryRequest request) {
+        LambdaQueryWrapper<AccountFreezeDetailPO> wrapper = new LambdaQueryWrapper<>();
+        if (StringUtils.isNotBlank(request.getAccountNo())) {
+            wrapper.eq(AccountFreezeDetailPO::getAccountNo, request.getAccountNo().trim());
+        }
+        if (StringUtils.isNotBlank(request.getFreezeId())) {
+            wrapper.eq(AccountFreezeDetailPO::getVoucherNo, request.getFreezeId().trim());
+        }
+        if (request.getStatus() != null) {
+            wrapper.eq(AccountFreezeDetailPO::getStatus, request.getStatus());
+        }
+        if (request.getStartDate() != null) {
+            wrapper.ge(AccountFreezeDetailPO::getCreateTime, request.getStartDate().atStartOfDay());
+        }
+        if (request.getEndDate() != null) {
+            wrapper.le(AccountFreezeDetailPO::getCreateTime, request.getEndDate().atTime(23, 59, 59));
+        }
+        wrapper.eq(AccountFreezeDetailPO::getIsDelete, 0);
+        wrapper.orderByDesc(AccountFreezeDetailPO::getCreateTime);
+
+        int pageNo = request.getPageNo() != null && request.getPageNo() > 0 ? request.getPageNo() : 1;
+        int pageSize = request.getPageSize() != null && request.getPageSize() > 0 ? request.getPageSize() : 20;
+
+        IPage<AccountFreezeDetailPO> page = freezeDetailRepository.selectPage(wrapper, pageNo, pageSize);
+
+        return PageResponse.<FreezeDetailResponse>builder()
+                .total(page.getTotal())
+                .pages(page.getPages())
+                .current(page.getCurrent())
+                .list(freezeAssembler.toListResponse(page.getRecords()))
+                .build();
     }
 }

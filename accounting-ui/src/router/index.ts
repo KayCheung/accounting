@@ -66,7 +66,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'business/freeze',
         name: 'FreezeBusiness',
-        component: () => import('@/views/placeholder.vue'),
+        component: () => import('@/views/business/freeze/index.vue'),
         meta: { title: '资金冻结与扣款' }
       },
       {

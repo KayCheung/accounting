@@ -94,4 +94,14 @@ public class FreezeDetailRepository {
                                                                long offset, int limit) {
         return accountFreezeDetailMapper.selectPageByAccountNo(accountNo, status, offset, limit);
     }
+
+    /**
+     * 通用条件分页查询冻结记录
+     */
+    public IPage<AccountFreezeDetailPO> selectPage(LambdaQueryWrapper<AccountFreezeDetailPO> wrapper,
+                                                  int pageNo, int pageSize) {
+        com.baomidou.mybatisplus.extension.plugins.pagination.Page<AccountFreezeDetailPO> page =
+                new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(pageNo, pageSize);
+        return accountFreezeDetailMapper.selectPage(page, wrapper);
+    }
 }

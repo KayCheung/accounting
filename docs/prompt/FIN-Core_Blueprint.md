@@ -313,7 +313,25 @@
       - 跨页面联动：账户管理模块（`business/account`）操作菜单中支持一键直达“余额与明细”并自动加载对应账户；
       - 路由切换：`/business/balance` 成功切换绑定至正式查询页面；
       - 验证通过：TypeScript 0 错误，`vite build` 打包 100% 成功，后端单测 100% 通过。
-  → 待进行业务页面：资金冻结与扣款 (`business/freeze`)、记账凭证管理 (`business/voucher`)、日切与试算平衡 (`business/eod`)、缓冲记账监控 (`business/buffer-monitor`)
+  → 完成内容（Step 23.3 资金冻结与扣款模块 — `business/freeze`）：
+    - 后端服务与契约：
+      - 新增综合分页查询契约 `FreezePageQueryRequest`（继承 `PageRequest`，支持按账号、单号、状态、时间范围多维过滤）；
+      - 增强 `FundFreezeRequest` 的 `expireTime` 注解支持 `@JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")`；
+      - `FreezeDetailRepository` 补充通用分页查询能力 `selectPage`；
+      - `FreezeApplicationService` 扩展 `queryFreezePage` 分页编排与 DTO 装配；
+      - `FreezeController` 暴露 `GET /accounting/account/freeze/page` 分页接口，并优化 `/list` 接口允许账户编号选填；
+      - 自动化单测覆盖：补充 `FreezeApplicationServiceTest`，测试用例全部通过（0 失败 0 错误）。
+    - 前端交互与页面（`accounting-ui/src/views/business/freeze/index.vue`、`src/api/freeze.ts`）：
+      - 检索卡片：支持账户编号联想建议、冻结单号精确检索、状态筛选、创建时间范围过滤；
+      - 数据表格：清晰展示冻结编号（一键复制）、关联账户（点击直达查余额）、冻结金额（金融千分位等宽呈现）、状态 Tag、失效时间（过期智能提示）、创建时间与原因摘要；
+      - 核心操作列：统一采用 `MoreFilled` “...” 紧凑下拉菜单（列宽 70px）；
+      - 资金冻结弹窗：支持账户输入联想、即时获取展示账户户名与可用余额看板、金额防超可用校验、失效时间选择与原因录入；
+      - 资金解冻弹窗：回显冻结单号与当前金额、指定解冻金额（支持一键“全额解冻”快捷回填）、解冻原因；
+      - 冻结扣款弹窗：醒目红字风险警示横幅（告知不可逆并自动生成正式财务记账凭证）、回显单号与账户、指定扣款金额（支持一键全部扣除）、扣款原因/司法执行文号；
+      - 全景档案抽屉（`el-drawer`）：查看单笔冻结核心属性、摘要与快捷解冻/扣款/查余额动作；
+      - 路由更新：`/business/freeze` 成功绑定至正式业务页面；
+      - 验证通过：TypeScript 0 错误，`vite build` 打包 100% 成功，后端单测 100% 通过。
+  → 待进行业务页面：记账凭证管理 (`business/voucher`)、日切与试算平衡 (`business/eod`)、缓冲记账监控 (`business/buffer-monitor`)
 
 ---
 
