@@ -1,5 +1,6 @@
 package com.kltb.accounting.core.application.assembler;
 
+import com.kltb.accounting.api.constant.Constants;
 import com.kltb.accounting.api.response.AccountStatusChangeResponse;
 import com.kltb.accounting.api.response.AccountStatusResponse;
 import com.kltb.accounting.core.domain.enums.AccountStatusEnum;
@@ -15,8 +16,6 @@ import java.util.Optional;
  */
 @Component
 public class AccountStatusAssembler {
-
-    private static final LocalDate EPOCH_DATE = LocalDate.of(1970, 1, 1);
 
     /**
      * PO → 状态查询响应
@@ -57,7 +56,7 @@ public class AccountStatusAssembler {
      * DDL 默认值 1970-01-01 转为 null，前端显示"未注销"
      */
     private LocalDate normalizeInactiveDate(LocalDate inactiveDate) {
-        if (inactiveDate != null && inactiveDate.equals(EPOCH_DATE)) {
+        if (inactiveDate != null && inactiveDate.equals(Constants.EPOCH_DATE)) {
             return null;
         }
         return inactiveDate;

@@ -1,5 +1,8 @@
 package com.kltb.accounting.api.constant;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+
 /**
  * 系统通用聚合常量
  * <p>
@@ -20,4 +23,14 @@ public final class Constants {
      * 系统级默认操作员标识
      */
     public static final String SYSTEM_OPERATOR = "system";
+
+    /**
+     * 数据库日期字段 DDL 默认无效起始基准日期 (1970-01-01)
+     */
+    public static final LocalDate EPOCH_DATE = LocalDate.of(1970, 1, 1);
+
+    /**
+     * 数据库时间字段 DDL 默认无效起始基准时间戳 (1970-01-01 00:00:00)
+     */
+    public static final LocalDateTime EPOCH_DATE_TIME = LocalDateTime.of(1970, 1, 1, 0, 0, 0);
 }

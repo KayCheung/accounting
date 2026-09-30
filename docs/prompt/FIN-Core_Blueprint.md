@@ -471,7 +471,7 @@
   → 完成内容（Step 23.4.7 1970 默认时间全链路脱敏过滤与凭证编号基于凭证类型动态前缀驱动）：
     - 数据库 1970-01-01 默认时间全链路脱敏过滤（后端 DTO 转 null + 前端格式化双重防御）：
       - 根因：MySQL DDL 默认值设置 `post_time DATETIME NOT NULL DEFAULT '1970-01-01 00:00:00'`，凭证未过账时数据库填充默认时间并序列化至前端；
-      - 后端治理：在 `VoucheringAssembler` 与 `ReversalAssembler` 增加 `sanitizePostTime`，若 `postTime == null || postTime.getYear() <= 1970` 统一转为 `null`；
+      - 后端治理：全局常量聚合类 `Constants.java` 新增 `EPOCH_DATE` (1970-01-01) 与 `EPOCH_DATE_TIME` (1970-01-01 00:00:00)；`AccountStatusAssembler`、`VoucheringAssembler` 与 `ReversalAssembler` 全面移除本地分散定义的重复常量，统一引用 `Constants` 并安全转为 `null`；
       - 前端双重防御：`voucher/index.vue` 与 `manual-voucher/index.vue` 的 `formatDateTime` 拦截 `!val || val.startsWith('1970-01-01')` 统一返回 `'-'`。
     - 凭证编号基于凭证类型（voucher_type）动态前缀驱动架构升级：
       - 彻底改变以往凭证号一律固定以 `VOU` 开头的生硬逻辑，依据财务会计标准凭证类型实现字母前缀动态推导；

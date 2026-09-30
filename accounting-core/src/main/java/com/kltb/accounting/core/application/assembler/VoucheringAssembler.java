@@ -1,6 +1,7 @@
 package com.kltb.accounting.core.application.assembler;
 
 import cn.hutool.core.util.StrUtil;
+import com.kltb.accounting.api.constant.Constants;
 import com.kltb.accounting.api.response.*;
 import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
 import com.kltb.accounting.core.domain.enums.PostingTypeEnum;
@@ -17,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -25,8 +27,6 @@ import java.util.stream.Collectors;
  */
 @Component
 public class VoucheringAssembler {
-
-    private static final java.time.LocalDateTime EPOCH_DATE_TIME = java.time.LocalDateTime.of(1970, 1, 1, 0, 0, 0);
 
     private final DictionaryComponent dictionaryComponent;
 
@@ -42,8 +42,8 @@ public class VoucheringAssembler {
     /**
      * DDL 默认值 1970-01-01 00:00:00 转为 null，避免在前端错误展示
      */
-    private java.time.LocalDateTime sanitizePostTime(java.time.LocalDateTime postTime) {
-        if (postTime == null || postTime.isEqual(EPOCH_DATE_TIME) || postTime.getYear() <= 1970) {
+    private LocalDateTime sanitizePostTime(LocalDateTime postTime) {
+        if (postTime == null || postTime.isEqual(Constants.EPOCH_DATE_TIME) || postTime.getYear() <= 1970) {
             return null;
         }
         return postTime;

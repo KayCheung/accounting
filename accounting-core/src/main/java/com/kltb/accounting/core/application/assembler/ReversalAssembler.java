@@ -1,5 +1,6 @@
 package com.kltb.accounting.core.application.assembler;
 
+import com.kltb.accounting.api.constant.Constants;
 import com.kltb.accounting.api.response.ReversalRecordResponse;
 import com.kltb.accounting.api.response.ReversalResponse;
 import com.kltb.accounting.core.domain.enums.VoucherStatusEnum;
@@ -7,6 +8,7 @@ import com.kltb.accounting.core.domain.service.ReversalDomainService.ReversalRes
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherPO;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -43,8 +45,6 @@ public class ReversalAssembler {
                 .collect(Collectors.toList());
     }
 
-    private static final java.time.LocalDateTime EPOCH_DATE_TIME = java.time.LocalDateTime.of(1970, 1, 1, 0, 0, 0);
-
     private ReversalRecordResponse toRecordResponse(AccountingVoucherPO voucher) {
         return ReversalRecordResponse.builder()
                 .reversalVoucherNo(voucher.getVoucherNo())
@@ -58,8 +58,8 @@ public class ReversalAssembler {
                 .build();
     }
 
-    private java.time.LocalDateTime sanitizePostTime(java.time.LocalDateTime postTime) {
-        if (postTime == null || postTime.isEqual(EPOCH_DATE_TIME) || postTime.getYear() <= 1970) {
+    private LocalDateTime sanitizePostTime(LocalDateTime postTime) {
+        if (postTime == null || postTime.isEqual(Constants.EPOCH_DATE_TIME) || postTime.getYear() <= 1970) {
             return null;
         }
         return postTime;

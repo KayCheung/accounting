@@ -35,7 +35,7 @@ class VoucheringAssemblerTest {
         po.setAmount(new BigDecimal("100.00"));
         po.setStatus(VoucherStatusEnum.PENDING);
         po.setAccountingDate(LocalDate.of(2026, 9, 30));
-        po.setPostTime(LocalDateTime.of(1970, 1, 1, 0, 0, 0)); // DDL 默认值
+        po.setPostTime(com.kltb.accounting.api.constant.Constants.EPOCH_DATE_TIME); // DDL 默认值
 
         VoucherPageItemResponse pageItem = assembler.toPageItem(po, Collections.emptyList(), null, null);
         assertThat(pageItem.getPostTime()).isNull();
