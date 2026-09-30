@@ -825,10 +825,7 @@
             <div class="meta-no">
               <strong>凭证字号：</strong>
               <span class="mono-font">{{ printVoucherData.voucherWord || printVoucherData.voucherNo }}</span>
-              <el-tag size="small" type="info" class="ml-2">
-                {{ printVoucherData.voucherTypeName || printVoucherData.voucherType || '记账凭证' }}
-              </el-tag>
-              <el-tag size="small" :type="printVoucherData.postingType === 1 ? 'warning' : 'primary'" class="ml-1">
+              <el-tag size="small" :type="printVoucherData.postingType === 1 ? 'warning' : 'primary'" class="ml-2">
                 {{ printVoucherData.postingType === 1 ? '手工凭证' : '机制凭证' }}
               </el-tag>
             </div>

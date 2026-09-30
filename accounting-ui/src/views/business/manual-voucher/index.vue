@@ -722,8 +722,7 @@
             <div class="meta-no">
               <strong>凭证字号：</strong>
               <span class="mono-font">{{ detailData.voucherWord || detailData.voucherNo || detailData.applyNo }}</span>
-              <el-tag size="small" type="info" class="ml-2">{{ getVoucherTypeLabel(detailData.voucherType) }}</el-tag>
-              <el-tag size="small" type="warning" class="ml-1">手工凭证</el-tag>
+              <el-tag size="small" type="warning" class="ml-2">手工凭证</el-tag>
             </div>
             <div class="meta-attachment">
               附单据 <span class="mono-font underline">{{ detailData.attachmentCount || detailData.attachments?.length || 0 }}</span> 张

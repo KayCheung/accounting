@@ -1,5 +1,6 @@
 package com.kltb.accounting.core.application.service;
 
+import cn.hutool.core.util.StrUtil;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.api.request.PostingExecuteRequest;
 import com.kltb.accounting.api.response.PostingExecuteResponse;
@@ -116,7 +117,14 @@ public class PostingApplicationService {
             .filter(e -> e.getBuffered() == null || e.getBuffered() != 1)
             .collect(Collectors.toList());
 
-        // 3. 账户状态检查：收集所有非缓冲分录涉及的账户
+        // 3. 账户状态检查：收集所有非缓冲分录涉及的账户并严格校验
+        for (AccountingVoucherEntryPO entry : allEntries) {
+            if (StrUtil.isBlank(entry.getAccountNo())) {
+                throw new AccountException(ResultCode.PARAM_ERROR,
+                    "凭证分录未关联有效分户账号，禁止执行过账: voucherNo=" + voucherNo + ", entryId=" + entry.getEntryId());
+            }
+        }
+
         List<String> accountNos = allEntries.stream()
             .map(AccountingVoucherEntryPO::getAccountNo)
             .distinct()

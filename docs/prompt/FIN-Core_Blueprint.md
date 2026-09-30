@@ -456,6 +456,18 @@
     - 审批与保存操作枚举化：
       - 新建 `AuditDecisionEnum`（`PASS` 通过, `REJECT` 驳回）与 `ManualVoucherSaveActionEnum`（`DRAFT` 保存草稿, `SUBMIT` 提交初审）；
       - 初审、复核与保存逻辑彻底消除 `"PASS".equalsIgnoreCase`、`"DRAFT".equalsIgnoreCase` 魔法比对，非法操作码严格校验拦截。
+  → 完成内容（Step 23.4.6 过账引擎加固、SQL 语法空集合防御、事务失败原因截断保护与印签详情标签优化）：
+    - 根治 SQLSyntaxErrorException near 'ORDER BY account_no ASC'：
+      - 根因：`AccountMapper.xml` 的 `selectForUpdateBatch` 中 `<foreach>` 在 `accountNos` 为空集合或 null 时不渲染内容，导致拼接出 `WHERE account_no IN ORDER BY account_no ASC FOR UPDATE` 语法错误；
+      - 修复：XML 改用 `<choose><when test="accountNos != null and accountNos.size() > 0">` 包装，空集合时回退至 `AND 1 = 0`；同时在 `AccountRepository.selectForUpdateBatch` 增加非空校验与有效账号过滤，入参为空时直接返回空列表，免查数据库。
+    - 根治 Data truncation: Data too long for column 'fail_reason'：
+      - 根因：底层 SQL 或业务异常堆栈过长，直接写入 `t_transaction.fail_reason`（VARCHAR(255)）触发 MySQL 截断异常，导致事务回滚自身崩溃；
+      - 修复：在 `RollbackDomainService` 和 `TransactionRepository` 增加安全截断机制（超过 250 字符自动保留前 247 字符加省略号），保障失败状态与原因 100% 安全落库。
+    - 过账前置分录账号合法性拦截：
+      - 在 `PostingApplicationService` 过账前置检查中增加对分录 `accountNo` 的非空校验，阻断未关联分户账号的脏数据分录流入过账引擎。
+    - 前端凭证全景档案与印签打印标签体验优化：
+      - 移除 `manual-voucher/index.vue` 与 `voucher/index.vue` 凭证字号旁冗余重复的“收款凭证/记账凭证”标签；
+      - 仅保留【手工凭证】/【机制凭证】来源标签，并配置舒展间距（`ml-2`），与顶层大标题各司其职，消除标签挤塞。
   → 待进行业务页面：日切与试算平衡 (`business/eod`)、缓冲记账监控 (`business/buffer-monitor`)
 
 ---

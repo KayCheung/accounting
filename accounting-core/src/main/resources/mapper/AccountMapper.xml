@@ -14,17 +14,25 @@
         FOR UPDATE
     </select>
 
-    <!-- P1-2: 显式 ORDER BY 保证加锁顺序，防止死锁 -->
+    <!-- P1-2: 显式 ORDER BY 保证加锁顺序，防止死锁；使用 choose 保护空集合场景杜绝语法错误 -->
     <select id="selectForUpdateBatch" resultType="com.kltb.accounting.core.infrastructure.persistence.entity.AccountPO">
         SELECT id, subject_code, owner_id, owner_type, account_no, account_name,
                account_type, currency, balance_direction, opening_balance, balance,
                status, risk_status, request_no, open_date, inactive_date, version,
                create_time, update_time, is_delete, tenant_id
         FROM t_account
-        WHERE account_no IN
-        <foreach collection="accountNos" item="no" open="(" separator="," close=")">
-            #{no}
-        </foreach>
+        WHERE is_delete = 0
+        <choose>
+            <when test="accountNos != null and accountNos.size() > 0">
+                AND account_no IN
+                <foreach collection="accountNos" item="no" open="(" separator="," close=")">
+                    #{no}
+                </foreach>
+            </when>
+            <otherwise>
+                AND 1 = 0
+            </otherwise>
+        </choose>
         ORDER BY account_no ASC
         FOR UPDATE
     </select>

@@ -45,14 +45,15 @@ public class RollbackDomainService {
         String traceNo,
         String failReason) {
 
+        String safeFailReason = truncateFailReason(failReason);
         log.error("[ROLLBACK] 标记事务失败: txnNo={}, voucherNo={}, traceNo={}, reason={}",
-            txnNo, voucherNo, traceNo, failReason);
+            txnNo, voucherNo, traceNo, safeFailReason);
 
         transactionTemplate.execute(status -> {
             // 1. 更新 t_transaction 状态为失败
             if (txnNo != null) {
                 transactionRepository.updateStatusByTxnNo(
-                    txnNo, TransactionStatusEnum.FAILED, failReason, LocalDateTime.now());
+                    txnNo, TransactionStatusEnum.FAILED, safeFailReason, LocalDateTime.now());
             }
 
             // 2. 更新 t_business_record 状态为失败
@@ -248,7 +249,7 @@ public class RollbackDomainService {
             // d. 更新事务状态
             if (txnNo != null) {
                 transactionRepository.updateStatusByTxnNo(
-                    txnNo, TransactionStatusEnum.FAILED, failReason, LocalDateTime.now());
+                    txnNo, TransactionStatusEnum.FAILED, truncateFailReason(failReason), LocalDateTime.now());
             }
 
             return null;
@@ -264,5 +265,15 @@ public class RollbackDomainService {
         return org.springframework.dao.PessimisticLockingFailureException.class.isAssignableFrom(type)
             || java.util.concurrent.TimeoutException.class.isAssignableFrom(type)
             || org.springframework.dao.TransientDataAccessResourceException.class.isAssignableFrom(type);
+    }
+
+    /**
+     * 安全截断失败原因，防止超长引起 MySQL DataTruncation 异常
+     */
+    private String truncateFailReason(String reason) {
+        if (reason == null) {
+            return "";
+        }
+        return reason.length() > 250 ? reason.substring(0, 247) + "..." : reason;
     }
 }

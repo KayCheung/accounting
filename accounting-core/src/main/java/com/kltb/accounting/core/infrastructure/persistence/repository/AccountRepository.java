@@ -16,6 +16,7 @@ import org.springframework.stereotype.Repository;
 import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 账户持久化仓储
@@ -92,7 +93,17 @@ public class AccountRepository {
      * 调用方必须保证 accountNos 已按升序排序
      */
     public List<AccountPO> selectForUpdateBatch(List<String> accountNos) {
-        return accountMapper.selectForUpdateBatch(accountNos);
+        if (accountNos == null || accountNos.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<String> validNos = accountNos.stream()
+                .filter(StrUtil::isNotBlank)
+                .sorted()
+                .collect(Collectors.toList());
+        if (validNos.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return accountMapper.selectForUpdateBatch(validNos);
     }
 
     /**

@@ -45,7 +45,8 @@ public class TransactionRepository {
                 .eq(TransactionPO::getTxnNo, txnNo)
                 .set(TransactionPO::getStatus, status != null ? status.getCode() : null);
         if (failReason != null) {
-            wrapper.set(TransactionPO::getFailReason, failReason);
+            String safeReason = failReason.length() > 250 ? failReason.substring(0, 247) + "..." : failReason;
+            wrapper.set(TransactionPO::getFailReason, safeReason);
         }
         if (finishTime != null) {
             wrapper.set(TransactionPO::getFinishTime, finishTime);
