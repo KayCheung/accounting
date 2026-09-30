@@ -449,9 +449,9 @@
     - 币种单一事实来源架构演进（废弃 CurrencyEnum，全量由 t_dictionary 驱动）：
       - 架构决议：遵循单一事实来源（SSOT）原则，彻底删除静态硬编码的 `CurrencyEnum`，消除与字典表双头维护与数据脱节的系统隐患；
       - 业务币种全面由系统字典表 `t_dictionary(dict_type='currency')` 动态驱动；
-      - 引入轻量级常量类 `CurrencyConstant.java`，仅定义底层系统级缺省记账本位币 `DEFAULT_CURRENCY = "CNY"`；
+      - 建立全局聚合常量类 `Constants.java`（`DEFAULT_CURRENCY = "CNY"`、`SYSTEM_OPERATOR = "system"`），避免微小常量类碎片化离散，后续系统通用常量统一定义在此；
       - `DictionaryComponent` 提供 `isDictValid`（支持状态与有效性检查）与 `resolveCurrencyName`（字典名称反查与优雅降级兜底）；
-      - 全面重构 `ManualVoucherApplicationService`、`TemplateConverter`、`AccountOpeningDomainService`、`JournalingDomainService`、`VoucheringDomainService`、`EodDomainService`，将币种默认值统一指向 `CurrencyConstant.DEFAULT_CURRENCY`，币种解析动态依赖字典服务；
+      - 全面重构 `ManualVoucherApplicationService`、`TemplateConverter`、`AccountOpeningDomainService`、`JournalingDomainService`、`VoucheringDomainService`、`EodDomainService`，将币种默认值统一指向 `Constants.DEFAULT_CURRENCY`，币种解析动态依赖字典服务；
       - 手工记账流水与事务记录的币种由分录自动动态继承，非硬编码绑定人民币。
     - 审批与保存操作枚举化：
       - 新建 `AuditDecisionEnum`（`PASS` 通过, `REJECT` 驳回）与 `ManualVoucherSaveActionEnum`（`DRAFT` 保存草稿, `SUBMIT` 提交初审）；

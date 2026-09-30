@@ -1,6 +1,6 @@
 package com.kltb.accounting.core.application.converter;
 
-import com.kltb.accounting.api.constant.CurrencyConstant;
+import com.kltb.accounting.api.constant.Constants;
 import com.kltb.accounting.api.request.TemplateCreateRequest;
 import com.kltb.accounting.api.request.TemplateUpdateRequest;
 import com.kltb.accounting.core.application.dto.TemplateResponse;
@@ -43,16 +43,16 @@ public class TemplateConverter {
         po.setAutoOpen(request.getAutoOpen() != null && request.getAutoOpen());
         po.setSubjectCode(request.getSubjectCode());
         po.setAccountType(request.getAccountType());
-        po.setCurrency(request.getCurrency() != null ? request.getCurrency() : CurrencyConstant.DEFAULT_CURRENCY);
+        po.setCurrency(request.getCurrency() != null ? request.getCurrency() : Constants.DEFAULT_CURRENCY);
         po.setBalanceDirection(BALANCE_DIR_MAP.getOrDefault(request.getBalanceDirection(), BalanceDirectionEnum.DEBIT));
         po.setAcctNoRule(request.getAcctNoRule());
         po.setAcctNameRule(request.getAcctNameRule());
         TemplateStatusEnum status = TemplateStatusEnum.fromCode(request.getStatus());
         po.setStatus(status != null ? status : TemplateStatusEnum.PENDING);
-        po.setCreateId("system");
-        po.setCreateName("system");
-        po.setUpdateId("system");
-        po.setUpdateName("system");
+        po.setCreateId(Constants.SYSTEM_OPERATOR);
+        po.setCreateName(Constants.SYSTEM_OPERATOR);
+        po.setUpdateId(Constants.SYSTEM_OPERATOR);
+        po.setUpdateName(Constants.SYSTEM_OPERATOR);
         return po;
     }
 

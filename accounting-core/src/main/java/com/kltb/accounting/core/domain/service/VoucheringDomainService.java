@@ -1,6 +1,6 @@
 package com.kltb.accounting.core.domain.service;
 
-import com.kltb.accounting.api.constant.CurrencyConstant;
+import com.kltb.accounting.api.constant.Constants;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.*;
 import com.kltb.accounting.core.infrastructure.account.RedisSequenceGenerator;
@@ -165,7 +165,7 @@ public class VoucheringDomainService {
             entryPO.setDebitCredit(entry.getDebitCredit() != null ?
                     DebitCreditEnum.fromCode(entry.getDebitCredit()) : null);
             entryPO.setAmount(entry.getAmount());
-            entryPO.setCurrency(StringUtils.defaultIfBlank(entry.getCurrency(), CurrencyConstant.DEFAULT_CURRENCY));
+            entryPO.setCurrency(StringUtils.defaultIfBlank(entry.getCurrency(), Constants.DEFAULT_CURRENCY));
             entryPO.setSummary(entry.getSummary());
             entryPO.setStatus(VoucherEntryStatusEnum.PENDING);
             entryPO.setAccountingDate(entry.getAccountingDate());
