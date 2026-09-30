@@ -156,11 +156,16 @@ public class DictionaryComponent {
             String tradingCode = ext.containsKey("tradingCode") ? ext.getStr("tradingCode") : "TRANSFER";
             String payChannel = ext.containsKey("payChannel") ? ext.getStr("payChannel") : "INTERNAL";
 
+            String voucherNoPrefix = ext.containsKey("voucherNoPrefix") && StrUtil.isNotBlank(ext.getStr("voucherNoPrefix"))
+                    ? ext.getStr("voucherNoPrefix").trim().toUpperCase()
+                    : deriveVoucherNoPrefix(dict.getDictCode(), dict.getDictName());
+
             return VoucherTypeMeta.builder()
                     .dictCode(dict.getDictCode())
                     .dictName(dict.getDictName())
                     .title(StrUtil.isNotBlank(title) ? title : "记账凭证")
                     .prefix(StrUtil.isNotBlank(prefix) ? prefix : "记")
+                    .voucherNoPrefix(voucherNoPrefix)
                     .tradeType(tradeType)
                     .tradingCode(tradingCode)
                     .payChannel(payChannel)
@@ -170,12 +175,14 @@ public class DictionaryComponent {
         // 优雅降级兜底：未匹配到字典项时根据入参推导
         String rawName = StrUtil.isNotBlank(voucherTypeCodeOrName) ? voucherTypeCodeOrName : "记账凭证";
         String derivedPrefix = derivePrefixFromName(rawName);
+        String derivedVoucherNoPrefix = deriveVoucherNoPrefix(rawName, rawName);
 
         return VoucherTypeMeta.builder()
                 .dictCode(rawName)
                 .dictName(rawName)
                 .title(rawName)
                 .prefix(derivedPrefix)
+                .voucherNoPrefix(derivedVoucherNoPrefix)
                 .tradeType(TradeTypeEnum.NORMAL.getCode())
                 .tradingCode("TRANSFER")
                 .payChannel("INTERNAL")
@@ -188,6 +195,42 @@ public class DictionaryComponent {
         }
         // 默认取名称首字，如“收款凭证”->“收”，“调账凭证”->“调”
         return name.substring(0, 1);
+    }
+
+    /**
+     * 根据凭证类型编码或名称智能推导凭证流水号前缀（英文缩写）
+     * 规则：
+     * 收款凭证 (RECEIPT) -> REC
+     * 付款凭证 (PAYMENT) -> PAY
+     * 转账凭证 (TRANSFER) -> TRF
+     * 调账凭证 (ADJUST) -> ADJ
+     * 冲账凭证 (REVERSAL) -> REV
+     * 期末结转凭证 (PERIOD_END) -> PET
+     * 记账凭证/其它 -> VOU
+     */
+    private String deriveVoucherNoPrefix(String code, String name) {
+        String upperCode = StrUtil.isNotBlank(code) ? code.toUpperCase() : "";
+        String safeName = StrUtil.isNotBlank(name) ? name : "";
+
+        if (upperCode.contains("RECEIPT") || safeName.contains("收款")) {
+            return "REC";
+        }
+        if (upperCode.contains("PAYMENT") || upperCode.contains("PAY") || safeName.contains("付款")) {
+            return "PAY";
+        }
+        if (upperCode.contains("TRANSFER") || safeName.contains("转账") || safeName.contains("转帐")) {
+            return "TRF";
+        }
+        if (upperCode.contains("ADJUST") || safeName.contains("调账") || safeName.contains("调整")) {
+            return "ADJ";
+        }
+        if (upperCode.contains("REVERSAL") || safeName.contains("冲账") || safeName.contains("红冲") || safeName.contains("冲销")) {
+            return "REV";
+        }
+        if (upperCode.contains("PERIOD_END") || safeName.contains("结转") || safeName.contains("结账")) {
+            return "PET";
+        }
+        return "VOU";
     }
 
     /**

@@ -84,8 +84,14 @@ class DictionaryComponentTest {
         VoucherTypeMeta meta = dictionaryComponent.getVoucherTypeMeta("RECEIPT");
         assertThat(meta.getTitle()).isEqualTo("收款凭证");
         assertThat(meta.getPrefix()).isEqualTo("收");
+        assertThat(meta.getVoucherNoPrefix()).isEqualTo("REC");
         assertThat(meta.getTradingCode()).isEqualTo("CASH_IN");
         assertThat(meta.getPayChannel()).isEqualTo("ALIPAY");
+
+        // 测试显式指定 voucherNoPrefix 的场景
+        receipt.setExtJson("{\"title\":\"收款凭证\",\"prefix\":\"收\",\"voucherNoPrefix\":\"RCP\",\"tradeType\":1}");
+        VoucherTypeMeta explicitMeta = dictionaryComponent.getVoucherTypeMeta("RECEIPT");
+        assertThat(explicitMeta.getVoucherNoPrefix()).isEqualTo("RCP");
 
         // 测试降级兜底
         when(dictionaryRepository.selectByTypeAndCode(DictTypeEnum.VOUCHER_TYPE.getCode(), "UNKNOWN")).thenReturn(null);
@@ -94,5 +100,13 @@ class DictionaryComponentTest {
         VoucherTypeMeta fallback = dictionaryComponent.getVoucherTypeMeta("UNKNOWN");
         assertThat(fallback.getTitle()).isEqualTo("UNKNOWN");
         assertThat(fallback.getPrefix()).isEqualTo("U");
+        assertThat(fallback.getVoucherNoPrefix()).isEqualTo("VOU");
+
+        // 测试各类型智能前缀推导
+        assertThat(dictionaryComponent.getVoucherTypeMeta("付款凭证").getVoucherNoPrefix()).isEqualTo("PAY");
+        assertThat(dictionaryComponent.getVoucherTypeMeta("TRANSFER").getVoucherNoPrefix()).isEqualTo("TRF");
+        assertThat(dictionaryComponent.getVoucherTypeMeta("调账凭证").getVoucherNoPrefix()).isEqualTo("ADJ");
+        assertThat(dictionaryComponent.getVoucherTypeMeta("REVERSAL").getVoucherNoPrefix()).isEqualTo("REV");
+        assertThat(dictionaryComponent.getVoucherTypeMeta("期末结转凭证").getVoucherNoPrefix()).isEqualTo("PET");
     }
 }

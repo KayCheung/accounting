@@ -450,4 +450,65 @@ class ManualVoucherApplicationServiceTest {
         assertEquals("PDF", detail.getAttachments().get(0).getFileType());
         assertEquals("1.00 MB", detail.getAttachments().get(0).getFileSizeFormatted());
     }
+
+    @Test
+    @DisplayName("测试动态凭证号前缀：收款凭证使用 REC 前缀，调账凭证使用 ADJ 前缀")
+    void testExecuteBookkeeping_DynamicVoucherPrefix() {
+        // 1. 收款凭证 -> REC
+        ManualVoucherApplyPO receiptPO = new ManualVoucherApplyPO();
+        receiptPO.setApplyNo("MVA_REC_01");
+        receiptPO.setVoucherType("收款凭证");
+        receiptPO.setAccountingDate(LocalDate.of(2026, 9, 30));
+        receiptPO.setTotalDebitAmount(new BigDecimal("800.00"));
+        receiptPO.setTotalCreditAmount(new BigDecimal("800.00"));
+        receiptPO.setApplyStatus(ManualVoucherApplyStatusEnum.PENDING_BOOKKEEPING);
+        when(applyRepository.selectByApplyNo("MVA_REC_01")).thenReturn(receiptPO);
+
+        ManualVoucherApplyEntryPO e1 = new ManualVoucherApplyEntryPO();
+        e1.setApplyNo("MVA_REC_01");
+        e1.setRowNum(1);
+        e1.setDebitCredit(DebitCreditEnum.DEBIT);
+        e1.setSubjectCode("100201");
+        e1.setAccountNo("ACC001");
+        e1.setAmount(new BigDecimal("800.00"));
+        when(applyRepository.selectEntriesByApplyNo("MVA_REC_01")).thenReturn(List.of(e1));
+
+        when(seqGen.generate(eq("REC"), any(LocalDate.class), eq(6), eq(25))).thenReturn("REC20260930000001");
+        when(postingApplicationService.executePosting(any())).thenReturn(mock(PostingExecuteResponse.class));
+
+        String recVoucherNo = service.executeBookkeeping(ManualVoucherApplyPostRequest.builder()
+                .applyNo("MVA_REC_01")
+                .bookkeeperName("王出纳")
+                .build());
+        assertEquals("REC20260930000001", recVoucherNo);
+        assertEquals("REC20260930000001", receiptPO.getVoucherNo());
+
+        // 2. 调账凭证 -> ADJ
+        ManualVoucherApplyPO adjPO = new ManualVoucherApplyPO();
+        adjPO.setApplyNo("MVA_ADJ_01");
+        adjPO.setVoucherType("调账凭证");
+        adjPO.setAccountingDate(LocalDate.of(2026, 9, 30));
+        adjPO.setTotalDebitAmount(new BigDecimal("500.00"));
+        adjPO.setTotalCreditAmount(new BigDecimal("500.00"));
+        adjPO.setApplyStatus(ManualVoucherApplyStatusEnum.PENDING_BOOKKEEPING);
+        when(applyRepository.selectByApplyNo("MVA_ADJ_01")).thenReturn(adjPO);
+
+        ManualVoucherApplyEntryPO e2 = new ManualVoucherApplyEntryPO();
+        e2.setApplyNo("MVA_ADJ_01");
+        e2.setRowNum(1);
+        e2.setDebitCredit(DebitCreditEnum.DEBIT);
+        e2.setSubjectCode("100201");
+        e2.setAccountNo("ACC001");
+        e2.setAmount(new BigDecimal("500.00"));
+        when(applyRepository.selectEntriesByApplyNo("MVA_ADJ_01")).thenReturn(List.of(e2));
+
+        when(seqGen.generate(eq("ADJ"), any(LocalDate.class), eq(6), eq(25))).thenReturn("ADJ20260930000002");
+
+        String adjVoucherNo = service.executeBookkeeping(ManualVoucherApplyPostRequest.builder()
+                .applyNo("MVA_ADJ_01")
+                .bookkeeperName("王出纳")
+                .build());
+        assertEquals("ADJ20260930000002", adjVoucherNo);
+        assertEquals("ADJ20260930000002", adjPO.getVoucherNo());
+    }
 }

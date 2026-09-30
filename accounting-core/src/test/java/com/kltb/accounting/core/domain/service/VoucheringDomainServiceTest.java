@@ -41,6 +41,7 @@ class VoucheringDomainServiceTest {
     @Mock private BusinessDetailRepository businessDetailRepository;
     @Mock private RedisSequenceGenerator seqGen;
     @Mock private RuleScriptExecutor ruleScriptExecutor;
+    @Mock private com.kltb.accounting.core.infrastructure.dictionary.DictionaryComponent dictionaryComponent;
 
     @InjectMocks private VoucheringDomainService voucheringDomainService;
 
@@ -222,14 +223,20 @@ class VoucheringDomainServiceTest {
                 new VoucherEntryData(null, null, 1, "1301", "A001", 1, new BigDecimal("10000"), "CNY", "test", LocalDate.of(2026, 6, 24), Boolean.FALSE, Boolean.FALSE),
                 new VoucherEntryData(null, null, 2, "1001", "A001", 2, new BigDecimal("10000"), "CNY", "test", LocalDate.of(2026, 6, 24), Boolean.FALSE, Boolean.FALSE)
         );
-        when(seqGen.generate("VOU", LocalDate.now(), 6, 25)).thenReturn("VOU20260624000001");
+        com.kltb.accounting.core.infrastructure.dictionary.VoucherTypeMeta meta = com.kltb.accounting.core.infrastructure.dictionary.VoucherTypeMeta.builder()
+                .dictCode("PAYMENT")
+                .dictName("付款凭证")
+                .voucherNoPrefix("PAY")
+                .build();
+        when(dictionaryComponent.getVoucherTypeMeta("PAYMENT")).thenReturn(meta);
+        when(seqGen.generate("PAY", LocalDate.of(2026, 6, 24), 6, 25)).thenReturn("PAY20260624000001");
         when(seqGen.generate(eq("ENT"), any(LocalDateTime.class), eq("yyyyMMddHHmmssSSS"), eq(4), eq(2)))
                 .thenReturn("ENT202606241030000001")
                 .thenReturn("ENT202606241030000002");
         String voucherNo = voucheringDomainService.persistVoucher(journal, rule, entries, "SYSTEM");
-        assertThat(voucherNo).isEqualTo("VOU20260624000001");
+        assertThat(voucherNo).isEqualTo("PAY20260624000001");
         verify(accountingVoucherRepository).insert(argThat(v ->
-                v.getVoucherNo().equals("VOU20260624000001")
+                v.getVoucherNo().equals("PAY20260624000001")
                         && v.getPostingType() == PostingTypeEnum.AUTOMATIC
                         && v.getStatus() == VoucherStatusEnum.PENDING
         ));

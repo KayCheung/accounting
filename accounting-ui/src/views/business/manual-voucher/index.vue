@@ -1658,7 +1658,7 @@ function goToVoucherLedger(voucherNo?: string) {
 
 // ==================== 格式化辅助方法 ====================
 function formatDateTime(val?: string) {
-  if (!val) return '-'
+  if (!val || val.startsWith('1970-01-01')) return '-'
   return val.replace('T', ' ').substring(0, 19)
 }
 

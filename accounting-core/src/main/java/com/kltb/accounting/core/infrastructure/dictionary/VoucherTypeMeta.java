@@ -43,6 +43,11 @@ public class VoucherTypeMeta implements Serializable {
     private String prefix;
 
     /**
+     * 凭证流水号前缀（英文缩写），如 REC, PAY, TRF, ADJ, REV, PET, VOU
+     */
+    private String voucherNoPrefix;
+
+    /**
      * 默认交易类别：1-正常, 2-调账, 3-红字, 4-蓝字
      */
     private Integer tradeType;

@@ -1330,7 +1330,7 @@ function getTradeTypeLabel(type?: number): string {
 }
 
 function formatDateTime(val?: string): string {
-  if (!val) return '-'
+  if (!val || val.startsWith('1970-01-01')) return '-'
   return val.replace('T', ' ').substring(0, 19)
 }
 

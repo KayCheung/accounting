@@ -1,9 +1,12 @@
 package com.kltb.accounting.core.domain.service;
 
+import cn.hutool.core.util.StrUtil;
 import com.kltb.accounting.api.constant.Constants;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.*;
 import com.kltb.accounting.core.infrastructure.account.RedisSequenceGenerator;
+import com.kltb.accounting.core.infrastructure.dictionary.DictionaryComponent;
+import com.kltb.accounting.core.infrastructure.dictionary.VoucherTypeMeta;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountingRuleRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountingVoucherRepository;
@@ -37,6 +40,7 @@ public class VoucheringDomainService {
     private final BusinessDetailRepository businessDetailRepository;
     private final RedisSequenceGenerator seqGen;
     private final RuleScriptExecutor ruleScriptExecutor;
+    private final DictionaryComponent dictionaryComponent;
 
     /**
      * 按 traceNo 查询流水及其明细
@@ -128,7 +132,10 @@ public class VoucheringDomainService {
             List<VoucherEntryData> entries,
             String bookkeeperName) {
 
-        String voucherNo = seqGen.generate("VOU", LocalDate.now(), 6, 25);
+        VoucherTypeMeta vMeta = dictionaryComponent != null ? dictionaryComponent.getVoucherTypeMeta(rule.getVoucherType()) : null;
+        String prefix = (vMeta != null && StrUtil.isNotBlank(vMeta.getVoucherNoPrefix())) ? vMeta.getVoucherNoPrefix() : "VOU";
+        LocalDate seqDate = journal.getAccountingDate() != null ? journal.getAccountingDate() : LocalDate.now();
+        String voucherNo = seqGen.generate(prefix, seqDate, 6, 25);
 
         // 1. 写入 t_accounting_voucher
         AccountingVoucherPO voucher = new AccountingVoucherPO();

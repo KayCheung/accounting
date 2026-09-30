@@ -26,6 +26,8 @@ import java.util.stream.Collectors;
 @Component
 public class VoucheringAssembler {
 
+    private static final java.time.LocalDateTime EPOCH_DATE_TIME = java.time.LocalDateTime.of(1970, 1, 1, 0, 0, 0);
+
     private final DictionaryComponent dictionaryComponent;
 
     public VoucheringAssembler() {
@@ -35,6 +37,16 @@ public class VoucheringAssembler {
     @Autowired(required = false)
     public VoucheringAssembler(DictionaryComponent dictionaryComponent) {
         this.dictionaryComponent = dictionaryComponent;
+    }
+
+    /**
+     * DDL 默认值 1970-01-01 00:00:00 转为 null，避免在前端错误展示
+     */
+    private java.time.LocalDateTime sanitizePostTime(java.time.LocalDateTime postTime) {
+        if (postTime == null || postTime.isEqual(EPOCH_DATE_TIME) || postTime.getYear() <= 1970) {
+            return null;
+        }
+        return postTime;
     }
 
     /**
@@ -140,7 +152,7 @@ public class VoucheringAssembler {
                 .amount(po.getAmount())
                 .status(po.getStatus() != null ? po.getStatus().getCode() : null)
                 .statusDesc(po.getStatus() != null ? po.getStatus().getDesc() : null)
-                .postTime(po.getPostTime())
+                .postTime(sanitizePostTime(po.getPostTime()))
                 .accountingDate(po.getAccountingDate())
                 .summary(po.getSummary())
                 .attachmentCount(po.getAttachmentCount())

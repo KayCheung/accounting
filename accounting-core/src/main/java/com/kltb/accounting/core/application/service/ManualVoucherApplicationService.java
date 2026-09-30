@@ -320,11 +320,13 @@ public class ManualVoucherApplicationService {
 
         // 生成正式凭证号、事务记录与入账逻辑
         String voucherNo = transactionTemplate.execute(status -> {
-            String vouNo = generateVoucherNo(po.getAccountingDate());
-            String txnNo = generateTxnNo(po.getAccountingDate());
-
             // 0. 通过公共字典组件动态获取凭证类型元数据（彻底消除硬编码与手工解析）
             VoucherTypeMeta vMeta = dictionaryComponent.getVoucherTypeMeta(po.getVoucherType());
+            String voucherNoPrefix = StrUtil.isNotBlank(vMeta.getVoucherNoPrefix()) ? vMeta.getVoucherNoPrefix() : "VOU";
+
+            String vouNo = generateVoucherNo(voucherNoPrefix, po.getAccountingDate());
+            String txnNo = generateTxnNo(po.getAccountingDate());
+
             String tradingCode = StrUtil.isNotBlank(vMeta.getTradingCode()) ? vMeta.getTradingCode() : "TRANSFER";
             String payChannel = StrUtil.isNotBlank(vMeta.getPayChannel()) ? vMeta.getPayChannel() : "INTERNAL";
             int resolvedTradeType = (po.getTradeType() != null)
@@ -861,11 +863,12 @@ public class ManualVoucherApplicationService {
         }
     }
 
-    private String generateVoucherNo(LocalDate date) {
+    private String generateVoucherNo(String prefix, LocalDate date) {
+        String cleanPrefix = StrUtil.isNotBlank(prefix) ? prefix.trim().toUpperCase() : "VOU";
         try {
-            return seqGen.generate("VOU", date != null ? date : LocalDate.now(), 6, 25);
+            return seqGen.generate(cleanPrefix, date != null ? date : LocalDate.now(), 6, 25);
         } catch (Exception e) {
-            return "VOU" + (date != null ? date.toString().replace("-", "") : "20260929")
+            return cleanPrefix + (date != null ? date.toString().replace("-", "") : "20260929")
                     + String.format("%06d", (int) (Math.random() * 900000 + 100000));
         }
     }

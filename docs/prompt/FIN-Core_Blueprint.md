@@ -468,6 +468,24 @@
     - 前端凭证全景档案与印签打印标签体验优化：
       - 移除 `manual-voucher/index.vue` 与 `voucher/index.vue` 凭证字号旁冗余重复的“收款凭证/记账凭证”标签；
       - 仅保留【手工凭证】/【机制凭证】来源标签，并配置舒展间距（`ml-2`），与顶层大标题各司其职，消除标签挤塞。
+  → 完成内容（Step 23.4.7 1970 默认时间全链路脱敏过滤与凭证编号基于凭证类型动态前缀驱动）：
+    - 数据库 1970-01-01 默认时间全链路脱敏过滤（后端 DTO 转 null + 前端格式化双重防御）：
+      - 根因：MySQL DDL 默认值设置 `post_time DATETIME NOT NULL DEFAULT '1970-01-01 00:00:00'`，凭证未过账时数据库填充默认时间并序列化至前端；
+      - 后端治理：在 `VoucheringAssembler` 与 `ReversalAssembler` 增加 `sanitizePostTime`，若 `postTime == null || postTime.getYear() <= 1970` 统一转为 `null`；
+      - 前端双重防御：`voucher/index.vue` 与 `manual-voucher/index.vue` 的 `formatDateTime` 拦截 `!val || val.startsWith('1970-01-01')` 统一返回 `'-'`。
+    - 凭证编号基于凭证类型（voucher_type）动态前缀驱动架构升级：
+      - 彻底改变以往凭证号一律固定以 `VOU` 开头的生硬逻辑，依据财务会计标准凭证类型实现字母前缀动态推导；
+      - `VoucherTypeMeta` 领域模型扩展 `voucherNoPrefix`（如 `REC`, `PAY`, `TRF`, `ADJ`, `REV`, `PET`, `VOU`）；
+      - `DictionaryComponent` 统一解析 `ext_json.voucherNoPrefix`，未配置时通过 `deriveVoucherNoPrefix` 智能推导：
+        - 收款凭证 (`RECEIPT`) → `REC`（如 `REC20260930000001`）
+        - 付款凭证 (`PAYMENT`) → `PAY`（如 `PAY20260930000001`）
+        - 转账凭证 (`TRANSFER`) → `TRF`（如 `TRF20260930000001`）
+        - 调账凭证 (`ADJUST`) → `ADJ`（如 `ADJ20260930000001`）
+        - 冲账凭证 (`REVERSAL`) → `REV`（如 `REV20260930000001`）
+        - 期末结转凭证 (`PERIOD_END`) → `PET`（如 `PET20260930000001`）
+        - 记账凭证/默认 (`GENERAL`) → `VOU`（如 `VOU20260930000001`）
+      - 重构 `ManualVoucherApplicationService.executeBookkeeping`、`VoucheringDomainService.persistVoucher` 与 `PeriodEndTransferDomainService.generateTransferVoucher`，凭证编号生成全面切换至基于凭证类型的动态前缀。
+      - 数据库沉淀：创建 Flyway 增量脚本 `V15__voucher_no_prefix.sql` 完善 `t_dictionary` 凭证类型扩展属性。
   → 待进行业务页面：日切与试算平衡 (`business/eod`)、缓冲记账监控 (`business/buffer-monitor`)
 
 ---

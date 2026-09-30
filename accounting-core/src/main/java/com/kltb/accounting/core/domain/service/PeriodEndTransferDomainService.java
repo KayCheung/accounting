@@ -182,7 +182,7 @@ public class PeriodEndTransferDomainService {
             PeriodEndTransferRulePO rule, LocalDate accountingDate,
             String transferNo, List<AccountBalancePO> balances) {
 
-        String voucherNo = seqGen.generate("VOU", accountingDate, 6, 25);
+        String voucherNo = seqGen.generate("PET", accountingDate, 6, 25);
 
         BigDecimal totalAmount = balances.stream()
                 .map(AccountBalancePO::getEndBalance)

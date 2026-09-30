@@ -43,6 +43,8 @@ public class ReversalAssembler {
                 .collect(Collectors.toList());
     }
 
+    private static final java.time.LocalDateTime EPOCH_DATE_TIME = java.time.LocalDateTime.of(1970, 1, 1, 0, 0, 0);
+
     private ReversalRecordResponse toRecordResponse(AccountingVoucherPO voucher) {
         return ReversalRecordResponse.builder()
                 .reversalVoucherNo(voucher.getVoucherNo())
@@ -51,8 +53,15 @@ public class ReversalAssembler {
                 .accountingDate(voucher.getAccountingDate())
                 .summary(voucher.getSummary())
                 .status(Optional.ofNullable(voucher.getStatus()).map(VoucherStatusEnum::getCode).orElse(null))
-                .postTime(voucher.getPostTime())
+                .postTime(sanitizePostTime(voucher.getPostTime()))
                 .bookkeeperName(voucher.getBookkeeperName())
                 .build();
+    }
+
+    private java.time.LocalDateTime sanitizePostTime(java.time.LocalDateTime postTime) {
+        if (postTime == null || postTime.isEqual(EPOCH_DATE_TIME) || postTime.getYear() <= 1970) {
+            return null;
+        }
+        return postTime;
     }
 }
