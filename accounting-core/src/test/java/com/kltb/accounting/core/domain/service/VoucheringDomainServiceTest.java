@@ -1,10 +1,7 @@
 package com.kltb.accounting.core.domain.service;
 
 import com.kltb.accounting.api.constant.ResultCode;
-import com.kltb.accounting.core.domain.enums.BusinessRecordStatusEnum;
-import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
-import com.kltb.accounting.core.domain.enums.PostingTypeEnum;
-import com.kltb.accounting.core.domain.enums.VoucherStatusEnum;
+import com.kltb.accounting.core.domain.enums.*;
 import com.kltb.accounting.core.infrastructure.account.RedisSequenceGenerator;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountingRuleRepository;
@@ -139,7 +136,7 @@ class VoucheringDomainServiceTest {
         rule.setBusinessCode("LOAN");
         rule.setTradingCode("DISBURSE");
         rule.setPayChannel("BANK");
-        rule.setStatus(com.kltb.accounting.core.domain.enums.RuleStatusEnum.DISABLED);
+        rule.setStatus(RuleStatusEnum.DISABLED);
         when(accountingRuleRepository.selectByBusinessKey("LOAN", "DISBURSE", "BANK")).thenReturn(rule);
         assertThatThrownBy(() -> voucheringDomainService.matchRule("LOAN", "DISBURSE", "BANK"))
                 .isInstanceOf(AccountException.class)
@@ -159,7 +156,7 @@ class VoucheringDomainServiceTest {
         rule.setTradingCode("DISBURSE");
         rule.setPayChannel("BANK");
         rule.setVoucherType("PAYMENT");
-        rule.setStatus(com.kltb.accounting.core.domain.enums.RuleStatusEnum.ENABLED);
+        rule.setStatus(RuleStatusEnum.ENABLED);
         List<AccountingRuleDetailPO> details = List.of(
                 buildRuleDetail(1L, "1301", 1),
                 buildRuleDetail(2L, "1001", 2)
@@ -218,7 +215,7 @@ class VoucheringDomainServiceTest {
         journal.setTradeTime(LocalDateTime.now());
         journal.setSummary("test");
         journal.setAccountingDate(LocalDate.of(2026, 6, 24));
-        journal.setTradeType(com.kltb.accounting.core.domain.enums.TradeTypeEnum.NORMAL);
+        journal.setTradeType(TradeTypeEnum.NORMAL);
         AccountingRulePO rule = new AccountingRulePO();
         rule.setVoucherType("PAYMENT");
         List<VoucherEntryData> entries = List.of(
@@ -255,7 +252,7 @@ class VoucheringDomainServiceTest {
     private BusinessDetailPO buildBusinessDetail(String customerId, String fundsType, BigDecimal amount) {
         BusinessDetailPO detail = new BusinessDetailPO();
         detail.setCustomerId(customerId);
-        detail.setCustomerType(com.kltb.accounting.core.domain.enums.CustomerTypeEnum.ENTERPRISE);
+        detail.setCustomerType(CustomerTypeEnum.ENTERPRISE);
         detail.setFundsType(fundsType);
         return detail;
     }

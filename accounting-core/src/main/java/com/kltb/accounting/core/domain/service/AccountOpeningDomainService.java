@@ -1,6 +1,7 @@
 package com.kltb.accounting.core.domain.service;
 
 import cn.hutool.core.util.StrUtil;
+import com.kltb.accounting.api.constant.CurrencyEnum;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.AccountStatusEnum;
 import com.kltb.accounting.core.domain.enums.BalanceDirectionEnum;
@@ -376,7 +377,7 @@ public class AccountOpeningDomainService {
         account.setOwnerType(OwnerTypeEnum.fromCode(customerType.getCode()));
         account.setSubjectCode(template.getSubjectCode());
         account.setAccountType(template.getAccountType());
-        account.setCurrency(template.getCurrency() != null ? template.getCurrency() : "CNY");
+        account.setCurrency(template.getCurrency() != null ? template.getCurrency() : CurrencyEnum.DEFAULT_CURRENCY);
         account.setBalanceDirection(template.getBalanceDirection());
         account.setOpeningBalance(BigDecimal.ZERO);
         account.setBalance(BigDecimal.ZERO);
@@ -400,7 +401,7 @@ public class AccountOpeningDomainService {
         account.setOwnerType(OwnerTypeEnum.OTHER);
         account.setSubjectCode(subjectCode);
         account.setAccountType("INTERNAL");
-        account.setCurrency("CNY");
+        account.setCurrency(CurrencyEnum.DEFAULT_CURRENCY);
         account.setBalanceDirection(subject.getDebitCredit() != null
                 ? BalanceDirectionEnum.fromCode(subject.getDebitCredit().getCode())
                 : BalanceDirectionEnum.DEBIT);
@@ -461,13 +462,8 @@ public class AccountOpeningDomainService {
             } catch (Exception ignored) {
             }
         }
-        switch (currency.toUpperCase()) {
-            case "CNY": return "人民币";
-            case "USD": return "美元";
-            case "EUR": return "欧元";
-            case "HKD": return "港币";
-            default: return currency;
-        }
+        CurrencyEnum cEnum = CurrencyEnum.fromCode(currency);
+        return cEnum != null ? cEnum.getDesc() : currency;
     }
 
     private String resolveAccountTypeName(String accountType) {

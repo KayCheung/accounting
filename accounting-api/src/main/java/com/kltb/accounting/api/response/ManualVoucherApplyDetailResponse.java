@@ -1,6 +1,7 @@
 // accounting-api/src/main/java/com/kltb/accounting/api/response/ManualVoucherApplyDetailResponse.java
 package com.kltb.accounting.api.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -34,6 +35,18 @@ public class ManualVoucherApplyDetailResponse implements Serializable {
 
     @Schema(description = "凭证字号/类型", example = "记账凭证")
     private String voucherType;
+
+    @Schema(description = "经典财务凭证字号(如：转 20260930000001)", example = "转 20260930000001")
+    private String voucherWord;
+
+    @Schema(description = "凭证排版大标题(如：转账凭证/收款凭证/记账凭证)", example = "转账凭证")
+    private String voucherTitle;
+
+    @Schema(description = "入账类型：1-手工凭证, 2-机制凭证", example = "1")
+    private Integer postingType;
+
+    @Schema(description = "入账类型描述", example = "手工凭证")
+    private String postingTypeDesc;
 
     @Schema(description = "交易类别：1-正常, 2-调账", example = "2")
     private Integer tradeType;
@@ -77,6 +90,7 @@ public class ManualVoucherApplyDetailResponse implements Serializable {
     private String auditorName;
 
     @Schema(description = "初审时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime auditTime;
 
     @Schema(description = "初审意见/驳回原因")
@@ -86,6 +100,7 @@ public class ManualVoucherApplyDetailResponse implements Serializable {
     private String reviewerName;
 
     @Schema(description = "复核时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime reviewTime;
 
     @Schema(description = "复核意见/驳回原因")
@@ -95,9 +110,11 @@ public class ManualVoucherApplyDetailResponse implements Serializable {
     private String bookkeeperName;
 
     @Schema(description = "记账时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime bookkeepingTime;
 
     @Schema(description = "创建时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime createTime;
 
     // ==================== 借贷分录明细 ====================

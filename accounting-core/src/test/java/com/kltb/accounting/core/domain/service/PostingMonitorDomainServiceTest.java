@@ -1,5 +1,6 @@
 package com.kltb.accounting.core.domain.service;
 
+import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
 import com.kltb.accounting.core.domain.enums.VoucherEntryStatusEnum;
 import com.kltb.accounting.core.domain.enums.VoucherStatusEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherEntryPO;
@@ -139,7 +140,7 @@ class PostingMonitorDomainServiceTest {
         entry.setStatus(status);
         entry.setAmount(new BigDecimal("1000"));
         entry.setAccountingDate(LocalDate.now());
-        entry.setDebitCredit(com.kltb.accounting.core.domain.enums.DebitCreditEnum.DEBIT);
+        entry.setDebitCredit(DebitCreditEnum.DEBIT);
         entry.setCurrency("CNY");
         entry.setSummary("test");
         entry.setUnilateral(unilateral);

@@ -155,7 +155,11 @@
           </template>
         </el-table-column>
         <el-table-column label="会计日期" prop="accountingDate" width="110" align="center" />
-        <el-table-column label="凭证类型" prop="voucherType" width="100" align="center" />
+        <el-table-column label="凭证类型" width="110" align="center">
+          <template #default="{ row }">
+            <el-tag size="small" type="info">{{ getVoucherTypeLabel(row.voucherType) }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="凭证摘要" prop="summary" min-width="180" show-overflow-tooltip />
         <el-table-column label="借贷合计金额" width="140" align="right">
           <template #default="{ row }">
@@ -198,7 +202,11 @@
             <span v-else class="text-muted">-</span>
           </template>
         </el-table-column>
-        <el-table-column label="申请时间" prop="createTime" width="150" align="center" />
+        <el-table-column label="申请时间" width="165" align="center">
+          <template #default="{ row }">
+            <span>{{ formatDateTime(row.createTime) }}</span>
+          </template>
+        </el-table-column>
 
         <!-- 规范操作列：紧凑下拉菜单 (MoreFilled, 列宽 70px) -->
         <el-table-column label="操作" width="70" align="center" fixed="right">
@@ -302,16 +310,24 @@
           </el-col>
           <el-col :span="8">
             <el-form-item label="凭证类型">
-              <el-select v-model="createForm.voucherType" style="width: 100%">
-                <el-option label="记账凭证" value="记账凭证" />
-                <el-option label="调整凭证" value="调整凭证" />
-                <el-option label="结账凭证" value="结账凭证" />
+              <el-select v-model="createForm.voucherType" placeholder="请选择凭证类型" style="width: 100%" @change="handleVoucherTypeChange">
+                <el-option
+                  v-for="opt in voucherTypeOptions"
+                  :key="opt.dictCode"
+                  :label="opt.dictName"
+                  :value="opt.dictCode"
+                />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="8">
             <el-form-item label="制单人" required>
-              <el-input v-model="createForm.makerName" placeholder="制单人姓名" />
+              <!-- TODO: 当前未接入统一用户认证中心(SSO/SecurityContext)，制单人暂时默认当前登录用户并置灰只读，待统一认证模块上线后从用户上下文自动注入 -->
+              <el-input
+                v-model="createForm.makerName"
+                disabled
+                placeholder="制单人（自动获取当前登录用户）"
+              />
             </el-form-item>
           </el-col>
         </el-row>
@@ -460,13 +476,21 @@
                 </el-select>
               </template>
             </el-table-column>
-            <el-table-column label="核算类别" width="130">
+            <el-table-column label="核算类别" width="150">
               <template #default="{ row }">
-                <el-select v-model="row.auxType" size="small" style="width: 100%" @change="handleAuxTypeChange(row)">
-                  <el-option label="部门 (DEPT)" value="DEPT" />
-                  <el-option label="项目 (PROJECT)" value="PROJECT" />
-                  <el-option label="客户 (CUSTOMER)" value="CUSTOMER" />
-                  <el-option label="供应商 (SUPPLIER)" value="SUPPLIER" />
+                <el-select
+                  v-model="row.auxType"
+                  size="small"
+                  placeholder="选择核算类别"
+                  style="width: 100%"
+                  @change="handleAuxTypeChange(row)"
+                >
+                  <el-option
+                    v-for="opt in auxiliaryTypeOptions"
+                    :key="opt.dictCode"
+                    :label="`${opt.dictName} (${opt.dictCode})`"
+                    :value="opt.dictCode"
+                  />
                 </el-select>
               </template>
             </el-table-column>
@@ -517,6 +541,7 @@
         </div>
 
         <!-- 凭证原始单据附件编制 (对应《凭证附件.html》) -->
+        <!-- TODO: 凭证附件上传功能需对接对象存储服务（MinIO/Aliyun OSS/S3），待底层对象存储接入后改造为文件直传组件；当前保留单据元数据录入及示范单据快速填制能力 -->
         <div class="entries-section mt-4">
           <div class="entries-toolbar">
             <div class="toolbar-left">
@@ -683,9 +708,9 @@
       <div v-loading="detailLoading" v-if="detailData" class="voucher-preview-container">
         <!-- 经典纸质凭证仿真卡片 (参考原型《凭证详情.html》) -->
         <div class="classic-voucher-sheet">
-          <!-- 凭证主标题 -->
+          <!-- 凭证主标题（根据凭证类型自适应标题，字距舒展） -->
           <div class="voucher-header-title">
-            <h2>记 &nbsp; 账 &nbsp; 凭 &nbsp; 证</h2>
+            <h2>{{ getVoucherPrintTitle(detailData.voucherTitle || detailData.voucherType) }}</h2>
             <div class="voucher-title-underline"></div>
           </div>
 
@@ -696,8 +721,9 @@
             </div>
             <div class="meta-no">
               <strong>凭证字号：</strong>
-              <span class="mono-font">{{ detailData.voucherNo || detailData.applyNo }}</span>
-              <el-tag size="small" type="info" class="ml-2">{{ detailData.voucherType }}</el-tag>
+              <span class="mono-font">{{ detailData.voucherWord || detailData.voucherNo || detailData.applyNo }}</span>
+              <el-tag size="small" type="info" class="ml-2">{{ getVoucherTypeLabel(detailData.voucherType) }}</el-tag>
+              <el-tag size="small" type="warning" class="ml-1">手工凭证</el-tag>
             </div>
             <div class="meta-attachment">
               附单据 <span class="mono-font underline">{{ detailData.attachmentCount || detailData.attachments?.length || 0 }}</span> 张
@@ -968,6 +994,7 @@ import {
   type ManualVoucherAuxiliaryItem,
   type ManualVoucherAttachmentItem
 } from '@/api/manualVoucher'
+import { getDictByType, type DictResponse } from '@/api/dict'
 
 const router = useRouter()
 
@@ -1113,6 +1140,56 @@ function handleSubjectChange(row: ApplyEntryItem, subjectCode: string) {
   }
 }
 
+// ==================== 字典项加载 (voucher_type, auxiliary_type) ====================
+const voucherTypeOptions = ref<DictResponse[]>([])
+const auxiliaryTypeOptions = ref<DictResponse[]>([])
+
+async function loadVoucherTypes() {
+  try {
+    const res = await getDictByType('voucher_type')
+    if (res && res.length > 0) {
+      voucherTypeOptions.value = res.filter(item => item.status === 1)
+    } else {
+      voucherTypeOptions.value = [
+        { dictType: 'voucher_type', dictCode: '记账凭证', dictName: '记账凭证', status: 1 },
+        { dictType: 'voucher_type', dictCode: '调整凭证', dictName: '调整凭证', status: 1 },
+        { dictType: 'voucher_type', dictCode: '结账凭证', dictName: '结账凭证', status: 1 }
+      ]
+    }
+  } catch (error) {
+    console.warn('加载凭证类型字典失败，使用系统预设配置:', error)
+    voucherTypeOptions.value = [
+      { dictType: 'voucher_type', dictCode: '记账凭证', dictName: '记账凭证', status: 1 },
+      { dictType: 'voucher_type', dictCode: '调整凭证', dictName: '调整凭证', status: 1 },
+      { dictType: 'voucher_type', dictCode: '结账凭证', dictName: '结账凭证', status: 1 }
+    ]
+  }
+}
+
+async function loadAuxiliaryTypes() {
+  try {
+    const res = await getDictByType('auxiliary_type')
+    if (res && res.length > 0) {
+      auxiliaryTypeOptions.value = res.filter(item => item.status === 1)
+    } else {
+      auxiliaryTypeOptions.value = [
+        { dictType: 'auxiliary_type', dictCode: 'DEPT', dictName: '部门', status: 1 },
+        { dictType: 'auxiliary_type', dictCode: 'PROJECT', dictName: '项目', status: 1 },
+        { dictType: 'auxiliary_type', dictCode: 'CUSTOMER', dictName: '客户', status: 1 },
+        { dictType: 'auxiliary_type', dictCode: 'SUPPLIER', dictName: '供应商', status: 1 }
+      ]
+    }
+  } catch (error) {
+    console.warn('加载辅助核算类别字典失败，使用系统预设配置:', error)
+    auxiliaryTypeOptions.value = [
+      { dictType: 'auxiliary_type', dictCode: 'DEPT', dictName: '部门', status: 1 },
+      { dictType: 'auxiliary_type', dictCode: 'PROJECT', dictName: '项目', status: 1 },
+      { dictType: 'auxiliary_type', dictCode: 'CUSTOMER', dictName: '客户', status: 1 },
+      { dictType: 'auxiliary_type', dictCode: 'SUPPLIER', dictName: '供应商', status: 1 }
+    ]
+  }
+}
+
 // ==================== 弹窗1：手工凭证填制与编辑 ====================
 const createDialogVisible = ref(false)
 const submitLoading = ref(false)
@@ -1120,21 +1197,52 @@ const submitLoading = ref(false)
 const createForm = reactive({
   applyNo: '',
   voucherType: '记账凭证',
-  tradeType: 2,
+  tradeType: 1,
   accountingDate: new Date().toISOString().split('T')[0],
   summary: '',
-  makerName: '当前操作员',
+  makerName: '张会计',
   entries: [] as ApplyEntryItem[],
   auxiliaries: [] as ManualVoucherAuxiliaryItem[],
   attachments: [] as ManualVoucherAttachmentItem[]
 })
 
+function handleVoucherTypeChange(val: string) {
+  if (val === 'ADJUST' || (val && val.includes('调账'))) {
+    createForm.tradeType = 2
+  } else {
+    createForm.tradeType = 1
+  }
+}
+
+function getVoucherTypeLabel(typeCode?: string): string {
+  if (!typeCode) return '记账凭证'
+  const found = voucherTypeOptions.value.find(o => o.dictCode === typeCode || o.dictName === typeCode)
+  return found ? found.dictName : typeCode
+}
+
+function getVoucherPrintTitle(val?: string): string {
+  let raw = val || '记账凭证'
+  if (raw === 'RECEIPT' || raw.includes('收款')) raw = '收款凭证'
+  else if (raw === 'PAYMENT' || raw.includes('付款')) raw = '付款凭证'
+  else if (raw === 'TRANSFER' || raw.includes('转账')) raw = '转账凭证'
+  else if (raw === 'ADJUST' || raw.includes('调账')) raw = '调账凭证'
+  else if (raw === 'REVERSAL' || raw.includes('冲')) raw = '冲账凭证'
+  else if (raw === 'PERIOD_END' || raw.includes('结')) raw = '期末结转凭证'
+  else if (raw === 'GENERAL') raw = '记账凭证'
+  else {
+    const lbl = getVoucherTypeLabel(raw)
+    if (lbl) raw = lbl
+  }
+  return raw.split('').join('  ')
+}
+
 function openCreateModal() {
   createForm.applyNo = ''
-  createForm.voucherType = '记账凭证'
-  createForm.tradeType = 2
+  createForm.voucherType = voucherTypeOptions.value.length > 0 ? voucherTypeOptions.value[0].dictCode : '记账凭证'
+  createForm.tradeType = (createForm.voucherType === 'ADJUST' || createForm.voucherType.includes('调账')) ? 2 : 1
   createForm.accountingDate = new Date().toISOString().split('T')[0]
   createForm.summary = ''
+  // TODO: 当前未接入统一用户认证中心(SSO/SecurityContext)，制单人暂时默认当前登录用户并置灰只读，待统一认证模块上线后从用户上下文自动注入
   createForm.makerName = '张会计'
   // 默认预设一借一贷2行
   createForm.entries = [
@@ -1198,17 +1306,15 @@ function handleAuxEntryChange(aux: ManualVoucherAuxiliaryItem) {
 }
 
 function handleAuxTypeChange(aux: ManualVoucherAuxiliaryItem) {
-  const typeMap: Record<string, { name: string; code: string; label: string }> = {
-    DEPT: { name: '部门', code: 'DEPT001', label: '产品运营部' },
-    PROJECT: { name: '项目', code: 'PRJ001', label: '核心账务系统改造' },
-    CUSTOMER: { name: '客户', code: 'CUST8888', label: '京东零售自营账户' },
-    SUPPLIER: { name: '供应商', code: 'SUPP9999', label: '阿里云计算技术服务' }
-  }
-  const config = typeMap[aux.auxType]
-  if (config) {
-    aux.auxTypeName = config.name
-    aux.auxCode = config.code
-    aux.auxName = config.label
+  const matched = auxiliaryTypeOptions.value.find(opt => opt.dictCode === aux.auxType)
+  if (matched) {
+    aux.auxTypeName = matched.dictName
+    if (!aux.auxCode) {
+      aux.auxCode = `${matched.dictCode}_001`
+      aux.auxName = `${matched.dictName}默认核算项`
+    }
+  } else {
+    aux.auxTypeName = aux.auxType
   }
 }
 
@@ -1552,6 +1658,11 @@ function goToVoucherLedger(voucherNo?: string) {
 }
 
 // ==================== 格式化辅助方法 ====================
+function formatDateTime(val?: string) {
+  if (!val) return '-'
+  return val.replace('T', ' ').substring(0, 19)
+}
+
 function formatAmount(val?: number) {
   if (val === null || val === undefined) return '0.00'
   return Number(val).toLocaleString('zh-CN', {
@@ -1624,6 +1735,8 @@ function formatBytes(bytes?: number) {
 onMounted(() => {
   loadStats()
   loadLeafSubjects()
+  loadVoucherTypes()
+  loadAuxiliaryTypes()
   loadData()
 })
 </script>

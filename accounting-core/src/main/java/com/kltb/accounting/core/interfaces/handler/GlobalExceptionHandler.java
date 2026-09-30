@@ -117,6 +117,17 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 处理 404 资源或路由未找到异常（Spring Boot 3.2+ NoResourceFoundException）
+     */
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiResponse<Void> handleNoResourceFoundException(
+            org.springframework.web.servlet.resource.NoResourceFoundException ex) {
+        log.warn("[404 未找到] 请求接口或资源不存在: {}", ex.getResourcePath());
+        return ApiResponse.fail(ResultCode.DATA_NOT_FOUND, "请求接口或资源不存在: " + ex.getResourcePath());
+    }
+
+    /**
      * 处理所有未捕获的系统异常（ERROR 级别，需立即排查）
      */
     @ExceptionHandler(Exception.class)

@@ -387,6 +387,9 @@
               <el-button link type="primary" :icon="MoreFilled" class="more-btn" />
               <template #dropdown>
                 <el-dropdown-menu>
+                  <el-dropdown-item :icon="Tickets" @click="openPrintModal(row.voucherNo)">
+                    凭证印签详情
+                  </el-dropdown-item>
                   <el-dropdown-item :icon="View" @click="openDetailDrawer(row.voucherNo)">
                     详情档案
                   </el-dropdown-item>
@@ -705,6 +708,14 @@
         <div class="drawer-footer">
           <el-button @click="drawerVisible = false">关闭</el-button>
           <el-button
+            :icon="Printer"
+            type="primary"
+            plain
+            @click="openPrintModal(currentVoucher?.voucherNo)"
+          >
+            打印凭证印签
+          </el-button>
+          <el-button
             v-if="currentVoucher && (currentVoucher.status === 1 || currentVoucher.status === 4)"
             type="primary"
             :icon="Money"
@@ -788,6 +799,162 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- ==================== 弹窗：经典纸质凭证仿真印签与打印 (无审批流) ==================== -->
+    <el-dialog
+      v-model="printModalVisible"
+      title="记账凭证印签详情与打印"
+      width="960px"
+      destroy-on-close
+      class="classic-voucher-dialog"
+    >
+      <div v-loading="printModalLoading" v-if="printVoucherData" class="voucher-preview-container print-area">
+        <!-- 经典纸质凭证仿真卡片 (无审批流时间轴) -->
+        <div class="classic-voucher-sheet">
+          <!-- 凭证主标题（自适应类型，大字间距舒展） -->
+          <div class="voucher-header-title">
+            <h2>{{ getVoucherPrintTitle(printVoucherData.voucherTitle || printVoucherData.voucherTypeName || printVoucherData.voucherType) }}</h2>
+            <div class="voucher-title-underline"></div>
+          </div>
+
+          <!-- 凭证元数据栏 -->
+          <div class="voucher-meta-bar">
+            <div class="meta-date">
+              {{ formatVoucherDate(printVoucherData.accountingDate) }}
+            </div>
+            <div class="meta-no">
+              <strong>凭证字号：</strong>
+              <span class="mono-font">{{ printVoucherData.voucherWord || printVoucherData.voucherNo }}</span>
+              <el-tag size="small" type="info" class="ml-2">
+                {{ printVoucherData.voucherTypeName || printVoucherData.voucherType || '记账凭证' }}
+              </el-tag>
+              <el-tag size="small" :type="printVoucherData.postingType === 1 ? 'warning' : 'primary'" class="ml-1">
+                {{ printVoucherData.postingType === 1 ? '手工凭证' : '机制凭证' }}
+              </el-tag>
+            </div>
+            <div class="meta-attachment">
+              附单据 <span class="mono-font underline">{{ printVoucherData.attachmentCount || printVoucherData.attachments?.length || 0 }}</span> 张
+            </div>
+          </div>
+
+          <!-- 借贷分录对照表格 -->
+          <table class="voucher-entries-table">
+            <thead>
+              <tr>
+                <th style="width: 50px">行号</th>
+                <th style="width: 220px">摘 &nbsp; 要</th>
+                <th style="min-width: 260px">会计科目 / 账户编号</th>
+                <th style="width: 140px" class="text-right">借方金额 (DEBIT)</th>
+                <th style="width: 140px" class="text-right">贷方金额 (CREDIT)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in printVoucherData.entries" :key="item.entryId || item.rowNum">
+                <td class="text-center">{{ item.rowNum }}</td>
+                <td>{{ item.summary }}</td>
+                <td>
+                  <div class="subject-title">({{ item.subjectCode }}) {{ item.subjectName }}</div>
+                  <div v-if="item.accountNo" class="account-sub mono-font">账号: {{ item.accountNo }}</div>
+                </td>
+                <td class="text-right mono-font">
+                  {{ item.debitCredit === 1 ? formatAmount(item.amount) : '' }}
+                </td>
+                <td class="text-right mono-font">
+                  {{ item.debitCredit === 2 ? formatAmount(item.amount) : '' }}
+                </td>
+              </tr>
+              <!-- 空行补齐 -->
+              <tr v-if="!printVoucherData.entries || printVoucherData.entries.length < 3">
+                <td class="text-center">-</td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+              </tr>
+            </tbody>
+            <!-- 合计行 -->
+            <tfoot>
+              <tr class="total-row">
+                <td colspan="2" class="text-center font-bold">合计金额</td>
+                <td class="chinese-total">
+                  <span>人民币 (大写): </span>
+                  <strong>{{ printVoucherData.totalAmountInWords || formatAmountToChinese(printVoucherData.amount) }}</strong>
+                </td>
+                <td class="text-right mono-font font-bold">
+                  ¥ {{ formatAmount(printVoucherData.debitAmount || printVoucherData.amount) }}
+                </td>
+                <td class="text-right mono-font font-bold">
+                  ¥ {{ formatAmount(printVoucherData.creditAmount || printVoucherData.amount) }}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+
+          <!-- 四方印签栏 -->
+          <div class="voucher-signatures-bar">
+            <div class="signature-col">
+              <span class="sig-label">财务主管：</span>
+              <span class="sig-val">—</span>
+            </div>
+            <div class="signature-col">
+              <span class="sig-label">复 &nbsp; 核：</span>
+              <span class="sig-val">{{ printVoucherData.reviewerName || '—' }}</span>
+            </div>
+            <div class="signature-col">
+              <span class="sig-label">记 &nbsp; 账：</span>
+              <span class="sig-val font-bold text-primary">{{ printVoucherData.bookkeeperName || '—' }}</span>
+            </div>
+            <div class="signature-col">
+              <span class="sig-label">制 &nbsp; 单：</span>
+              <span class="sig-val">{{ printVoucherData.postingType === 1 ? (printVoucherData.bookkeeperName || '手工制单') : '系统自动' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 辅助核算项表格 (若存在) -->
+        <div v-if="printVoucherData.auxiliaries && printVoucherData.auxiliaries.length > 0" class="auxiliary-section mt-4">
+          <div class="section-title mb-2">
+            <span class="font-bold">辅助核算项 (Auxiliary Items)</span>
+          </div>
+          <table class="voucher-entries-table classic-aux-table">
+            <thead>
+              <tr>
+                <th style="width: 55px" class="text-center">序号</th>
+                <th style="width: 110px" class="text-center">关联分录</th>
+                <th style="min-width: 180px">关联会计科目</th>
+                <th style="width: 130px" class="text-center">辅助核算类别</th>
+                <th style="min-width: 180px">辅助核算项目</th>
+                <th style="width: 80px" class="text-center">方向</th>
+                <th style="width: 130px" class="text-right">核算金额 (¥)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(aux, idx) in printVoucherData.auxiliaries" :key="aux.entryId || idx">
+                <td class="text-center mono-font">{{ idx + 1 }}</td>
+                <td class="text-center">{{ aux.entryId ? aux.entryId.substring(aux.entryId.length - 4) : '-' }}</td>
+                <td>{{ aux.subjectCode }}</td>
+                <td class="text-center">
+                  <el-tag size="small" effect="plain">{{ aux.auxType }}</el-tag>
+                </td>
+                <td class="font-bold">
+                  {{ aux.auxName }} <span class="text-muted mono-font">({{ aux.auxCode }})</span>
+                </td>
+                <td class="text-center">
+                  <el-tag size="small" :type="aux.changeDirection === 2 ? 'warning' : 'success'">
+                    {{ aux.changeDirection === 2 ? '减少' : '增加' }}
+                  </el-tag>
+                </td>
+                <td class="text-right mono-font font-bold">¥ {{ formatAmount(aux.amount) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="printModalVisible = false">关闭</el-button>
+        <el-button type="primary" :icon="Printer" @click="handlePrintVoucher">打印凭证</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -798,7 +965,8 @@ import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'elem
 import {
   Search, RefreshRight, Refresh, DocumentCopy,
   View, Money, MoreFilled, WarningFilled,
-  CircleCheckFilled, Document, Clock, ArrowRight
+  CircleCheckFilled, Document, Clock, ArrowRight,
+  Tickets, Printer
 } from '@element-plus/icons-vue'
 import { formatAmount } from '@/utils/amount'
 import {
@@ -856,6 +1024,55 @@ const drawerVisible = ref(false)
 const drawerLoading = ref(false)
 const currentVoucher = ref<VoucherFullDetail | null>(null)
 const activeDrawerTab = ref('entries')
+
+// 凭证仿真印签与打印弹窗
+const printModalVisible = ref(false)
+const printModalLoading = ref(false)
+const printVoucherData = ref<VoucherFullDetail | null>(null)
+
+async function openPrintModal(voucherNo?: string) {
+  if (!voucherNo) return
+  printModalVisible.value = true
+  printModalLoading.value = true
+  try {
+    const res = await getVoucherDetail(voucherNo)
+    printVoucherData.value = res
+  } catch (error) {
+    ElMessage.error('获取凭证印签详情失败')
+  } finally {
+    printModalLoading.value = false
+  }
+}
+
+function handlePrintVoucher() {
+  window.print()
+}
+
+function formatVoucherDate(dateStr?: string) {
+  if (!dateStr) return ''
+  const parts = dateStr.split('-')
+  if (parts.length === 3) {
+    return `${parts[0]} 年 ${parts[1]} 月 ${parts[2]} 日`
+  }
+  return dateStr
+}
+
+function getVoucherPrintTitle(val?: string): string {
+  let raw = val || '记账凭证'
+  if (raw === 'RECEIPT' || raw.includes('收款')) raw = '收款凭证'
+  else if (raw === 'PAYMENT' || raw.includes('付款')) raw = '付款凭证'
+  else if (raw === 'TRANSFER' || raw.includes('转账')) raw = '转账凭证'
+  else if (raw === 'ADJUST' || raw.includes('调账')) raw = '调账凭证'
+  else if (raw === 'REVERSAL' || raw.includes('冲')) raw = '冲账凭证'
+  else if (raw === 'PERIOD_END' || raw.includes('结')) raw = '期末结转凭证'
+  else if (raw === 'GENERAL') raw = '记账凭证'
+  return raw.split('').join('  ')
+}
+
+function formatAmountToChinese(num?: number): string {
+  if (num === null || num === undefined) return '零元整'
+  return `${formatAmount(num)} 元整`
+}
 
 // 红冲弹窗
 const reversalDialogVisible = ref(false)
@@ -1589,5 +1806,154 @@ onMounted(() => {
 .reversal-dialog :deep(.el-alert__description) {
   font-size: 12px;
   line-height: 1.5;
+}
+
+/* 经典纸质凭证仿真印签与打印卡片 */
+.classic-voucher-dialog :deep(.el-dialog__body) {
+  padding: 16px 20px;
+  background-color: #f7f8fa;
+}
+
+.voucher-preview-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.classic-voucher-sheet {
+  background: #ffffff;
+  padding: 24px 28px;
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  border: 1px solid #dcdfe6;
+}
+
+.voucher-header-title {
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.voucher-header-title h2 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  margin: 0;
+  color: #1a1a1a;
+}
+
+.voucher-title-underline {
+  width: 180px;
+  height: 2px;
+  background: #1a1a1a;
+  margin: 4px auto 0;
+}
+
+.voucher-meta-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  margin-bottom: 10px;
+  padding: 0 4px;
+}
+
+.meta-date {
+  font-weight: 600;
+}
+
+.meta-attachment .underline {
+  text-decoration: underline;
+  padding: 0 4px;
+}
+
+.voucher-entries-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #333333;
+  font-size: 13px;
+}
+
+.voucher-entries-table th,
+.voucher-entries-table td {
+  border: 1px solid #333333;
+  padding: 8px 10px;
+}
+
+.voucher-entries-table th {
+  background-color: #f2f4f7;
+  font-weight: 600;
+  text-align: center;
+}
+
+.subject-title {
+  font-weight: 600;
+}
+
+.account-sub {
+  font-size: 12px;
+  color: #666;
+}
+
+.total-row {
+  background-color: #fafbfc;
+}
+
+.chinese-total {
+  font-size: 13px;
+}
+
+.voucher-signatures-bar {
+  margin-top: 14px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  padding: 0 8px;
+}
+
+.signature-col {
+  display: flex;
+  align-items: center;
+}
+
+.sig-label {
+  color: #444;
+}
+
+.sig-val {
+  min-width: 70px;
+  border-bottom: 1px solid #888;
+  text-align: center;
+  padding-bottom: 2px;
+}
+
+.classic-aux-table {
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.classic-aux-table th {
+  background-color: #f5f7fa;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .classic-voucher-dialog,
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+  .el-dialog__header,
+  .el-dialog__footer {
+    display: none !important;
+  }
 }
 </style>

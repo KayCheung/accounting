@@ -106,6 +106,10 @@ export interface ManualVoucherApplyDetail {
   applyNo: string
   voucherNo?: string
   voucherType: string
+  voucherWord?: string
+  voucherTitle?: string
+  postingType?: number
+  postingTypeDesc?: string
   tradeType: number
   tradeTypeDesc: string
   accountingDate: string

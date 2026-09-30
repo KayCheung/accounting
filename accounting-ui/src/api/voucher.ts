@@ -54,6 +54,9 @@ export interface VoucherPageItem {
   traceSeq?: number
   voucherType?: string
   voucherTypeName?: string
+  voucherWord?: string
+  voucherTitle?: string
+  totalAmountInWords?: string
   postingType?: number // 1-手工, 2-机制
   postingTypeDesc?: string
   businessCode?: string

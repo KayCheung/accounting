@@ -47,6 +47,15 @@ public class VoucherFullDetailResponse implements Serializable {
     @Schema(description = "凭证类型名称", example = "通用凭证")
     private String voucherTypeName;
 
+    @Schema(description = "经典财务凭证字号(如：转 20260930000001)", example = "转 20260930000001")
+    private String voucherWord;
+
+    @Schema(description = "凭证排版大标题(如：转账凭证/收款凭证/记账凭证)", example = "转账凭证")
+    private String voucherTitle;
+
+    @Schema(description = "合计金额中文大写", example = "壹万元整")
+    private String totalAmountInWords;
+
     @Schema(description = "入账类型：1-手工凭证, 2-机制凭证", example = "2")
     private Integer postingType;
 

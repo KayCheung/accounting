@@ -154,7 +154,7 @@ class VoucheringApplicationServiceTest {
         DictionaryPO dict = new DictionaryPO();
         dict.setDictCode("GENERAL");
         dict.setDictName("通用记账凭证");
-        when(dictionaryRepository.selectByType("VOUCHER_TYPE"))
+        when(dictionaryRepository.selectByType(com.kltb.accounting.api.constant.DictTypeEnum.VOUCHER_TYPE.getCode()))
                 .thenReturn(List.of(dict));
 
         PageResponse<VoucherPageItemResponse> response = service.queryVoucherPage(req);

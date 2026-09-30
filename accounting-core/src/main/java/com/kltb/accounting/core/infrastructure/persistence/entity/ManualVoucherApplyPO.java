@@ -3,7 +3,7 @@ package com.kltb.accounting.core.infrastructure.persistence.entity;
 
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
-import com.kltb.accounting.api.constant.ManualVoucherApplyStatusEnum;
+import com.kltb.accounting.core.domain.enums.ManualVoucherApplyStatusEnum;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;

@@ -1,5 +1,6 @@
 package com.kltb.accounting.job.job;
 
+import com.kltb.accounting.core.domain.enums.BufferStatusEnum;
 import com.kltb.accounting.core.domain.service.BufferPostingEngineDomainService;
 import com.kltb.accounting.core.domain.service.BufferPostingEngineDomainService.BatchPostingResult;
 import com.kltb.accounting.core.domain.service.RunningBalanceValidator;
@@ -80,8 +81,7 @@ public class BufferPostingEodJobHandler extends AbstractXxlJobHandler {
      */
     private Set<String> getAffectedAccountNos(LocalDate targetDate) {
         List<BufferPostingDetailPO> details = bufferPostingDetailRepository.selectPendingByCondition(
-                targetDate, BufferModeEnum.EOD_BATCH.getCode(),
-                com.kltb.accounting.core.domain.enums.BufferStatusEnum.SUCCESS.getCode(), 10000);
+                targetDate, BufferModeEnum.EOD_BATCH.getCode(), BufferStatusEnum.SUCCESS.getCode(), 10000);
 
         return details.stream()
                 .map(BufferPostingDetailPO::getAccountNo)

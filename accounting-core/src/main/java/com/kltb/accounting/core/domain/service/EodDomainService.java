@@ -1,5 +1,6 @@
 package com.kltb.accounting.core.domain.service;
 
+import com.kltb.accounting.api.constant.CurrencyEnum;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.BalanceDirectionEnum;
 import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
@@ -65,7 +66,7 @@ public class EodDomainService {
             balance.setAccountingDate(accountingDate);
             balance.setSubjectCode(subjectCode);
             balance.setAccountNo(accountNo != null ? accountNo : "");
-            balance.setCurrency("CNY");
+            balance.setCurrency(CurrencyEnum.DEFAULT_CURRENCY);
             balance.setDebitAmount(debitAmount);
             balance.setCreditAmount(creditAmount);
 

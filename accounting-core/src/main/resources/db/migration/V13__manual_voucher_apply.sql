@@ -1,4 +1,4 @@
--- Flyway migration V9__manual_voucher_apply.sql
+-- Flyway migration V13__manual_voucher_apply.sql
 -- 1. 手工凭证申请流转表
 CREATE TABLE IF NOT EXISTS `t_manual_voucher_apply` (
     `id` BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键',

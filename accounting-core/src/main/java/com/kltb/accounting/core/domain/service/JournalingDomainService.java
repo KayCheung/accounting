@@ -1,6 +1,7 @@
 // accounting-core/src/main/java/com/kltb/accounting/core/domain/service/JournalingDomainService.java
 package com.kltb.accounting.core.domain.service;
 
+import com.kltb.accounting.api.constant.CurrencyEnum;
 import com.kltb.accounting.api.request.JournalDetailRequest;
 import com.kltb.accounting.core.domain.enums.BusinessRecordStatusEnum;
 import com.kltb.accounting.core.domain.enums.CustomerTypeEnum;
@@ -121,7 +122,7 @@ public class JournalingDomainService {
             TransactionPO transaction = new TransactionPO();
             transaction.setTxnNo(txnNo).setTraceNo(traceNo);
             transaction.setAccountingDate(accountingDate);
-            transaction.setAmount(amount).setCurrency("CNY");
+            transaction.setAmount(amount).setCurrency(CurrencyEnum.DEFAULT_CURRENCY);
             transaction.setStatus(TransactionStatusEnum.PROCESSING);
             transaction.setRelateAccountCount(0); // 预开户后更新
             transactionRepository.save(transaction);

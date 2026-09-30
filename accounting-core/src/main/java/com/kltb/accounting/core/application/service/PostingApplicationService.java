@@ -103,9 +103,9 @@ public class PostingApplicationService {
         if (voucher == null) {
             throw new ServiceException(ResultCode.VOUCHER_NOT_FOUND, "凭证不存在: " + voucherNo);
         }
-        if (voucher.getStatus() != VoucherStatusEnum.PENDING) {
+        if (voucher.getStatus() != VoucherStatusEnum.PENDING && voucher.getStatus() != VoucherStatusEnum.FAILED) {
             throw new ServiceException(ResultCode.VOUCHER_STATUS_ILLEGAL,
-                "凭证状态非法，仅允许未过账凭证执行过账: " + voucherNo
+                "凭证状态非法，仅允许未过账或过账失败凭证执行过账: " + voucherNo
                     + ", 当前状态=" + (voucher.getStatus() != null ? voucher.getStatus().getDesc() : "null"));
         }
 

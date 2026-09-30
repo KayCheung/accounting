@@ -1,9 +1,7 @@
 package com.kltb.accounting.core.domain.service;
 
 import com.kltb.accounting.api.constant.ResultCode;
-import com.kltb.accounting.core.domain.enums.TradeTypeEnum;
-import com.kltb.accounting.core.domain.enums.VoucherEntryStatusEnum;
-import com.kltb.accounting.core.domain.enums.VoucherStatusEnum;
+import com.kltb.accounting.core.domain.enums.*;
 import com.kltb.accounting.core.infrastructure.account.RedisSequenceGenerator;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherEntryPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherPO;
@@ -161,7 +159,7 @@ class ReversalDomainServiceTest {
         voucher.setTraceNo("TRC001");
         voucher.setTraceSeq(0);
         voucher.setBookkeeperName("SYSTEM");
-        voucher.setPostingType(com.kltb.accounting.core.domain.enums.PostingTypeEnum.AUTOMATIC);
+        voucher.setPostingType(PostingTypeEnum.AUTOMATIC);
         return voucher;
     }
 
@@ -172,7 +170,7 @@ class ReversalDomainServiceTest {
         entry.setRowNum(1);
         entry.setSubjectCode("1001");
         entry.setAccountNo("A001");
-        entry.setDebitCredit(com.kltb.accounting.core.domain.enums.DebitCreditEnum.DEBIT);
+        entry.setDebitCredit(DebitCreditEnum.DEBIT);
         entry.setAmount(new BigDecimal("1000"));
         entry.setCurrency("CNY");
         entry.setSummary("test");

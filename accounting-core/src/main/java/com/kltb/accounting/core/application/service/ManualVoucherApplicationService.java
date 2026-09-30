@@ -3,22 +3,20 @@ package com.kltb.accounting.core.application.service;
 
 import cn.hutool.core.convert.Convert;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONObject;
+import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.kltb.accounting.api.constant.ManualVoucherApplyStatusEnum;
+import com.kltb.accounting.api.constant.AuditDecisionEnum;
+import com.kltb.accounting.api.constant.CurrencyEnum;
+import com.kltb.accounting.api.constant.DictTypeEnum;
+import com.kltb.accounting.api.constant.ManualVoucherSaveActionEnum;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.api.request.*;
 import com.kltb.accounting.api.response.*;
-import com.kltb.accounting.core.domain.enums.ChangeDirectionEnum;
-import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
-import com.kltb.accounting.core.domain.enums.PostingTypeEnum;
-import com.kltb.accounting.core.domain.enums.TradeTypeEnum;
-import com.kltb.accounting.core.domain.enums.VoucherEntryStatusEnum;
-import com.kltb.accounting.core.domain.enums.VoucherStatusEnum;
+import com.kltb.accounting.core.domain.enums.*;
 import com.kltb.accounting.core.infrastructure.account.RedisSequenceGenerator;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
-import com.kltb.accounting.core.infrastructure.persistence.repository.AccountingVoucherRepository;
-import com.kltb.accounting.core.infrastructure.persistence.repository.ManualVoucherApplyRepository;
-import com.kltb.accounting.core.infrastructure.persistence.repository.SubjectRepository;
+import com.kltb.accounting.core.infrastructure.persistence.repository.*;
 import com.kltb.accounting.core.shared.exception.AccountException;
 import com.kltb.accounting.core.shared.exception.ServiceException;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +29,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
+
+import com.kltb.accounting.core.infrastructure.dictionary.DictionaryComponent;
+import com.kltb.accounting.core.infrastructure.dictionary.VoucherTypeMeta;
 
 /**
  * 手工记账独立审批流编排应用服务
@@ -49,6 +50,10 @@ public class ManualVoucherApplicationService {
     private final ManualVoucherApplyRepository applyRepository;
     private final AccountingVoucherRepository accountingVoucherRepository;
     private final SubjectRepository subjectRepository;
+    private final AccountRepository accountRepository;
+    private final TransactionRepository transactionRepository;
+    private final DictionaryRepository dictionaryRepository;
+    private final DictionaryComponent dictionaryComponent;
     private final PostingApplicationService postingApplicationService;
     private final TransactionTemplate transactionTemplate;
     private final RedisSequenceGenerator seqGen;
@@ -63,7 +68,10 @@ public class ManualVoucherApplicationService {
         // b. 校验末级科目
         validateSubjects(request.getEntries());
 
-        // c. 计算借贷合计
+        // c. 账号自动推导与多账号拦截（若未选账号则由科目反查，唯一定位填入，多账号报错）
+        resolveAndValidateAccounts(request.getEntries());
+
+        // d. 计算借贷合计
         BigDecimal totalDebit = BigDecimal.ZERO;
         BigDecimal totalCredit = BigDecimal.ZERO;
         for (ManualVoucherApplyEntryRequest entry : request.getEntries()) {
@@ -77,10 +85,18 @@ public class ManualVoucherApplicationService {
         final BigDecimal finalDebit = totalDebit;
         final BigDecimal finalCredit = totalCredit;
 
-        boolean isDraft = "DRAFT".equalsIgnoreCase(request.getAction());
+        ManualVoucherSaveActionEnum saveAction = ManualVoucherSaveActionEnum.fromCode(request.getAction());
+        boolean isDraft = saveAction.isDraft();
         ManualVoucherApplyStatusEnum targetStatus = isDraft
                 ? ManualVoucherApplyStatusEnum.DRAFT
                 : ManualVoucherApplyStatusEnum.PENDING_AUDIT;
+
+        // 凭证类型元数据动态解析（通过公共字典组件读取 ext_json，彻底消除硬编码 "ADJUST"）
+        VoucherTypeMeta vMeta = dictionaryComponent.getVoucherTypeMeta(request.getVoucherType());
+        int defaultTradeType = (vMeta.getTradeType() != null)
+                ? vMeta.getTradeType()
+                : (vMeta.isAdjustment() ? TradeTypeEnum.ADJUSTMENT.getCode() : TradeTypeEnum.NORMAL.getCode());
+        int resolvedTradeType = (request.getTradeType() != null) ? request.getTradeType() : defaultTradeType;
 
         return transactionTemplate.execute(status -> {
             boolean isNew = StrUtil.isBlank(request.getApplyNo());
@@ -95,7 +111,7 @@ public class ManualVoucherApplicationService {
                 po = new ManualVoucherApplyPO();
                 po.setApplyNo(applyNo);
                 po.setVoucherType(defaultIfBlank(request.getVoucherType(), "记账凭证"));
-                po.setTradeType(request.getTradeType() != null ? request.getTradeType() : 2);
+                po.setTradeType(resolvedTradeType);
                 po.setAccountingDate(request.getAccountingDate());
                 po.setSummary(request.getSummary());
                 po.setAttachmentCount(attachmentCount);
@@ -105,11 +121,10 @@ public class ManualVoucherApplicationService {
                 po.setMakerName(request.getMakerName());
                 applyRepository.insertApply(po);
 
-                // 写入审计日志
+                // 写入审计日志（使用规范领域枚举，消除魔法字符）
                 recordAuditLog(applyNo,
-                        isDraft ? "CREATE_DRAFT" : "SUBMIT_AUDIT",
-                        isDraft ? "保存草稿" : "提交初审",
-                        request.getMakerName(), "MAKER",
+                        isDraft ? ManualVoucherAuditActionEnum.CREATE_DRAFT : ManualVoucherAuditActionEnum.SUBMIT_AUDIT,
+                        request.getMakerName(), ManualVoucherOperatorRoleEnum.MAKER,
                         null, targetStatus.getCode(),
                         isDraft ? "制单人保存凭证草稿" : "制单人提交初审");
             } else {
@@ -122,12 +137,12 @@ public class ManualVoucherApplicationService {
                         && po.getApplyStatus() != ManualVoucherApplyStatusEnum.AUDIT_REJECTED
                         && po.getApplyStatus() != ManualVoucherApplyStatusEnum.REVIEW_REJECTED) {
                     throw new ServiceException(ResultCode.OPERATION_NOT_ALLOWED,
-                            "当前状态不允许编辑: " + po.getApplyStatus().getDesc());
+                            "当前状态不允许编辑: " + (po.getApplyStatus() != null ? po.getApplyStatus().getDesc() : ""));
                 }
 
-                Integer preStatus = po.getApplyStatus().getCode();
+                Integer preStatus = po.getApplyStatus() != null ? po.getApplyStatus().getCode() : null;
                 po.setVoucherType(defaultIfBlank(request.getVoucherType(), po.getVoucherType()));
-                po.setTradeType(request.getTradeType() != null ? request.getTradeType() : po.getTradeType());
+                po.setTradeType(request.getTradeType() != null ? request.getTradeType() : defaultTradeType);
                 po.setAccountingDate(request.getAccountingDate());
                 po.setSummary(request.getSummary());
                 po.setAttachmentCount(attachmentCount);
@@ -144,9 +159,8 @@ public class ManualVoucherApplicationService {
 
                 // 写入审计日志
                 recordAuditLog(applyNo,
-                        isDraft ? "UPDATE_DRAFT" : "RESUBMIT_AUDIT",
-                        isDraft ? "更新草稿" : "重新提交初审",
-                        request.getMakerName(), "MAKER",
+                        isDraft ? ManualVoucherAuditActionEnum.UPDATE_DRAFT : ManualVoucherAuditActionEnum.RESUBMIT_AUDIT,
+                        request.getMakerName(), ManualVoucherOperatorRoleEnum.MAKER,
                         preStatus, targetStatus.getCode(),
                         isDraft ? "制单人修改草稿" : "制单人重新修改并提交初审");
             }
@@ -162,7 +176,7 @@ public class ManualVoucherApplicationService {
                 entryPO.setSubjectCode(entryReq.getSubjectCode());
                 entryPO.setAccountNo(defaultIfBlank(entryReq.getAccountNo(), ""));
                 entryPO.setAmount(entryReq.getAmount());
-                entryPO.setCurrency(defaultIfBlank(entryReq.getCurrency(), "CNY"));
+                entryPO.setCurrency(StrUtil.isNotBlank(entryReq.getCurrency()) ? entryReq.getCurrency() : CurrencyEnum.DEFAULT_CURRENCY);
                 entryPO.setSummary(defaultIfBlank(entryReq.getSummary(), request.getSummary()));
                 entryPO.setUnilateral(entryReq.getUnilateral() != null ? entryReq.getUnilateral() : 1);
                 entryPOs.add(entryPO);
@@ -216,10 +230,14 @@ public class ManualVoucherApplicationService {
         }
         if (po.getApplyStatus() != ManualVoucherApplyStatusEnum.PENDING_AUDIT) {
             throw new ServiceException(ResultCode.OPERATION_NOT_ALLOWED,
-                    "当前申请单不在待初审状态: " + po.getApplyStatus().getDesc());
+                    "当前申请单不在待初审状态: " + (po.getApplyStatus() != null ? po.getApplyStatus().getDesc() : ""));
         }
 
-        boolean isPass = "PASS".equalsIgnoreCase(request.getAction());
+        AuditDecisionEnum decision = AuditDecisionEnum.fromCode(request.getAction());
+        if (decision == null) {
+            throw new ServiceException(ResultCode.PARAM_ERROR, "不支持的初审操作类型: " + request.getAction());
+        }
+        boolean isPass = decision.isPass();
         if (!isPass && StrUtil.isBlank(request.getOpinion())) {
             throw new ServiceException(ResultCode.PARAM_ERROR, "初审驳回时必须填写驳回原因");
         }
@@ -229,7 +247,7 @@ public class ManualVoucherApplicationService {
                 : ManualVoucherApplyStatusEnum.AUDIT_REJECTED;
 
         transactionTemplate.executeWithoutResult(status -> {
-            Integer preStatus = po.getApplyStatus().getCode();
+            Integer preStatus = po.getApplyStatus() != null ? po.getApplyStatus().getCode() : null;
             po.setApplyStatus(newStatus);
             po.setAuditorName(request.getOperatorName());
             po.setAuditTime(LocalDateTime.now());
@@ -237,9 +255,8 @@ public class ManualVoucherApplicationService {
             applyRepository.updateApply(po);
 
             recordAuditLog(request.getApplyNo(),
-                    isPass ? "AUDIT_PASS" : "AUDIT_REJECT",
-                    isPass ? "初审通过" : "初审驳回",
-                    request.getOperatorName(), "AUDITOR",
+                    isPass ? ManualVoucherAuditActionEnum.AUDIT_PASS : ManualVoucherAuditActionEnum.AUDIT_REJECT,
+                    request.getOperatorName(), ManualVoucherOperatorRoleEnum.AUDITOR,
                     preStatus, newStatus.getCode(),
                     request.getOpinion());
         });
@@ -255,10 +272,14 @@ public class ManualVoucherApplicationService {
         }
         if (po.getApplyStatus() != ManualVoucherApplyStatusEnum.PENDING_REVIEW) {
             throw new ServiceException(ResultCode.OPERATION_NOT_ALLOWED,
-                    "当前申请单不在待复核状态: " + po.getApplyStatus().getDesc());
+                    "当前申请单不在待复核状态: " + (po.getApplyStatus() != null ? po.getApplyStatus().getDesc() : ""));
         }
 
-        boolean isPass = "PASS".equalsIgnoreCase(request.getAction());
+        AuditDecisionEnum decision = AuditDecisionEnum.fromCode(request.getAction());
+        if (decision == null) {
+            throw new ServiceException(ResultCode.PARAM_ERROR, "不支持的复核操作类型: " + request.getAction());
+        }
+        boolean isPass = decision.isPass();
         if (!isPass && StrUtil.isBlank(request.getOpinion())) {
             throw new ServiceException(ResultCode.PARAM_ERROR, "复核驳回时必须填写驳回原因");
         }
@@ -268,7 +289,7 @@ public class ManualVoucherApplicationService {
                 : ManualVoucherApplyStatusEnum.REVIEW_REJECTED;
 
         transactionTemplate.executeWithoutResult(status -> {
-            Integer preStatus = po.getApplyStatus().getCode();
+            Integer preStatus = po.getApplyStatus() != null ? po.getApplyStatus().getCode() : null;
             po.setApplyStatus(newStatus);
             po.setReviewerName(request.getOperatorName());
             po.setReviewTime(LocalDateTime.now());
@@ -276,16 +297,15 @@ public class ManualVoucherApplicationService {
             applyRepository.updateApply(po);
 
             recordAuditLog(request.getApplyNo(),
-                    isPass ? "REVIEW_PASS" : "REVIEW_REJECT",
-                    isPass ? "复核通过" : "复核驳回",
-                    request.getOperatorName(), "REVIEWER",
+                    isPass ? ManualVoucherAuditActionEnum.REVIEW_PASS : ManualVoucherAuditActionEnum.REVIEW_REJECT,
+                    request.getOperatorName(), ManualVoucherOperatorRoleEnum.REVIEWER,
                     preStatus, newStatus.getCode(),
                     request.getOpinion());
         });
     }
 
     /**
-     * 4. 确认记账（终审复核通过后由记账员操作，正式生成凭证并执行过账）
+     * 4. 确认记账（终审复核通过后由记账员操作，正式生成法定凭证、事务记录并实时联动过账）
      */
     public String executeBookkeeping(ManualVoucherApplyPostRequest request) {
         ManualVoucherApplyPO po = applyRepository.selectByApplyNo(request.getApplyNo());
@@ -294,7 +314,7 @@ public class ManualVoucherApplicationService {
         }
         if (po.getApplyStatus() != ManualVoucherApplyStatusEnum.PENDING_BOOKKEEPING) {
             throw new ServiceException(ResultCode.OPERATION_NOT_ALLOWED,
-                    "仅允许对【待记账】状态的手工凭证执行记账入账，当前状态=" + po.getApplyStatus().getDesc());
+                    "仅允许对【待记账】状态的手工凭证执行记账入账，当前状态=" + (po.getApplyStatus() != null ? po.getApplyStatus().getDesc() : ""));
         }
 
         List<ManualVoucherApplyEntryPO> applyEntries = applyRepository.selectEntriesByApplyNo(request.getApplyNo());
@@ -302,22 +322,50 @@ public class ManualVoucherApplicationService {
             throw new ServiceException(ResultCode.DATA_NOT_FOUND, "申请分录明细不存在: " + request.getApplyNo());
         }
 
-        // 生成正式凭证号与入账逻辑
+        // 生成正式凭证号、事务记录与入账逻辑
         String voucherNo = transactionTemplate.execute(status -> {
             String vouNo = generateVoucherNo(po.getAccountingDate());
+            String txnNo = generateTxnNo(po.getAccountingDate());
 
-            // 1. 正式落库 t_accounting_voucher
+            // 0. 通过公共字典组件动态获取凭证类型元数据（彻底消除硬编码与手工解析）
+            VoucherTypeMeta vMeta = dictionaryComponent.getVoucherTypeMeta(po.getVoucherType());
+            String tradingCode = StrUtil.isNotBlank(vMeta.getTradingCode()) ? vMeta.getTradingCode() : "TRANSFER";
+            String payChannel = StrUtil.isNotBlank(vMeta.getPayChannel()) ? vMeta.getPayChannel() : "INTERNAL";
+            int resolvedTradeType = (po.getTradeType() != null)
+                    ? po.getTradeType()
+                    : (vMeta.getTradeType() != null ? vMeta.getTradeType() : (vMeta.isAdjustment() ? TradeTypeEnum.ADJUSTMENT.getCode() : TradeTypeEnum.NORMAL.getCode()));
+            String finalVoucherType = StrUtil.isNotBlank(vMeta.getDictCode()) ? vMeta.getDictCode() : po.getVoucherType();
+
+            // 动态解析币种（由分录继承，若空则使用系统默认币种，绝不硬编码）
+            String resolvedCurrency = applyEntries.stream()
+                    .map(ManualVoucherApplyEntryPO::getCurrency)
+                    .filter(StrUtil::isNotBlank)
+                    .findFirst()
+                    .orElse(CurrencyEnum.DEFAULT_CURRENCY);
+
+            // 1. 创建事务记录落库 t_transaction
+            TransactionPO txn = new TransactionPO();
+            txn.setTxnNo(txnNo);
+            txn.setTraceNo(po.getApplyNo());
+            txn.setAccountingDate(po.getAccountingDate());
+            txn.setRelateAccountCount(applyEntries.size());
+            txn.setAmount(po.getTotalDebitAmount());
+            txn.setCurrency(resolvedCurrency);
+            txn.setStatus(TransactionStatusEnum.PROCESSING);
+            transactionRepository.save(txn);
+
+            // 2. 正式落库法定凭证主表 t_accounting_voucher
             AccountingVoucherPO voucherPO = new AccountingVoucherPO();
             voucherPO.setVoucherNo(vouNo);
-            voucherPO.setTxnNo("");
+            voucherPO.setTxnNo(txnNo);
             voucherPO.setTraceNo(po.getApplyNo());
             voucherPO.setTraceSeq(1);
-            voucherPO.setVoucherType(po.getVoucherType());
+            voucherPO.setVoucherType(finalVoucherType);
             voucherPO.setPostingType(PostingTypeEnum.MANUAL);
             voucherPO.setBusinessCode("MANUAL");
-            voucherPO.setTradingCode("ADJUST");
-            voucherPO.setPayChannel("INTERNAL");
-            voucherPO.setTradeType(TradeTypeEnum.ADJUSTMENT);
+            voucherPO.setTradingCode(tradingCode);
+            voucherPO.setPayChannel(payChannel);
+            voucherPO.setTradeType(TradeTypeEnum.fromCode(resolvedTradeType));
             voucherPO.setTradeTime(LocalDateTime.now());
             voucherPO.setAmount(po.getTotalDebitAmount());
             voucherPO.setStatus(VoucherStatusEnum.PENDING);
@@ -328,26 +376,65 @@ public class ManualVoucherApplicationService {
             voucherPO.setReviewerName(po.getReviewerName());
             accountingVoucherRepository.insert(voucherPO);
 
-            // 2. 正式落库 t_accounting_voucher_entry 与关联辅助核算 t_accounting_voucher_auxiliary
+            // 3. 正式落库 t_accounting_voucher_entry 与关联辅助核算 t_accounting_voucher_auxiliary
             List<ManualVoucherApplyAuxiliaryPO> applyAuxiliaries = applyRepository.selectAuxiliariesByApplyNo(po.getApplyNo());
             Map<Integer, List<ManualVoucherApplyAuxiliaryPO>> auxMap = applyAuxiliaries.stream()
                     .collect(Collectors.groupingBy(ManualVoucherApplyAuxiliaryPO::getEntryRowNum));
 
             for (ManualVoucherApplyEntryPO applyEntry : applyEntries) {
+                // 若手工申请遗留空白账号，根据科目自动反查补全
+                if (StrUtil.isBlank(applyEntry.getAccountNo())) {
+                    List<AccountPO> accounts = accountRepository.selectBySubjectCode(applyEntry.getSubjectCode());
+                    if (accounts.size() == 1) {
+                        applyEntry.setAccountNo(accounts.get(0).getAccountNo());
+                    } else if (accounts.size() > 1) {
+                        throw new AccountException(ResultCode.PARAM_ERROR,
+                                "分录科目 [" + applyEntry.getSubjectCode() + "] 关联多个分户账户，无法自动推导，请修改申请指定明确账号");
+                    } else {
+                        throw new AccountException(ResultCode.ACCOUNT_NOT_FOUND,
+                                "分录科目 [" + applyEntry.getSubjectCode() + "] 未开立分户账户，无法记账");
+                    }
+                }
+
                 String entryId = generateEntryId();
                 AccountingVoucherEntryPO entryPO = new AccountingVoucherEntryPO();
                 entryPO.setVoucherNo(vouNo);
                 entryPO.setEntryId(entryId);
                 entryPO.setRowNum(applyEntry.getRowNum());
                 entryPO.setSubjectCode(applyEntry.getSubjectCode());
-                entryPO.setAccountNo(applyEntry.getAccountNo());
+                entryPO.setAccountNo(defaultIfBlank(applyEntry.getAccountNo(), ""));
                 entryPO.setDebitCredit(applyEntry.getDebitCredit());
                 entryPO.setAmount(applyEntry.getAmount());
-                entryPO.setCurrency(applyEntry.getCurrency());
-                entryPO.setSummary(applyEntry.getSummary());
+                entryPO.setCurrency(StrUtil.isNotBlank(applyEntry.getCurrency()) ? applyEntry.getCurrency() : CurrencyEnum.DEFAULT_CURRENCY);
+                entryPO.setSummary(defaultIfBlank(applyEntry.getSummary(), po.getSummary()));
                 entryPO.setStatus(VoucherEntryStatusEnum.PENDING);
                 entryPO.setAccountingDate(po.getAccountingDate());
-                entryPO.setUnilateral(applyEntry.getUnilateral());
+                entryPO.setUnilateral(applyEntry.getUnilateral() != null ? applyEntry.getUnilateral() : 1);
+                entryPO.setBuffered(0);
+                entryPO.setExchangeRate(BigDecimal.ONE);
+                entryPO.setUnitPrice(BigDecimal.ZERO);
+                entryPO.setQuantity(0);
+                entryPO.setPricingUnit("");
+
+                // 核心财务律法：推导分录增减方向 changeDirection（1-增, 2-减）
+                AccountSubjectPO subject = subjectRepository.selectByCode(applyEntry.getSubjectCode());
+                int subjectBalanceDir = 1; // 默认借方
+                if (subject != null && subject.getDebitCredit() != null) {
+                    subjectBalanceDir = subject.getDebitCredit().getCode();
+                } else if (applyEntry.getSubjectCode() != null && !applyEntry.getSubjectCode().isEmpty()) {
+                    char firstChar = applyEntry.getSubjectCode().charAt(0);
+                    if (firstChar == '2' || firstChar == '3' || (firstChar == '6' && applyEntry.getSubjectCode().startsWith("60"))) {
+                        subjectBalanceDir = 2; // 贷方
+                    } else {
+                        subjectBalanceDir = 1; // 借方
+                    }
+                }
+                int entryDebitCredit = (applyEntry.getDebitCredit() != null)
+                        ? applyEntry.getDebitCredit().getCode()
+                        : 1;
+                int changeDir = (entryDebitCredit == subjectBalanceDir) ? 1 : 2;
+                entryPO.setChangeDirection(changeDir);
+
                 accountingVoucherRepository.insertEntry(entryPO);
 
                 // 关联当前分录的辅助核算分摊项，转入法定凭证辅助核算表
@@ -369,7 +456,7 @@ public class ManualVoucherApplicationService {
                 }
             }
 
-            // 3. 正式落库凭证附件 t_accounting_voucher_attachment
+            // 4. 正式落库凭证附件 t_accounting_voucher_attachment
             List<ManualVoucherApplyAttachmentPO> applyAttachments = applyRepository.selectAttachmentsByApplyNo(po.getApplyNo());
             if (applyAttachments != null && !applyAttachments.isEmpty()) {
                 for (ManualVoucherApplyAttachmentPO att : applyAttachments) {
@@ -380,32 +467,31 @@ public class ManualVoucherApplicationService {
                 }
             }
 
-            // 3. 回填申请表状态与正式凭证号
-            Integer preStatus = po.getApplyStatus().getCode();
+            // 5. 回填申请表状态与正式凭证号
+            Integer preStatus = po.getApplyStatus() != null ? po.getApplyStatus().getCode() : null;
             po.setApplyStatus(ManualVoucherApplyStatusEnum.BOOKED);
             po.setVoucherNo(vouNo);
             po.setBookkeeperName(request.getBookkeeperName());
             po.setBookkeepingTime(LocalDateTime.now());
             applyRepository.updateApply(po);
 
-            // 4. 记录记账流转日志
+            // 6. 记录记账流转日志
             recordAuditLog(po.getApplyNo(),
-                    "BOOKKEEPING",
-                    "确认记账入账",
-                    request.getBookkeeperName(), "BOOKKEEPER",
+                    ManualVoucherAuditActionEnum.BOOKKEEPING,
+                    request.getBookkeeperName(), ManualVoucherOperatorRoleEnum.BOOKKEEPER,
                     preStatus, ManualVoucherApplyStatusEnum.BOOKED.getCode(),
                     defaultIfBlank(request.getRemark(), "确认记账，正式凭证号: " + vouNo));
 
             return vouNo;
         });
 
-        // 5. 联动过账引擎执行过账与余额扣增（若配置了分户账号）
+        // 7. 联动过账引擎实时执行过账与余额更新（记账后系统自动过账，无需人工二次操作）
         try {
             PostingExecuteRequest postReq = new PostingExecuteRequest();
             postReq.setVoucherNo(voucherNo);
             postReq.setOperatorName(request.getBookkeeperName());
             postingApplicationService.executePosting(postReq);
-            log.info("[手工记账] 凭证过账执行成功: applyNo={}, voucherNo={}", request.getApplyNo(), voucherNo);
+            log.info("[手工记账] 凭证记账落库成功并完成实时过账: applyNo={}, voucherNo={}", request.getApplyNo(), voucherNo);
         } catch (Exception e) {
             log.warn("[手工记账] 凭证保存成功，过账处理提示: applyNo={}, voucherNo={}, message={}",
                     request.getApplyNo(), voucherNo, e.getMessage());
@@ -426,18 +512,17 @@ public class ManualVoucherApplicationService {
                 && po.getApplyStatus() != ManualVoucherApplyStatusEnum.AUDIT_REJECTED
                 && po.getApplyStatus() != ManualVoucherApplyStatusEnum.REVIEW_REJECTED) {
             throw new ServiceException(ResultCode.OPERATION_NOT_ALLOWED,
-                    "仅允许对草稿或被驳回申请执行作废操作，当前状态=" + po.getApplyStatus().getDesc());
+                    "仅允许对草稿或被驳回申请执行作废操作，当前状态=" + (po.getApplyStatus() != null ? po.getApplyStatus().getDesc() : ""));
         }
 
         transactionTemplate.executeWithoutResult(status -> {
-            Integer preStatus = po.getApplyStatus().getCode();
+            Integer preStatus = po.getApplyStatus() != null ? po.getApplyStatus().getCode() : null;
             po.setApplyStatus(ManualVoucherApplyStatusEnum.CANCELLED);
             applyRepository.updateApply(po);
 
             recordAuditLog(applyNo,
-                    "CANCEL",
-                    "作废申请",
-                    operatorName, "MAKER",
+                    ManualVoucherAuditActionEnum.CANCEL,
+                    operatorName, ManualVoucherOperatorRoleEnum.MAKER,
                     preStatus, ManualVoucherApplyStatusEnum.CANCELLED.getCode(),
                     defaultIfBlank(reason, "制单人主动作废"));
         });
@@ -589,10 +674,22 @@ public class ManualVoucherApplicationService {
 
         String words = formatAmountToChinese(po.getTotalDebitAmount());
 
+        // 动态推导凭证印签大标题与字头（通过公共字典组件读取 ext_json，彻底消除硬编码）
+        VoucherTypeMeta vMeta = dictionaryComponent.getVoucherTypeMeta(po.getVoucherType());
+        String prefix = vMeta.getPrefix();
+        String title = vMeta.getTitle();
+
+        String digits = (po.getVoucherNo() != null ? po.getVoucherNo() : po.getApplyNo()).replaceAll("[^0-9]", "");
+        String voucherWord = prefix + (digits.isEmpty() ? "" : " " + digits);
+
         return ManualVoucherApplyDetailResponse.builder()
                 .applyNo(po.getApplyNo())
                 .voucherNo(po.getVoucherNo())
                 .voucherType(po.getVoucherType())
+                .voucherWord(voucherWord)
+                .voucherTitle(title)
+                .postingType(PostingTypeEnum.MANUAL.getCode())
+                .postingTypeDesc(PostingTypeEnum.MANUAL.getDesc())
                 .tradeType(po.getTradeType())
                 .tradeTypeDesc(po.getTradeType() != null && po.getTradeType() == 1 ? "正常" : "调账")
                 .accountingDate(po.getAccountingDate())
@@ -687,15 +784,48 @@ public class ManualVoucherApplicationService {
         }
     }
 
-    private void recordAuditLog(String applyNo, String action, String actionDesc,
-                                String operatorName, String operatorRole,
+    /**
+     * 账号自动推导与多账号校验拦截
+     */
+    private void resolveAndValidateAccounts(List<ManualVoucherApplyEntryRequest> entries) {
+        if (entries == null || entries.isEmpty()) {
+            return;
+        }
+        for (ManualVoucherApplyEntryRequest entry : entries) {
+            if (StrUtil.isBlank(entry.getAccountNo())) {
+                List<AccountPO> accounts = accountRepository.selectBySubjectCode(entry.getSubjectCode());
+                if (accounts == null || accounts.isEmpty()) {
+                    throw new AccountException(ResultCode.ACCOUNT_NOT_FOUND,
+                            "会计科目 [" + entry.getSubjectCode() + "] 未查询到绑定的分户账户，请先开立分户账户");
+                }
+                if (accounts.size() > 1) {
+                    throw new AccountException(ResultCode.PARAM_ERROR,
+                            "会计科目 [" + entry.getSubjectCode() + "] 存在多个分户账户(" + accounts.size() + "个)，请明确选择具体分户账号");
+                }
+                entry.setAccountNo(accounts.get(0).getAccountNo());
+            } else {
+                AccountPO acc = accountRepository.selectByAccountNo(entry.getAccountNo().trim());
+                if (acc == null) {
+                    throw new AccountException(ResultCode.ACCOUNT_NOT_FOUND,
+                            "分户账户不存在: " + entry.getAccountNo());
+                }
+                if (!acc.getSubjectCode().equals(entry.getSubjectCode())) {
+                    throw new AccountException(ResultCode.PARAM_ERROR,
+                            "分户账户 " + entry.getAccountNo() + " 所属科目(" + acc.getSubjectCode() + ")与分录科目(" + entry.getSubjectCode() + ")不一致");
+                }
+            }
+        }
+    }
+
+    private void recordAuditLog(String applyNo, ManualVoucherAuditActionEnum action,
+                                String operatorName, ManualVoucherOperatorRoleEnum operatorRole,
                                 Integer preStatus, Integer postStatus, String opinion) {
         ManualVoucherAuditLogPO logPO = new ManualVoucherAuditLogPO();
         logPO.setApplyNo(applyNo);
-        logPO.setAction(action);
-        logPO.setActionDesc(actionDesc);
+        logPO.setAction(action != null ? action.getCode() : "ACTION");
+        logPO.setActionDesc(action != null ? action.getDesc() : "");
         logPO.setOperatorName(defaultIfBlank(operatorName, "SYSTEM"));
-        logPO.setOperatorRole(defaultIfBlank(operatorRole, "OPERATOR"));
+        logPO.setOperatorRole(operatorRole != null ? operatorRole.getCode() : "OPERATOR");
         logPO.setPreStatus(preStatus);
         logPO.setPostStatus(postStatus);
         logPO.setOpinion(defaultIfBlank(opinion, ""));
@@ -740,6 +870,15 @@ public class ManualVoucherApplicationService {
             return seqGen.generate("VOU", date != null ? date : LocalDate.now(), 6, 25);
         } catch (Exception e) {
             return "VOU" + (date != null ? date.toString().replace("-", "") : "20260929")
+                    + String.format("%06d", (int) (Math.random() * 900000 + 100000));
+        }
+    }
+
+    private String generateTxnNo(LocalDate date) {
+        try {
+            return seqGen.generate("TXN", date != null ? date : LocalDate.now(), 6, 25);
+        } catch (Exception e) {
+            return "TXN" + (date != null ? date.toString().replace("-", "") : "20260930")
                     + String.format("%06d", (int) (Math.random() * 900000 + 100000));
         }
     }

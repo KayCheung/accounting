@@ -395,6 +395,64 @@
     - 质量与测试验收：
       - 单元测试覆盖：`ManualVoucherApplicationServiceTest` 新增 `testSaveAndBookkeepingWithAuxiliaryAndAttachment`，全套 7 个单测用例 100% 通过（0 失败 0 错误）；
       - 前端工程验证：TypeScript 0 错误，`npm run build` 打包 100% 成功。
+  → 完成内容（Step 23.4.3 手工凭证体验与规范优化 — 字典驱动、制单人锁定与持久化枚举对齐）：
+    - 字典动态驱动改造：
+      - 凭证类型从前端写死改造为自系统字典动态拉取（`dictType = voucher_type`），附带稳健降级兜底；
+      - 辅助核算分摊“核算类别”从前端写死改造为自系统字典动态拉取（`dictType = auxiliary_type`），联动回填核算项默认信息；
+    - 制单人安全锁定：
+      - 制单人输入框设为只读禁用，杜绝随意篡改，默认填充当前操作员；
+    - 领域枚举与持久化深度解耦（根除 SQLException: Incorrect integer value: 'PENDING_AUDIT'）：
+      - 根因：原 `ManualVoucherApplyStatusEnum` 错置在 `accounting-api`，受限于契约层严禁引入持久层依赖规范而无法添加 `@EnumValue`；
+      - 修复：将枚举迁移归位至领域层 `com.kltb.accounting.core.domain.enums`，为 `code` 标注 `@EnumValue`；
+      - `ManualVoucherApplyPO` 原生使用领域枚举，由 MyBatis-Plus 自动完成 Java 枚举与 MySQL `TINYINT` 的持久化双向映射。
+    - 待办技术债与后续演进清单（TODO Backlog）：
+      - [TODO-SEC-01] 制单人身份自动从登录上下文注入：当前系统尚未集成统一认证中心（SSO / SecurityContext），制单人暂时默认当前操作用户并置灰只读，后续待统一登录鉴权模块就绪后动态获取；
+      - [TODO-OSS-01] 凭证原始附件对象存储直传服务对接：当前系统尚未对接对象存储服务（MinIO / Aliyun OSS / S3），待底层对象存储服务接入后将附件录入改造为文件直传与哈希防篡改校验。
+  → 完成内容（Step 23.4.4 手工记账与凭证全景档案深度完善 — 魔法字符根除、字典驱动交易、科目账号智能推导、事务联动与印签打印）：
+    - 消除魔法字符与领域枚举补全：
+      - 新建 `ManualVoucherAuditActionEnum` 领域枚举：涵盖创建草稿、提交审核、重新提交、审核通过/驳回、复核通过/驳回、记账、作废等全生命周期动作；
+      - 新建 `ManualVoucherOperatorRoleEnum` 领域枚举：涵盖制单人、审核人、复核人、记账人、系统等五大流转角色；
+      - 全面替换业务服务与流转审计日志中的硬编码字符串。
+    - 消除业务硬编码与字典元数据增强（Flyway V14）：
+      - 新建 `V14__voucher_type_ext_and_manual_dicts.sql` 增量脚本；
+      - 补充字典项：`voucher_type = ADJUST`（调账凭证）、`business_code = MANUAL`（手工记账）、`trading_code = ADJUST`（账务调整）；
+      - 为 `voucher_type` 字典（收、付、转、调、冲、结等）扩充 `ext_json` 元数据：统一配置字头（prefix）、大标题（title）、默认交易类型（tradeType）、交易码（tradingCode）与资金渠道（payChannel）；
+      - `ManualVoucherApplicationService.executeBookkeeping` 完全从字典动态解析交易要素，彻底消除写死代码。
+    - TradeType 逻辑修正：
+      - 手工凭证录入与记账时 `tradeType` 默认设为正常（1-NORMAL）；
+      - 仅当凭证类型为调账（`ADJUST`）或字典配置为调账时，自动推导为调账类型（2-ADJUSTMENT）。
+    - 记账与过账流程闭环明确：
+      - 明确财务核心规则：手工凭证在【确认记账】时系统后台原子生成正式法定凭证、事务记录并直接触发实时过账更新分户余额，一步到位，无需也不应由用户在凭证管理页面进行二次手动过账。
+    - 会计科目反查账户智能推导与多账号拦截：
+      - 手工制单时分户账号允许选填；
+      - 制单提交时后端根据末级科目编码自动反查 `t_account`；
+      - 若该科目下唯一定位到 1 个分户账户，自动智能补全 `account_no`；
+      - 若该科目下开立了多个分户账户，严正抛出业务异常（`PARAM_ERROR`），拦截并提示用户手工明确选择具体分户账号，防止窜账；
+      - 若未开立分户账户，明确提示账户不存在（`ACCOUNT_NOT_FOUND`）。
+    - 过账引擎失败凭证放行重试：
+      - `PostingApplicationService` 调整过账前置状态校验，放行过账失败状态（`VoucherStatusEnum.FAILED`），支持在排查问题后手动重新触发过账。
+    - 完整业务事务记录（t_transaction）闭环：
+      - 手工凭证确认记账时，先落库 `t_transaction`（状态 `PROCESSING`，业务类型 `MANUAL`），并回填至 `t_accounting_voucher.txn_no`；
+      - 过账引擎完成后将事务状态更新为 `SUCCESS`，形成“业务单据 - 事务 - 凭证 - 分录 - 分户账”的完整追溯链条。
+    - 记账凭证管理（全景档案）印签详情与打印支持：
+      - `views/business/voucher/index.vue` 增加“凭证印签详情”操作与仿真纸质印签弹窗，**严格隐藏审批流转时间轴**；
+      - 显式区分展示【机制凭证】与【手工凭证】标签；
+  → 完成内容（Step 23.4.5 系统级字典治理与硬编码全面清除 — 公共字典 ext_json 组件、系统字典类型枚举、币种枚举、审批决策枚举）：
+    - 字典与 ext_json 统一公共组件落地：
+      - 新建 `DictionaryComponent`（Spring Bean）与 `VoucherTypeMeta` 领域模型，提供泛型对象反序列化、安全属性提取（String/Int/BigDecimal/Bool）与按编码/名称灵活反查；
+      - 封装凭证类型元数据装配与优雅降级兜底，彻底根除各业务类中重复的 JSONUtil 解析和 catch 块。
+    - 动态字头与标题彻底消除硬编码：
+      - `VoucheringAssembler.toFullDetail` 与 `ManualVoucherApplicationService.getDetail` 彻底删除 `if (contains("收款") || "RECEIPT".equalsIgnoreCase(...))` 庞大硬编码分支；
+      - 统一接入 `DictionaryComponent.getVoucherTypeMeta`，实现凭证大标题（title）与字头（prefix）由字典及 `ext_json` 100% 动态驱动，新增凭证类型无需修改任何 Java 代码。
+    - 系统级字典分类枚举（DictTypeEnum）：
+      - 新建 `DictTypeEnum` 枚举（`voucher_type`, `pay_channel`, `trading_code`, `funds_type`, `auxiliary_type`, `business_code`, `account_type`, `currency`），收拢所有系统级字典类型，杜绝魔法字符串。
+    - 币种枚举与硬编码 "CNY" 全面治理：
+      - 新建 `CurrencyEnum`（遵循 ISO 4217 规范），定义标准币种与 `DEFAULT_CURRENCY = "CNY"`；
+      - 全面重构 `ManualVoucherApplicationService`、`TemplateConverter`、`AccountOpeningDomainService`、`JournalingDomainService`、`VoucheringDomainService`、`EodDomainService` 中的 `"CNY"` 硬编码；
+      - 手工记账流水与事务记录的币种由分录自动动态继承，非硬编码绑定人民币。
+    - 审批与保存操作枚举化：
+      - 新建 `AuditDecisionEnum`（`PASS` 通过, `REJECT` 驳回）与 `ManualVoucherSaveActionEnum`（`DRAFT` 保存草稿, `SUBMIT` 提交初审）；
+      - 初审、复核与保存逻辑彻底消除 `"PASS".equalsIgnoreCase`、`"DRAFT".equalsIgnoreCase` 魔法比对，非法操作码严格校验拦截。
   → 待进行业务页面：日切与试算平衡 (`business/eod`)、缓冲记账监控 (`business/buffer-monitor`)
 
 ---

@@ -132,16 +132,16 @@ public class ManualVoucherController {
      */
     @GetMapping("/leaf-subjects")
     @Operation(summary = "获取允许记账的末级科目列表", description = "用于制单时快速下拉或搜索科目")
-    public ApiResponse<List<Map<String, Object>>> getLeafSubjects() {
+    public ApiResponse<List<com.kltb.accounting.api.response.LeafSubjectResponse>> getLeafSubjects() {
         List<AccountSubjectPO> subjects = subjectRepository.selectLeafForPosting();
-        List<Map<String, Object>> list = subjects.stream().map(sub -> {
-            Map<String, Object> map = new HashMap<>();
-            map.put("subjectCode", sub.getSubjectCode());
-            map.put("subjectName", sub.getSubjectName());
-            map.put("subjectLevel", sub.getSubjectLevel());
-            map.put("balanceDirection", sub.getDebitCredit() != null ? sub.getDebitCredit().getCode() : 1);
-            return map;
-        }).collect(Collectors.toList());
+        List<com.kltb.accounting.api.response.LeafSubjectResponse> list = subjects.stream().map(sub ->
+            com.kltb.accounting.api.response.LeafSubjectResponse.builder()
+                .subjectCode(sub.getSubjectCode())
+                .subjectName(sub.getSubjectName())
+                .subjectLevel(sub.getSubjectLevel())
+                .balanceDirection(sub.getDebitCredit() != null ? sub.getDebitCredit().getCode() : 1)
+                .build()
+        ).collect(Collectors.toList());
         return ApiResponse.ok(list);
     }
 }

@@ -2,6 +2,7 @@ package com.kltb.accounting.core.application;
 
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.api.request.TemplateCreateRequest;
+import com.kltb.accounting.core.domain.enums.CustomerTypeEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountSubjectPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountTemplatePO;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountMapper;
@@ -133,7 +134,7 @@ class TemplateApplicationServiceTest {
     void disable_hasActiveAccounts_shouldThrow() {
         AccountTemplatePO template = new AccountTemplatePO()
                 .setSubjectCode("101001")
-                .setCustomerType(com.kltb.accounting.core.domain.enums.CustomerTypeEnum.PERSONAL);
+                .setCustomerType(CustomerTypeEnum.PERSONAL);
         when(subjectRepository.selectTemplateById(1L)).thenReturn(template);
         when(accountMapper.countBySubjectCodeAndOwnerType("101001", 1)).thenReturn(5L);
         doAnswer(invocation -> {

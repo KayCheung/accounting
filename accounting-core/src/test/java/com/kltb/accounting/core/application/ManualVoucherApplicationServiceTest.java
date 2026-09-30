@@ -1,23 +1,22 @@
 // accounting-core/src/test/java/com/kltb/accounting/core/application/ManualVoucherApplicationServiceTest.java
 package com.kltb.accounting.core.application;
 
-import com.kltb.accounting.api.constant.ManualVoucherApplyStatusEnum;
+import com.kltb.accounting.api.constant.AuditDecisionEnum;
 import com.kltb.accounting.api.request.*;
 import com.kltb.accounting.api.response.ManualVoucherApplyDetailResponse;
 import com.kltb.accounting.api.response.PostingExecuteResponse;
 import com.kltb.accounting.core.application.service.ManualVoucherApplicationService;
 import com.kltb.accounting.core.application.service.PostingApplicationService;
-import com.kltb.accounting.core.domain.enums.BalanceDirectionEnum;
 import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
+import com.kltb.accounting.core.domain.enums.ManualVoucherApplyStatusEnum;
 import com.kltb.accounting.core.infrastructure.account.RedisSequenceGenerator;
+import com.kltb.accounting.core.infrastructure.dictionary.DictionaryComponent;
+import com.kltb.accounting.core.infrastructure.persistence.entity.AccountPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountSubjectPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.ManualVoucherApplyEntryPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.ManualVoucherApplyPO;
-import com.kltb.accounting.core.infrastructure.persistence.repository.AccountingVoucherRepository;
-import com.kltb.accounting.core.infrastructure.persistence.repository.ManualVoucherApplyRepository;
-import com.kltb.accounting.core.infrastructure.persistence.repository.SubjectRepository;
+import com.kltb.accounting.core.infrastructure.persistence.repository.*;
 import com.kltb.accounting.core.shared.exception.AccountException;
-import com.kltb.accounting.core.shared.exception.ServiceException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,6 +34,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -55,6 +55,12 @@ class ManualVoucherApplicationServiceTest {
     private AccountingVoucherRepository accountingVoucherRepository;
     @Mock
     private SubjectRepository subjectRepository;
+    @Mock
+    private AccountRepository accountRepository;
+    @Mock
+    private TransactionRepository transactionRepository;
+    @Mock
+    private DictionaryRepository dictionaryRepository;
     @Mock
     private PostingApplicationService postingApplicationService;
     @Mock
@@ -77,10 +83,15 @@ class ManualVoucherApplicationServiceTest {
             return null;
         }).when(transactionTemplate).executeWithoutResult(any());
 
+        DictionaryComponent dictionaryComponent = new DictionaryComponent(dictionaryRepository);
         service = new ManualVoucherApplicationService(
                 applyRepository,
                 accountingVoucherRepository,
                 subjectRepository,
+                accountRepository,
+                transactionRepository,
+                dictionaryRepository,
+                dictionaryComponent,
                 postingApplicationService,
                 transactionTemplate,
                 seqGen
@@ -102,6 +113,21 @@ class ManualVoucherApplicationServiceTest {
         sub2.setAllowPost(true);
         sub2.setDebitCredit(DebitCreditEnum.CREDIT);
         when(subjectRepository.selectByCode("600101")).thenReturn(sub2);
+
+        // mock 账户推导
+        AccountPO acc1 = new AccountPO();
+        acc1.setAccountNo("ACC001");
+        acc1.setSubjectCode("100201");
+        when(accountRepository.selectBySubjectCode("100201")).thenReturn(Collections.singletonList(acc1));
+        when(accountRepository.selectByAccountNo("ACC001")).thenReturn(acc1);
+
+        AccountPO acc2 = new AccountPO();
+        acc2.setAccountNo("ACC002");
+        acc2.setSubjectCode("600101");
+        when(accountRepository.selectBySubjectCode("600101")).thenReturn(Collections.singletonList(acc2));
+        when(accountRepository.selectByAccountNo("ACC002")).thenReturn(acc2);
+
+        when(seqGen.generate(eq("TXN"), any(LocalDate.class), eq(6), eq(25))).thenReturn("TXN20260929000088");
     }
 
     @Test
@@ -178,7 +204,7 @@ class ManualVoucherApplicationServiceTest {
         // 初审通过
         service.audit(ManualVoucherApplyAuditRequest.builder()
                 .applyNo("MVA001")
-                .action("PASS")
+                .action(AuditDecisionEnum.PASS.getCode())
                 .operatorName("李主管")
                 .opinion("核对无误，初审通过")
                 .build());
@@ -190,7 +216,7 @@ class ManualVoucherApplicationServiceTest {
         po.setApplyStatus(ManualVoucherApplyStatusEnum.PENDING_AUDIT);
         service.audit(ManualVoucherApplyAuditRequest.builder()
                 .applyNo("MVA001")
-                .action("REJECT")
+                .action(AuditDecisionEnum.REJECT.getCode())
                 .operatorName("李主管")
                 .opinion("科目选择有误，请修改")
                 .build());
@@ -209,7 +235,7 @@ class ManualVoucherApplicationServiceTest {
 
         service.review(ManualVoucherApplyAuditRequest.builder()
                 .applyNo("MVA002")
-                .action("PASS")
+                .action(AuditDecisionEnum.PASS.getCode())
                 .operatorName("赵经理")
                 .opinion("终审合规，同意入账")
                 .build());
@@ -279,8 +305,10 @@ class ManualVoucherApplicationServiceTest {
                         && "王出纳".equals(v.getBookkeeperName())
                         && "MVA003".equals(v.getTraceNo())
         ));
-        // 验证分录落库
-        verify(accountingVoucherRepository, times(2)).insertEntry(any());
+        // 验证分录落库且已正确推导并设置 changeDirection 增减方向
+        verify(accountingVoucherRepository, times(2)).insertEntry(argThat(entry ->
+                entry.getChangeDirection() != null && (entry.getChangeDirection() == 1 || entry.getChangeDirection() == 2)
+        ));
         // 验证申请表状态回填
         assertEquals(ManualVoucherApplyStatusEnum.BOOKED, po.getApplyStatus());
         assertEquals("VOU20260929000088", po.getVoucherNo());

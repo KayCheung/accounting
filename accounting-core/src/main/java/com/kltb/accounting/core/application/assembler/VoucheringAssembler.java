@@ -1,15 +1,19 @@
 package com.kltb.accounting.core.application.assembler;
 
+import cn.hutool.core.util.StrUtil;
 import com.kltb.accounting.api.response.*;
 import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
 import com.kltb.accounting.core.domain.enums.PostingTypeEnum;
 import com.kltb.accounting.core.domain.enums.TradeTypeEnum;
 import com.kltb.accounting.core.domain.enums.VoucherStatusEnum;
 import com.kltb.accounting.core.domain.service.VoucherEntryData;
+import com.kltb.accounting.core.infrastructure.dictionary.DictionaryComponent;
+import com.kltb.accounting.core.infrastructure.dictionary.VoucherTypeMeta;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherAttachmentPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherAuxiliaryPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherEntryPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherPO;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -21,6 +25,17 @@ import java.util.stream.Collectors;
  */
 @Component
 public class VoucheringAssembler {
+
+    private final DictionaryComponent dictionaryComponent;
+
+    public VoucheringAssembler() {
+        this.dictionaryComponent = null;
+    }
+
+    @Autowired(required = false)
+    public VoucheringAssembler(DictionaryComponent dictionaryComponent) {
+        this.dictionaryComponent = dictionaryComponent;
+    }
 
     /**
      * 将凭证生成结果组装为响应 DTO
@@ -205,6 +220,22 @@ public class VoucheringAssembler {
             boolean canReversal,
             Map<String, String> subjectNameMap,
             Map<String, String> voucherTypeNameMap) {
+        return toFullDetail(po, entries, auxiliaries, attachments, reversalVoucherNo, canReversal, subjectNameMap, voucherTypeNameMap, null);
+    }
+
+    /**
+     * 全景档案 DTO 组装（支持传入凭证类型元数据 VoucherTypeMeta）
+     */
+    public VoucherFullDetailResponse toFullDetail(
+            AccountingVoucherPO po,
+            List<AccountingVoucherEntryPO> entries,
+            List<AccountingVoucherAuxiliaryPO> auxiliaries,
+            List<AccountingVoucherAttachmentPO> attachments,
+            String reversalVoucherNo,
+            boolean canReversal,
+            Map<String, String> subjectNameMap,
+            Map<String, String> voucherTypeNameMap,
+            VoucherTypeMeta voucherTypeMeta) {
 
         VoucherPageItemResponse item = toPageItem(po, entries, subjectNameMap, voucherTypeNameMap);
 
@@ -216,6 +247,32 @@ public class VoucheringAssembler {
                 ? attachments.stream().map(this::toAttachmentResponse).collect(Collectors.toList())
                 : Collections.emptyList();
 
+        // 动态推导凭证印签大标题与字头（优先读取字典 ext_json 元数据，彻底根除硬编码）
+        VoucherTypeMeta meta = voucherTypeMeta;
+        if (meta == null && dictionaryComponent != null) {
+            meta = dictionaryComponent.getVoucherTypeMeta(po.getVoucherType());
+        }
+
+        String title = meta != null && StrUtil.isNotBlank(meta.getTitle())
+                ? meta.getTitle()
+                : (item.getVoucherTypeName() != null ? item.getVoucherTypeName() : "记账凭证");
+        String prefix = meta != null && StrUtil.isNotBlank(meta.getPrefix())
+                ? meta.getPrefix()
+                : (title.length() > 0 ? title.substring(0, 1) : "记");
+
+        String digits = po.getVoucherNo() != null ? po.getVoucherNo().replaceAll("[^0-9]", "") : "";
+        String voucherWord = prefix + (digits.isEmpty() ? "" : " " + digits);
+
+        BigDecimal totalAmt = item.getDebitAmount() != null && item.getDebitAmount().compareTo(BigDecimal.ZERO) > 0
+                ? item.getDebitAmount()
+                : (item.getAmount() != null ? item.getAmount() : BigDecimal.ZERO);
+        String words;
+        try {
+            words = cn.hutool.core.convert.Convert.digitToChinese(totalAmt.doubleValue());
+        } catch (Exception e) {
+            words = totalAmt.toPlainString() + " 元整";
+        }
+
         return VoucherFullDetailResponse.builder()
                 .id(item.getId())
                 .voucherNo(item.getVoucherNo())
@@ -224,6 +281,9 @@ public class VoucheringAssembler {
                 .traceSeq(item.getTraceSeq())
                 .voucherType(item.getVoucherType())
                 .voucherTypeName(item.getVoucherTypeName())
+                .voucherWord(voucherWord)
+                .voucherTitle(title)
+                .totalAmountInWords(words)
                 .postingType(item.getPostingType())
                 .postingTypeDesc(item.getPostingTypeDesc())
                 .businessCode(item.getBusinessCode())

@@ -1,6 +1,7 @@
 // accounting-api/src/main/java/com/kltb/accounting/api/response/ManualVoucherApplyPageItemResponse.java
 package com.kltb.accounting.api.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -68,6 +69,7 @@ public class ManualVoucherApplyPageItemResponse implements Serializable {
     private String auditorName;
 
     @Schema(description = "初审时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime auditTime;
 
     @Schema(description = "初审意见/驳回原因")
@@ -77,6 +79,7 @@ public class ManualVoucherApplyPageItemResponse implements Serializable {
     private String reviewerName;
 
     @Schema(description = "复核时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime reviewTime;
 
     @Schema(description = "复核意见/驳回原因")
@@ -86,12 +89,14 @@ public class ManualVoucherApplyPageItemResponse implements Serializable {
     private String bookkeeperName;
 
     @Schema(description = "记账时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime bookkeepingTime;
 
     @Schema(description = "正式入账凭证号(已记账后回填)", example = "VOU20260929000001")
     private String voucherNo;
 
     @Schema(description = "申请创建时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime createTime;
 
     @Schema(description = "分录明细列表(主表格展开行即时预览)")

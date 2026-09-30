@@ -1,5 +1,6 @@
 package com.kltb.accounting.core.infrastructure.persistence.repository;
 
+import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.kltb.accounting.api.constant.ResultCode;
@@ -68,6 +69,22 @@ public class AccountRepository {
         return accountMapper.selectOne(new LambdaQueryWrapper<AccountPO>()
                 .eq(AccountPO::getAccountNo, accountNo)
                 .eq(AccountPO::getIsDelete, 0));
+    }
+
+    /**
+     * 按会计科目编码查询有效分户账户列表
+     *
+     * @param subjectCode 会计科目编码
+     * @return 账户列表，无数据返回空列表
+     */
+    public List<AccountPO> selectBySubjectCode(String subjectCode) {
+        if (StrUtil.isBlank(subjectCode)) {
+            return Collections.emptyList();
+        }
+        List<AccountPO> result = accountMapper.selectList(new LambdaQueryWrapper<AccountPO>()
+                .eq(AccountPO::getSubjectCode, subjectCode.trim())
+                .eq(AccountPO::getIsDelete, 0));
+        return result != null ? result : Collections.emptyList();
     }
 
     /**

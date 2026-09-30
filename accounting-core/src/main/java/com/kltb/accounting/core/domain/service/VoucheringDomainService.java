@@ -1,10 +1,8 @@
 package com.kltb.accounting.core.domain.service;
 
+import com.kltb.accounting.api.constant.CurrencyEnum;
 import com.kltb.accounting.api.constant.ResultCode;
-import com.kltb.accounting.core.domain.enums.BusinessRecordStatusEnum;
-import com.kltb.accounting.core.domain.enums.PostingTypeEnum;
-import com.kltb.accounting.core.domain.enums.VoucherEntryStatusEnum;
-import com.kltb.accounting.core.domain.enums.VoucherStatusEnum;
+import com.kltb.accounting.core.domain.enums.*;
 import com.kltb.accounting.core.infrastructure.account.RedisSequenceGenerator;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountingRuleRepository;
@@ -165,9 +163,9 @@ public class VoucheringDomainService {
             entryPO.setAccountNo(entry.getAccountNo());
             // debit_credit 字段类型为 DebitCreditEnum
             entryPO.setDebitCredit(entry.getDebitCredit() != null ?
-                    com.kltb.accounting.core.domain.enums.DebitCreditEnum.fromCode(entry.getDebitCredit()) : null);
+                    DebitCreditEnum.fromCode(entry.getDebitCredit()) : null);
             entryPO.setAmount(entry.getAmount());
-            entryPO.setCurrency(StringUtils.defaultIfBlank(entry.getCurrency(), "CNY"));
+            entryPO.setCurrency(StringUtils.defaultIfBlank(entry.getCurrency(), CurrencyEnum.DEFAULT_CURRENCY));
             entryPO.setSummary(entry.getSummary());
             entryPO.setStatus(VoucherEntryStatusEnum.PENDING);
             entryPO.setAccountingDate(entry.getAccountingDate());

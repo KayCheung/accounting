@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.kltb.accounting.api.constant.DictTypeEnum;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.api.request.VoucherGenerateRequest;
 import com.kltb.accounting.api.request.VoucherPageQueryRequest;
@@ -391,12 +392,12 @@ public class VoucheringApplicationService {
      */
     private Map<String, String> getVoucherTypeNameMap() {
         try {
-            List<DictionaryPO> dicts = dictionaryRepository.selectByType("VOUCHER_TYPE");
-            return dicts.stream().collect(Collectors.toMap(
+            List<DictionaryPO> dicts = dictionaryRepository.selectByType(DictTypeEnum.VOUCHER_TYPE.getCode());
+            return dicts != null ? dicts.stream().collect(Collectors.toMap(
                     DictionaryPO::getDictCode,
                     DictionaryPO::getDictName,
                     (k1, k2) -> k1
-            ));
+            )) : Collections.emptyMap();
         } catch (Exception e) {
             return Collections.emptyMap();
         }
