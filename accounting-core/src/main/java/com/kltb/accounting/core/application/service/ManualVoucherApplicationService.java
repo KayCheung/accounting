@@ -7,7 +7,7 @@ import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.kltb.accounting.api.constant.AuditDecisionEnum;
-import com.kltb.accounting.api.constant.CurrencyEnum;
+import com.kltb.accounting.api.constant.CurrencyConstant;
 import com.kltb.accounting.api.constant.DictTypeEnum;
 import com.kltb.accounting.api.constant.ManualVoucherSaveActionEnum;
 import com.kltb.accounting.api.constant.ResultCode;
@@ -176,7 +176,7 @@ public class ManualVoucherApplicationService {
                 entryPO.setSubjectCode(entryReq.getSubjectCode());
                 entryPO.setAccountNo(defaultIfBlank(entryReq.getAccountNo(), ""));
                 entryPO.setAmount(entryReq.getAmount());
-                entryPO.setCurrency(StrUtil.isNotBlank(entryReq.getCurrency()) ? entryReq.getCurrency() : CurrencyEnum.DEFAULT_CURRENCY);
+                entryPO.setCurrency(StrUtil.isNotBlank(entryReq.getCurrency()) ? entryReq.getCurrency() : CurrencyConstant.DEFAULT_CURRENCY);
                 entryPO.setSummary(defaultIfBlank(entryReq.getSummary(), request.getSummary()));
                 entryPO.setUnilateral(entryReq.getUnilateral() != null ? entryReq.getUnilateral() : 1);
                 entryPOs.add(entryPO);
@@ -341,7 +341,7 @@ public class ManualVoucherApplicationService {
                     .map(ManualVoucherApplyEntryPO::getCurrency)
                     .filter(StrUtil::isNotBlank)
                     .findFirst()
-                    .orElse(CurrencyEnum.DEFAULT_CURRENCY);
+                    .orElse(CurrencyConstant.DEFAULT_CURRENCY);
 
             // 1. 创建事务记录落库 t_transaction
             TransactionPO txn = new TransactionPO();
@@ -405,7 +405,7 @@ public class ManualVoucherApplicationService {
                 entryPO.setAccountNo(defaultIfBlank(applyEntry.getAccountNo(), ""));
                 entryPO.setDebitCredit(applyEntry.getDebitCredit());
                 entryPO.setAmount(applyEntry.getAmount());
-                entryPO.setCurrency(StrUtil.isNotBlank(applyEntry.getCurrency()) ? applyEntry.getCurrency() : CurrencyEnum.DEFAULT_CURRENCY);
+                entryPO.setCurrency(StrUtil.isNotBlank(applyEntry.getCurrency()) ? applyEntry.getCurrency() : CurrencyConstant.DEFAULT_CURRENCY);
                 entryPO.setSummary(defaultIfBlank(applyEntry.getSummary(), po.getSummary()));
                 entryPO.setStatus(VoucherEntryStatusEnum.PENDING);
                 entryPO.setAccountingDate(po.getAccountingDate());

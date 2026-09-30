@@ -1,7 +1,7 @@
 package com.kltb.accounting.core.domain.service;
 
 import cn.hutool.core.util.StrUtil;
-import com.kltb.accounting.api.constant.CurrencyEnum;
+import com.kltb.accounting.api.constant.CurrencyConstant;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.AccountStatusEnum;
 import com.kltb.accounting.core.domain.enums.BalanceDirectionEnum;
@@ -377,7 +377,7 @@ public class AccountOpeningDomainService {
         account.setOwnerType(OwnerTypeEnum.fromCode(customerType.getCode()));
         account.setSubjectCode(template.getSubjectCode());
         account.setAccountType(template.getAccountType());
-        account.setCurrency(template.getCurrency() != null ? template.getCurrency() : CurrencyEnum.DEFAULT_CURRENCY);
+        account.setCurrency(template.getCurrency() != null ? template.getCurrency() : CurrencyConstant.DEFAULT_CURRENCY);
         account.setBalanceDirection(template.getBalanceDirection());
         account.setOpeningBalance(BigDecimal.ZERO);
         account.setBalance(BigDecimal.ZERO);
@@ -401,7 +401,7 @@ public class AccountOpeningDomainService {
         account.setOwnerType(OwnerTypeEnum.OTHER);
         account.setSubjectCode(subjectCode);
         account.setAccountType("INTERNAL");
-        account.setCurrency(CurrencyEnum.DEFAULT_CURRENCY);
+        account.setCurrency(CurrencyConstant.DEFAULT_CURRENCY);
         account.setBalanceDirection(subject.getDebitCredit() != null
                 ? BalanceDirectionEnum.fromCode(subject.getDebitCredit().getCode())
                 : BalanceDirectionEnum.DEBIT);
@@ -462,8 +462,7 @@ public class AccountOpeningDomainService {
             } catch (Exception ignored) {
             }
         }
-        CurrencyEnum cEnum = CurrencyEnum.fromCode(currency);
-        return cEnum != null ? cEnum.getDesc() : currency;
+        return currency;
     }
 
     private String resolveAccountTypeName(String accountType) {

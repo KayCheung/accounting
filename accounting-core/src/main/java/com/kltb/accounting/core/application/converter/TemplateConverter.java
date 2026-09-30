@@ -1,6 +1,6 @@
 package com.kltb.accounting.core.application.converter;
 
-import com.kltb.accounting.api.constant.CurrencyEnum;
+import com.kltb.accounting.api.constant.CurrencyConstant;
 import com.kltb.accounting.api.request.TemplateCreateRequest;
 import com.kltb.accounting.api.request.TemplateUpdateRequest;
 import com.kltb.accounting.core.application.dto.TemplateResponse;
@@ -43,7 +43,7 @@ public class TemplateConverter {
         po.setAutoOpen(request.getAutoOpen() != null && request.getAutoOpen());
         po.setSubjectCode(request.getSubjectCode());
         po.setAccountType(request.getAccountType());
-        po.setCurrency(request.getCurrency() != null ? request.getCurrency() : CurrencyEnum.DEFAULT_CURRENCY);
+        po.setCurrency(request.getCurrency() != null ? request.getCurrency() : CurrencyConstant.DEFAULT_CURRENCY);
         po.setBalanceDirection(BALANCE_DIR_MAP.getOrDefault(request.getBalanceDirection(), BalanceDirectionEnum.DEBIT));
         po.setAcctNoRule(request.getAcctNoRule());
         po.setAcctNameRule(request.getAcctNameRule());

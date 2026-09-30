@@ -446,9 +446,12 @@
       - 统一接入 `DictionaryComponent.getVoucherTypeMeta`，实现凭证大标题（title）与字头（prefix）由字典及 `ext_json` 100% 动态驱动，新增凭证类型无需修改任何 Java 代码。
     - 系统级字典分类枚举（DictTypeEnum）：
       - 新建 `DictTypeEnum` 枚举（`voucher_type`, `pay_channel`, `trading_code`, `funds_type`, `auxiliary_type`, `business_code`, `account_type`, `currency`），收拢所有系统级字典类型，杜绝魔法字符串。
-    - 币种枚举与硬编码 "CNY" 全面治理：
-      - 新建 `CurrencyEnum`（遵循 ISO 4217 规范），定义标准币种与 `DEFAULT_CURRENCY = "CNY"`；
-      - 全面重构 `ManualVoucherApplicationService`、`TemplateConverter`、`AccountOpeningDomainService`、`JournalingDomainService`、`VoucheringDomainService`、`EodDomainService` 中的 `"CNY"` 硬编码；
+    - 币种单一事实来源架构演进（废弃 CurrencyEnum，全量由 t_dictionary 驱动）：
+      - 架构决议：遵循单一事实来源（SSOT）原则，彻底删除静态硬编码的 `CurrencyEnum`，消除与字典表双头维护与数据脱节的系统隐患；
+      - 业务币种全面由系统字典表 `t_dictionary(dict_type='currency')` 动态驱动；
+      - 引入轻量级常量类 `CurrencyConstant.java`，仅定义底层系统级缺省记账本位币 `DEFAULT_CURRENCY = "CNY"`；
+      - `DictionaryComponent` 提供 `isDictValid`（支持状态与有效性检查）与 `resolveCurrencyName`（字典名称反查与优雅降级兜底）；
+      - 全面重构 `ManualVoucherApplicationService`、`TemplateConverter`、`AccountOpeningDomainService`、`JournalingDomainService`、`VoucheringDomainService`、`EodDomainService`，将币种默认值统一指向 `CurrencyConstant.DEFAULT_CURRENCY`，币种解析动态依赖字典服务；
       - 手工记账流水与事务记录的币种由分录自动动态继承，非硬编码绑定人民币。
     - 审批与保存操作枚举化：
       - 新建 `AuditDecisionEnum`（`PASS` 通过, `REJECT` 驳回）与 `ManualVoucherSaveActionEnum`（`DRAFT` 保存草稿, `SUBMIT` 提交初审）；

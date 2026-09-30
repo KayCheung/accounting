@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.kltb.accounting.api.constant.DictTypeEnum;
+import com.kltb.accounting.core.domain.enums.AvailableStatusEnum;
 import com.kltb.accounting.core.domain.enums.TradeTypeEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.DictionaryPO;
 import com.kltb.accounting.core.infrastructure.persistence.repository.DictionaryRepository;
@@ -187,5 +188,43 @@ public class DictionaryComponent {
         }
         // 默认取名称首字，如“收款凭证”->“收”，“调账凭证”->“调”
         return name.substring(0, 1);
+    }
+
+    /**
+     * 校验指定类型的字典项是否存在且处于启用状态
+     *
+     * @param dictType 字典分类
+     * @param dictCode 字典编码或名称
+     * @return true-合法启用；false-不存在或已禁用
+     */
+    public boolean isDictValid(DictTypeEnum dictType, String dictCode) {
+        DictionaryPO po = findByTypeAndCodeOrName(dictType, dictCode);
+        return po != null && po.getStatus() == AvailableStatusEnum.ENABLED;
+    }
+
+    /**
+     * 校验指定类型的字典项是否存在且处于启用状态（字符串入参）
+     *
+     * @param dictType 字典分类字符串
+     * @param dictCode 字典编码或名称
+     * @return true-合法启用；false-不存在或已禁用
+     */
+    public boolean isDictValid(String dictType, String dictCode) {
+        DictionaryPO po = findByTypeAndCodeOrName(dictType, dictCode);
+        return po != null && po.getStatus() == AvailableStatusEnum.ENABLED;
+    }
+
+    /**
+     * 解析币种中文名称（优先从字典表 t_dictionary 查询 dict_name）
+     *
+     * @param currencyCode 币种代码（如 CNY, USD, EUR, HKD）
+     * @return 币种中文名称（如 人民币、美元 等）；若未查到字典或未定义则优雅返回原币种代码
+     */
+    public String resolveCurrencyName(String currencyCode) {
+        if (StrUtil.isBlank(currencyCode)) {
+            return "";
+        }
+        DictionaryPO po = findByTypeAndCodeOrName(DictTypeEnum.CURRENCY, currencyCode);
+        return po != null && StrUtil.isNotBlank(po.getDictName()) ? po.getDictName() : currencyCode;
     }
 }
