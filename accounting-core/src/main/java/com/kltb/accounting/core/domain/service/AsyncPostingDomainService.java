@@ -23,6 +23,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -121,7 +122,7 @@ public class AsyncPostingDomainService {
 
         // 3. 按 account_no 加锁
         List<AccountPO> lockedAccounts = accountRepository.selectForUpdateBatch(
-            java.util.Collections.singletonList(payload.getAccountNo()));
+            Collections.singletonList(payload.getAccountNo()));
         if (lockedAccounts.isEmpty()) {
             throw new AccountException(ResultCode.ACCOUNT_NOT_FOUND,
                 "加锁查询账户为空: accountNo=" + payload.getAccountNo());
