@@ -11,14 +11,15 @@ import com.kltb.accounting.core.infrastructure.persistence.repository.BusinessRe
 import com.kltb.accounting.core.infrastructure.spel.RuleScriptExecutor;
 import com.kltb.accounting.core.shared.exception.AccountException;
 import com.kltb.accounting.core.shared.exception.ServiceException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import com.kltb.accounting.core.infrastructure.account.BusinessNoGenerator;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -43,7 +44,21 @@ class VoucheringDomainServiceTest {
     @Mock private RuleScriptExecutor ruleScriptExecutor;
     @Mock private com.kltb.accounting.core.infrastructure.dictionary.DictionaryComponent dictionaryComponent;
 
-    @InjectMocks private VoucheringDomainService voucheringDomainService;
+    private VoucheringDomainService voucheringDomainService;
+
+    @BeforeEach
+    void setUp() {
+        BusinessNoGenerator businessNoGenerator = new BusinessNoGenerator(seqGen);
+        voucheringDomainService = new VoucheringDomainService(
+                accountingRuleRepository,
+                accountingVoucherRepository,
+                businessRecordRepository,
+                businessDetailRepository,
+                businessNoGenerator,
+                ruleScriptExecutor,
+                dictionaryComponent
+        );
+    }
 
     @Test
     @DisplayName("借贷平衡校验: 借=贷 通过")

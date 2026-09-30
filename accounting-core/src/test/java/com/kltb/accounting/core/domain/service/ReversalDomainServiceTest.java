@@ -8,15 +8,17 @@ import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVouc
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountingVoucherRepository;
 import com.kltb.accounting.core.infrastructure.redis.DistributedLockTemplate;
 import com.kltb.accounting.core.shared.exception.AccountException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import com.kltb.accounting.core.infrastructure.account.BusinessNoGenerator;
+import com.kltb.accounting.core.infrastructure.cache.AccountingDateCache;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -37,8 +39,23 @@ class ReversalDomainServiceTest {
     @Mock private RedisSequenceGenerator seqGen;
     @Mock private DistributedLockTemplate distributedLockTemplate;
     @Mock private TransactionTemplate transactionTemplate;
+    @Mock private PostingDomainService postingDomainService;
+    @Mock private AccountingDateCache accountingDateCache;
 
-    @InjectMocks private ReversalDomainService reversalDomainService;
+    private ReversalDomainService reversalDomainService;
+
+    @BeforeEach
+    void setUp() {
+        BusinessNoGenerator businessNoGenerator = new BusinessNoGenerator(seqGen);
+        reversalDomainService = new ReversalDomainService(
+                accountingVoucherRepository,
+                businessNoGenerator,
+                distributedLockTemplate,
+                transactionTemplate,
+                postingDomainService,
+                accountingDateCache
+        );
+    }
 
     @Test
     @DisplayName("红冲: 原凭证不存在 -> 抛出 REVERSAL_ORIGINAL_NOT_FOUND")

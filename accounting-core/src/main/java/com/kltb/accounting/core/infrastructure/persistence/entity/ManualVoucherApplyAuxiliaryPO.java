@@ -3,6 +3,7 @@ package com.kltb.accounting.core.infrastructure.persistence.entity;
 
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.kltb.accounting.core.domain.enums.ChangeDirectionEnum;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
@@ -64,7 +65,7 @@ public class ManualVoucherApplyAuxiliaryPO extends BaseEntity {
      * 增减方向：1-增, 2-减。
      */
     @TableField("change_direction")
-    private Integer changeDirection;
+    private ChangeDirectionEnum changeDirection;
 
     /**
      * 核算金额。

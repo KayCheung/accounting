@@ -1,7 +1,6 @@
 // accounting-core/src/main/java/com/kltb/accounting/core/application/service/ManualVoucherApplicationService.java
 package com.kltb.accounting.core.application.service;
 
-import cn.hutool.core.convert.Convert;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.kltb.accounting.api.constant.AuditDecisionEnum;
@@ -11,13 +10,14 @@ import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.api.request.*;
 import com.kltb.accounting.api.response.*;
 import com.kltb.accounting.core.domain.enums.*;
-import com.kltb.accounting.core.infrastructure.account.RedisSequenceGenerator;
+import com.kltb.accounting.core.infrastructure.account.BusinessNoGenerator;
 import com.kltb.accounting.core.infrastructure.dictionary.DictionaryComponent;
 import com.kltb.accounting.core.infrastructure.dictionary.VoucherTypeMeta;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
 import com.kltb.accounting.core.infrastructure.persistence.repository.*;
 import com.kltb.accounting.core.shared.exception.AccountException;
 import com.kltb.accounting.core.shared.exception.ServiceException;
+import com.kltb.accounting.core.shared.util.FinancialAmountUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -52,7 +52,7 @@ public class ManualVoucherApplicationService {
     private final DictionaryComponent dictionaryComponent;
     private final PostingApplicationService postingApplicationService;
     private final TransactionTemplate transactionTemplate;
-    private final RedisSequenceGenerator seqGen;
+    private final BusinessNoGenerator businessNoGenerator;
 
     /**
      * 1. 制单录入 / 编辑保存（支持保存草稿 DRAFT 或提交初审 SUBMIT）
@@ -89,14 +89,16 @@ public class ManualVoucherApplicationService {
 
         // 凭证类型元数据动态解析（通过公共字典组件读取 ext_json，彻底消除硬编码 "ADJUST"）
         VoucherTypeMeta vMeta = dictionaryComponent.getVoucherTypeMeta(request.getVoucherType());
-        int defaultTradeType = (vMeta.getTradeType() != null)
-                ? vMeta.getTradeType()
-                : (vMeta.isAdjustment() ? TradeTypeEnum.ADJUSTMENT.getCode() : TradeTypeEnum.NORMAL.getCode());
-        int resolvedTradeType = (request.getTradeType() != null) ? request.getTradeType() : defaultTradeType;
+        TradeTypeEnum defaultTradeType = (vMeta.getTradeType() != null)
+                ? TradeTypeEnum.fromCode(vMeta.getTradeType())
+                : (vMeta.isAdjustment() ? TradeTypeEnum.ADJUSTMENT : TradeTypeEnum.NORMAL);
+        TradeTypeEnum resolvedTradeType = (request.getTradeType() != null)
+                ? TradeTypeEnum.fromCode(request.getTradeType())
+                : defaultTradeType;
 
         return transactionTemplate.execute(status -> {
             boolean isNew = StrUtil.isBlank(request.getApplyNo());
-            String applyNo = isNew ? generateApplyNo(request.getAccountingDate()) : request.getApplyNo();
+            String applyNo = isNew ? businessNoGenerator.generateApplyNo(request.getAccountingDate()) : request.getApplyNo();
             ManualVoucherApplyPO po;
 
             int attachmentCount = (request.getAttachments() != null && !request.getAttachments().isEmpty())
@@ -138,7 +140,7 @@ public class ManualVoucherApplicationService {
 
                 Integer preStatus = po.getApplyStatus() != null ? po.getApplyStatus().getCode() : null;
                 po.setVoucherType(defaultIfBlank(request.getVoucherType(), po.getVoucherType()));
-                po.setTradeType(request.getTradeType() != null ? request.getTradeType() : defaultTradeType);
+                po.setTradeType(request.getTradeType() != null ? TradeTypeEnum.fromCode(request.getTradeType()) : defaultTradeType);
                 po.setAccountingDate(request.getAccountingDate());
                 po.setSummary(request.getSummary());
                 po.setAttachmentCount(attachmentCount);
@@ -191,7 +193,7 @@ public class ManualVoucherApplicationService {
                     auxPO.setAuxTypeName(defaultIfBlank(auxReq.getAuxTypeName(), auxReq.getAuxType()));
                     auxPO.setAuxCode(auxReq.getAuxCode());
                     auxPO.setAuxName(auxReq.getAuxName());
-                    auxPO.setChangeDirection(auxReq.getChangeDirection() != null ? auxReq.getChangeDirection() : 1);
+                    auxPO.setChangeDirection(auxReq.getChangeDirection() != null ? ChangeDirectionEnum.fromCode(auxReq.getChangeDirection()) : ChangeDirectionEnum.INCREASE);
                     auxPO.setAmount(auxReq.getAmount() != null ? auxReq.getAmount() : BigDecimal.ZERO);
                     auxPOs.add(auxPO);
                 }
@@ -324,14 +326,14 @@ public class ManualVoucherApplicationService {
             VoucherTypeMeta vMeta = dictionaryComponent.getVoucherTypeMeta(po.getVoucherType());
             String voucherNoPrefix = StrUtil.isNotBlank(vMeta.getVoucherNoPrefix()) ? vMeta.getVoucherNoPrefix() : "VOU";
 
-            String vouNo = generateVoucherNo(voucherNoPrefix, po.getAccountingDate());
-            String txnNo = generateTxnNo(po.getAccountingDate());
+            String vouNo = businessNoGenerator.generateVoucherNo(voucherNoPrefix, po.getAccountingDate());
+            String txnNo = businessNoGenerator.generateTxnNo(po.getAccountingDate());
 
             String tradingCode = StrUtil.isNotBlank(vMeta.getTradingCode()) ? vMeta.getTradingCode() : "TRANSFER";
             String payChannel = StrUtil.isNotBlank(vMeta.getPayChannel()) ? vMeta.getPayChannel() : "INTERNAL";
-            int resolvedTradeType = (po.getTradeType() != null)
+            TradeTypeEnum finalTradeType = (po.getTradeType() != null)
                     ? po.getTradeType()
-                    : (vMeta.getTradeType() != null ? vMeta.getTradeType() : (vMeta.isAdjustment() ? TradeTypeEnum.ADJUSTMENT.getCode() : TradeTypeEnum.NORMAL.getCode()));
+                    : (vMeta.getTradeType() != null ? TradeTypeEnum.fromCode(vMeta.getTradeType()) : (vMeta.isAdjustment() ? TradeTypeEnum.ADJUSTMENT : TradeTypeEnum.NORMAL));
             String finalVoucherType = StrUtil.isNotBlank(vMeta.getDictCode()) ? vMeta.getDictCode() : po.getVoucherType();
 
             // 动态解析币种（由分录继承，若空则使用系统默认币种，绝不硬编码）
@@ -363,7 +365,7 @@ public class ManualVoucherApplicationService {
             voucherPO.setBusinessCode("MANUAL");
             voucherPO.setTradingCode(tradingCode);
             voucherPO.setPayChannel(payChannel);
-            voucherPO.setTradeType(TradeTypeEnum.fromCode(resolvedTradeType));
+            voucherPO.setTradeType(finalTradeType);
             voucherPO.setTradeTime(LocalDateTime.now());
             voucherPO.setAmount(po.getTotalDebitAmount());
             voucherPO.setStatus(VoucherStatusEnum.PENDING);
@@ -394,7 +396,7 @@ public class ManualVoucherApplicationService {
                     }
                 }
 
-                String entryId = generateEntryId();
+                String entryId = businessNoGenerator.generateEntryId();
                 AccountingVoucherEntryPO entryPO = new AccountingVoucherEntryPO();
                 entryPO.setVoucherNo(vouNo);
                 entryPO.setEntryId(entryId);
@@ -416,21 +418,11 @@ public class ManualVoucherApplicationService {
 
                 // 核心财务律法：推导分录增减方向 changeDirection（1-增, 2-减）
                 AccountSubjectPO subject = subjectRepository.selectByCode(applyEntry.getSubjectCode());
-                int subjectBalanceDir = 1; // 默认借方
-                if (subject != null && subject.getDebitCredit() != null) {
-                    subjectBalanceDir = subject.getDebitCredit().getCode();
-                } else if (applyEntry.getSubjectCode() != null && !applyEntry.getSubjectCode().isEmpty()) {
-                    char firstChar = applyEntry.getSubjectCode().charAt(0);
-                    if (firstChar == '2' || firstChar == '3' || (firstChar == '6' && applyEntry.getSubjectCode().startsWith("60"))) {
-                        subjectBalanceDir = 2; // 贷方
-                    } else {
-                        subjectBalanceDir = 1; // 借方
-                    }
+                if (subject == null || subject.getDebitCredit() == null) {
+                    throw new AccountException(ResultCode.SUBJECT_NOT_FOUND,
+                            "分录科目未配置或缺少借贷余额方向: " + applyEntry.getSubjectCode());
                 }
-                int entryDebitCredit = (applyEntry.getDebitCredit() != null)
-                        ? applyEntry.getDebitCredit().getCode()
-                        : 1;
-                int changeDir = (entryDebitCredit == subjectBalanceDir) ? 1 : 2;
+                int changeDir = (applyEntry.getDebitCredit() == subject.getDebitCredit()) ? 1 : 2;
                 entryPO.setChangeDirection(changeDir);
 
                 accountingVoucherRepository.insertEntry(entryPO);
@@ -446,7 +438,7 @@ public class ManualVoucherApplicationService {
                         voucherAux.setAuxType(aux.getAuxType());
                         voucherAux.setAuxCode(aux.getAuxCode());
                         voucherAux.setAuxName(aux.getAuxName());
-                        voucherAux.setChangeDirection(ChangeDirectionEnum.fromCode(aux.getChangeDirection()));
+                        voucherAux.setChangeDirection(aux.getChangeDirection() != null ? aux.getChangeDirection() : ChangeDirectionEnum.INCREASE);
                         voucherAux.setAmount(aux.getAmount());
                         voucherAux.setAccountingDate(po.getAccountingDate());
                         accountingVoucherRepository.insertAuxiliary(voucherAux);
@@ -583,8 +575,8 @@ public class ManualVoucherApplicationService {
                     .id(po.getId())
                     .applyNo(po.getApplyNo())
                     .voucherType(po.getVoucherType())
-                    .tradeType(po.getTradeType())
-                    .tradeTypeDesc(po.getTradeType() != null && po.getTradeType() == 1 ? "正常" : "调账")
+                    .tradeType(po.getTradeType() != null ? po.getTradeType().getCode() : null)
+                    .tradeTypeDesc(po.getTradeType() != null ? po.getTradeType().getDesc() : "")
                     .accountingDate(po.getAccountingDate())
                     .summary(po.getSummary())
                     .totalDebitAmount(po.getTotalDebitAmount())
@@ -670,7 +662,7 @@ public class ManualVoucherApplicationService {
                 && po.getTotalCreditAmount() != null
                 && po.getTotalDebitAmount().compareTo(po.getTotalCreditAmount()) == 0;
 
-        String words = formatAmountToChinese(po.getTotalDebitAmount());
+        String words = FinancialAmountUtil.toChineseWords(po.getTotalDebitAmount());
 
         // 动态推导凭证印签大标题与字头（通过公共字典组件读取 ext_json，彻底消除硬编码）
         VoucherTypeMeta vMeta = dictionaryComponent.getVoucherTypeMeta(po.getVoucherType());
@@ -688,8 +680,8 @@ public class ManualVoucherApplicationService {
                 .voucherTitle(title)
                 .postingType(PostingTypeEnum.MANUAL.getCode())
                 .postingTypeDesc(PostingTypeEnum.MANUAL.getDesc())
-                .tradeType(po.getTradeType())
-                .tradeTypeDesc(po.getTradeType() != null && po.getTradeType() == 1 ? "正常" : "调账")
+                .tradeType(po.getTradeType() != null ? po.getTradeType().getCode() : null)
+                .tradeTypeDesc(po.getTradeType() != null ? po.getTradeType().getDesc() : "")
                 .accountingDate(po.getAccountingDate())
                 .summary(po.getSummary())
                 .attachmentCount(po.getAttachmentCount() != null ? po.getAttachmentCount() : 1)
@@ -719,17 +711,23 @@ public class ManualVoucherApplicationService {
     /**
      * 8. 看板状态统计（待初审、待复核、待记账、已记账、被驳回）
      */
-    public Map<String, Long> getStatistics() {
-        Map<String, Long> map = new HashMap<>();
-        map.put("total", applyRepository.countByStatus(null));
-        map.put("pendingAudit", applyRepository.countByStatus(ManualVoucherApplyStatusEnum.PENDING_AUDIT));
-        map.put("pendingReview", applyRepository.countByStatus(ManualVoucherApplyStatusEnum.PENDING_REVIEW));
-        map.put("pendingBookkeeping", applyRepository.countByStatus(ManualVoucherApplyStatusEnum.PENDING_BOOKKEEPING));
-        map.put("booked", applyRepository.countByStatus(ManualVoucherApplyStatusEnum.BOOKED));
+    public ManualVoucherStatisticsResponse getStatistics() {
+        Long total = applyRepository.countByStatus(null);
+        Long pendingAudit = applyRepository.countByStatus(ManualVoucherApplyStatusEnum.PENDING_AUDIT);
+        Long pendingReview = applyRepository.countByStatus(ManualVoucherApplyStatusEnum.PENDING_REVIEW);
+        Long pendingBookkeeping = applyRepository.countByStatus(ManualVoucherApplyStatusEnum.PENDING_BOOKKEEPING);
+        Long booked = applyRepository.countByStatus(ManualVoucherApplyStatusEnum.BOOKED);
         long rejected = (applyRepository.countByStatus(ManualVoucherApplyStatusEnum.AUDIT_REJECTED) != null ? applyRepository.countByStatus(ManualVoucherApplyStatusEnum.AUDIT_REJECTED) : 0L)
                 + (applyRepository.countByStatus(ManualVoucherApplyStatusEnum.REVIEW_REJECTED) != null ? applyRepository.countByStatus(ManualVoucherApplyStatusEnum.REVIEW_REJECTED) : 0L);
-        map.put("rejected", rejected);
-        return map;
+
+        return ManualVoucherStatisticsResponse.builder()
+                .total(total != null ? total : 0L)
+                .pendingAudit(pendingAudit != null ? pendingAudit : 0L)
+                .pendingReview(pendingReview != null ? pendingReview : 0L)
+                .pendingBookkeeping(pendingBookkeeping != null ? pendingBookkeeping : 0L)
+                .booked(booked != null ? booked : 0L)
+                .rejected(rejected)
+                .build();
     }
 
     // ==================== 内部私有校验与辅助逻辑 ====================
@@ -820,10 +818,10 @@ public class ManualVoucherApplicationService {
                                 Integer preStatus, Integer postStatus, String opinion) {
         ManualVoucherAuditLogPO logPO = new ManualVoucherAuditLogPO();
         logPO.setApplyNo(applyNo);
-        logPO.setAction(action != null ? action.getCode() : "ACTION");
+        logPO.setAction(action != null ? action.getCode() : ManualVoucherAuditActionEnum.UPDATE_DRAFT.getCode());
         logPO.setActionDesc(action != null ? action.getDesc() : "");
-        logPO.setOperatorName(defaultIfBlank(operatorName, "SYSTEM"));
-        logPO.setOperatorRole(operatorRole != null ? operatorRole.getCode() : "OPERATOR");
+        logPO.setOperatorName(StrUtil.isNotBlank(operatorName) ? operatorName : Constants.SYSTEM_OPERATOR);
+        logPO.setOperatorRole(operatorRole != null ? operatorRole.getCode() : ManualVoucherOperatorRoleEnum.SYSTEM.getCode());
         logPO.setPreStatus(preStatus);
         logPO.setPostStatus(postStatus);
         logPO.setOpinion(defaultIfBlank(opinion, ""));
@@ -854,53 +852,6 @@ public class ManualVoucherApplicationService {
         return (str == null || str.trim().isEmpty()) ? defaultVal : str;
     }
 
-    private String generateApplyNo(LocalDate date) {
-        try {
-            return seqGen.generate("MVA", date != null ? date : LocalDate.now(), 6, 25);
-        } catch (Exception e) {
-            return "MVA" + (date != null ? date.toString().replace("-", "") : "20260929")
-                    + String.format("%06d", (int) (Math.random() * 900000 + 100000));
-        }
-    }
-
-    private String generateVoucherNo(String prefix, LocalDate date) {
-        String cleanPrefix = StrUtil.isNotBlank(prefix) ? prefix.trim().toUpperCase() : "VOU";
-        try {
-            return seqGen.generate(cleanPrefix, date != null ? date : LocalDate.now(), 6, 25);
-        } catch (Exception e) {
-            return cleanPrefix + (date != null ? date.toString().replace("-", "") : "20260929")
-                    + String.format("%06d", (int) (Math.random() * 900000 + 100000));
-        }
-    }
-
-    private String generateTxnNo(LocalDate date) {
-        try {
-            return seqGen.generate("TXN", date != null ? date : LocalDate.now(), 6, 25);
-        } catch (Exception e) {
-            return "TXN" + (date != null ? date.toString().replace("-", "") : "20260930")
-                    + String.format("%06d", (int) (Math.random() * 900000 + 100000));
-        }
-    }
-
-    private String generateEntryId() {
-        try {
-            return seqGen.generate("ENT", LocalDateTime.now(), "yyyyMMddHHmmssSSS", 4, 2);
-        } catch (Exception e) {
-            return "ENT" + System.currentTimeMillis() + String.format("%04d", (int) (Math.random() * 9000 + 1000));
-        }
-    }
-
-    private String formatAmountToChinese(BigDecimal amount) {
-        if (amount == null) {
-            return "零元整";
-        }
-        try {
-            return Convert.digitToChinese(amount.doubleValue());
-        } catch (Exception e) {
-            return amount.toPlainString() + " 元";
-        }
-    }
-
     private List<ManualVoucherApplyAuxiliaryResponse> loadAuxiliaryResponses(String applyNo, Map<String, String> subjectNameMap) {
         List<ManualVoucherApplyAuxiliaryPO> list = applyRepository.selectAuxiliariesByApplyNo(applyNo);
         if (list == null || list.isEmpty()) {
@@ -916,8 +867,8 @@ public class ManualVoucherApplicationService {
                 .auxTypeName(aux.getAuxTypeName())
                 .auxCode(aux.getAuxCode())
                 .auxName(aux.getAuxName())
-                .changeDirection(aux.getChangeDirection())
-                .changeDirectionDesc(aux.getChangeDirection() != null && aux.getChangeDirection() == 2 ? "减少" : "增加")
+                .changeDirection(aux.getChangeDirection() != null ? aux.getChangeDirection().getCode() : null)
+                .changeDirectionDesc(aux.getChangeDirection() != null ? aux.getChangeDirection().getDesc() : "")
                 .amount(aux.getAmount())
                 .build()
         ).collect(Collectors.toList());

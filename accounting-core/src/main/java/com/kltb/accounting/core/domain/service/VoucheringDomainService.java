@@ -4,7 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import com.kltb.accounting.api.constant.Constants;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.*;
-import com.kltb.accounting.core.infrastructure.account.RedisSequenceGenerator;
+import com.kltb.accounting.core.infrastructure.account.BusinessNoGenerator;
 import com.kltb.accounting.core.infrastructure.dictionary.DictionaryComponent;
 import com.kltb.accounting.core.infrastructure.dictionary.VoucherTypeMeta;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
@@ -38,7 +38,7 @@ public class VoucheringDomainService {
     private final AccountingVoucherRepository accountingVoucherRepository;
     private final BusinessRecordRepository businessRecordRepository;
     private final BusinessDetailRepository businessDetailRepository;
-    private final RedisSequenceGenerator seqGen;
+    private final BusinessNoGenerator businessNoGenerator;
     private final RuleScriptExecutor ruleScriptExecutor;
     private final DictionaryComponent dictionaryComponent;
 
@@ -135,7 +135,7 @@ public class VoucheringDomainService {
         VoucherTypeMeta vMeta = dictionaryComponent != null ? dictionaryComponent.getVoucherTypeMeta(rule.getVoucherType()) : null;
         String prefix = (vMeta != null && StrUtil.isNotBlank(vMeta.getVoucherNoPrefix())) ? vMeta.getVoucherNoPrefix() : "VOU";
         LocalDate seqDate = journal.getAccountingDate() != null ? journal.getAccountingDate() : LocalDate.now();
-        String voucherNo = seqGen.generate(prefix, seqDate, 6, 25);
+        String voucherNo = businessNoGenerator.generateVoucherNo(prefix, seqDate);
 
         // 1. 写入 t_accounting_voucher
         AccountingVoucherPO voucher = new AccountingVoucherPO();
@@ -160,7 +160,7 @@ public class VoucheringDomainService {
         // 2. 写入 t_accounting_voucher_entry
         for (VoucherEntryData entry : entries) {
             entry.setVoucherNo(voucherNo);
-            entry.setEntryId(seqGen.generate("ENT", LocalDateTime.now(), "yyyyMMddHHmmssSSS", 4, 2));
+            entry.setEntryId(businessNoGenerator.generateEntryId());
 
             AccountingVoucherEntryPO entryPO = new AccountingVoucherEntryPO();
             entryPO.setVoucherNo(voucherNo);

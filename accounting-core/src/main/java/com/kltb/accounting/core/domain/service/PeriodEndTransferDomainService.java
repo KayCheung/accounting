@@ -2,7 +2,7 @@ package com.kltb.accounting.core.domain.service;
 
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.*;
-import com.kltb.accounting.core.infrastructure.account.RedisSequenceGenerator;
+import com.kltb.accounting.core.infrastructure.account.BusinessNoGenerator;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
 import com.kltb.accounting.core.infrastructure.persistence.repository.*;
 import com.kltb.accounting.core.shared.exception.AccountException;
@@ -40,7 +40,7 @@ public class PeriodEndTransferDomainService {
     private final AccountBalanceRepository accountBalanceRepository;
     private final AccountingVoucherRepository voucherRepository;
     private final TransactionTemplate transactionTemplate;
-    private final RedisSequenceGenerator seqGen;
+    private final BusinessNoGenerator businessNoGenerator;
 
     /**
      * 执行所有启用的期末结转规则
@@ -78,7 +78,7 @@ public class PeriodEndTransferDomainService {
             } catch (Exception e) {
                 log.error("[EOD-TRANSFER-FAILED] rule={}, reason={}",
                         rule.getRuleCode(), e.getMessage(), e);
-                String failedTransferNo = seqGen.generate("EODTR", accountingDate, 4, 25);
+                String failedTransferNo = businessNoGenerator.generateTransferNo(accountingDate);
                 writeFailedTransferRecord(rule, accountingDate, failedTransferNo, e.getMessage());
                 TransferRuleResult failResult = new TransferRuleResult(
                         rule.getRuleCode(), rule.getRuleName(), failedTransferNo, null,
@@ -182,7 +182,7 @@ public class PeriodEndTransferDomainService {
             PeriodEndTransferRulePO rule, LocalDate accountingDate,
             String transferNo, List<AccountBalancePO> balances) {
 
-        String voucherNo = seqGen.generate("PET", accountingDate, 6, 25);
+        String voucherNo = businessNoGenerator.generateVoucherNo("PET", accountingDate);
 
         BigDecimal totalAmount = balances.stream()
                 .map(AccountBalancePO::getEndBalance)
@@ -222,7 +222,7 @@ public class PeriodEndTransferDomainService {
             rowNum++;
             AccountingVoucherEntryPO entry = new AccountingVoucherEntryPO();
             entry.setVoucherNo(voucherNo);
-            entry.setEntryId(seqGen.generate("ENT", LocalDateTime.now(), "yyyyMMddHHmmssSSS", 4, 2));
+            entry.setEntryId(businessNoGenerator.generateEntryId());
             entry.setRowNum(rowNum);
             entry.setSubjectCode(balance.getSubjectCode());
             entry.setAccountNo(balance.getAccountNo());
@@ -245,7 +245,7 @@ public class PeriodEndTransferDomainService {
             rowNum++;
             AccountingVoucherEntryPO targetEntry = new AccountingVoucherEntryPO();
             targetEntry.setVoucherNo(voucherNo);
-            targetEntry.setEntryId(seqGen.generate("ENT", LocalDateTime.now(), "yyyyMMddHHmmssSSS", 4, 2));
+            targetEntry.setEntryId(businessNoGenerator.generateEntryId());
             targetEntry.setRowNum(rowNum);
             targetEntry.setSubjectCode(rule.getTargetSubjectCode());
             targetEntry.setAccountNo(null);
@@ -293,7 +293,7 @@ public class PeriodEndTransferDomainService {
      * 生成结转流水号
      */
     private String generateTransferNo(LocalDate date, String ruleCode) {
-        return seqGen.generate("EODTR", date, 4, 25);
+        return businessNoGenerator.generateTransferNo(date);
     }
 
     /**

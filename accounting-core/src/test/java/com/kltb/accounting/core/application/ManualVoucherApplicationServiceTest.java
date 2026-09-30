@@ -4,11 +4,15 @@ package com.kltb.accounting.core.application;
 import com.kltb.accounting.api.constant.AuditDecisionEnum;
 import com.kltb.accounting.api.request.*;
 import com.kltb.accounting.api.response.ManualVoucherApplyDetailResponse;
+import com.kltb.accounting.api.response.ManualVoucherStatisticsResponse;
 import com.kltb.accounting.api.response.PostingExecuteResponse;
 import com.kltb.accounting.core.application.service.ManualVoucherApplicationService;
 import com.kltb.accounting.core.application.service.PostingApplicationService;
+import com.kltb.accounting.core.domain.enums.ChangeDirectionEnum;
 import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
 import com.kltb.accounting.core.domain.enums.ManualVoucherApplyStatusEnum;
+import com.kltb.accounting.core.domain.enums.TradeTypeEnum;
+import com.kltb.accounting.core.infrastructure.account.BusinessNoGenerator;
 import com.kltb.accounting.core.infrastructure.account.RedisSequenceGenerator;
 import com.kltb.accounting.core.infrastructure.dictionary.DictionaryComponent;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountPO;
@@ -84,6 +88,7 @@ class ManualVoucherApplicationServiceTest {
         }).when(transactionTemplate).executeWithoutResult(any());
 
         DictionaryComponent dictionaryComponent = new DictionaryComponent(dictionaryRepository);
+        BusinessNoGenerator businessNoGenerator = new BusinessNoGenerator(seqGen);
         service = new ManualVoucherApplicationService(
                 applyRepository,
                 accountingVoucherRepository,
@@ -94,7 +99,7 @@ class ManualVoucherApplicationServiceTest {
                 dictionaryComponent,
                 postingApplicationService,
                 transactionTemplate,
-                seqGen
+                businessNoGenerator
         );
 
         // mock 末级科目
@@ -250,7 +255,7 @@ class ManualVoucherApplicationServiceTest {
         ManualVoucherApplyPO po = new ManualVoucherApplyPO();
         po.setApplyNo("MVA003");
         po.setVoucherType("记账凭证");
-        po.setTradeType(2);
+        po.setTradeType(TradeTypeEnum.ADJUSTMENT);
         po.setAccountingDate(LocalDate.of(2026, 9, 29));
         po.setSummary("正式调账");
         po.setTotalDebitAmount(new BigDecimal("2500.00"));
@@ -416,7 +421,7 @@ class ManualVoucherApplicationServiceTest {
         auxPO.setAuxType("DEPT");
         auxPO.setAuxCode("DEPT001");
         auxPO.setAuxName("产品运营部");
-        auxPO.setChangeDirection(1);
+        auxPO.setChangeDirection(ChangeDirectionEnum.INCREASE);
         auxPO.setAmount(new BigDecimal("150.00"));
         when(applyRepository.selectAuxiliariesByApplyNo("MVA202609299999")).thenReturn(List.of(auxPO));
 
@@ -510,5 +515,26 @@ class ManualVoucherApplicationServiceTest {
                 .build());
         assertEquals("ADJ20260930000002", adjVoucherNo);
         assertEquals("ADJ20260930000002", adjPO.getVoucherNo());
+    }
+
+    @Test
+    @DisplayName("测试看板流转状态统计返回强类型 DTO 结构")
+    void testGetStatistics_ReturnsStrongTypeDTO() {
+        when(applyRepository.countByStatus(null)).thenReturn(10L);
+        when(applyRepository.countByStatus(ManualVoucherApplyStatusEnum.PENDING_AUDIT)).thenReturn(2L);
+        when(applyRepository.countByStatus(ManualVoucherApplyStatusEnum.PENDING_REVIEW)).thenReturn(3L);
+        when(applyRepository.countByStatus(ManualVoucherApplyStatusEnum.PENDING_BOOKKEEPING)).thenReturn(1L);
+        when(applyRepository.countByStatus(ManualVoucherApplyStatusEnum.BOOKED)).thenReturn(3L);
+        when(applyRepository.countByStatus(ManualVoucherApplyStatusEnum.AUDIT_REJECTED)).thenReturn(1L);
+        when(applyRepository.countByStatus(ManualVoucherApplyStatusEnum.REVIEW_REJECTED)).thenReturn(0L);
+
+        ManualVoucherStatisticsResponse stats = service.getStatistics();
+        assertNotNull(stats);
+        assertEquals(10L, stats.getTotal());
+        assertEquals(2L, stats.getPendingAudit());
+        assertEquals(3L, stats.getPendingReview());
+        assertEquals(1L, stats.getPendingBookkeeping());
+        assertEquals(3L, stats.getBooked());
+        assertEquals(1L, stats.getRejected());
     }
 }

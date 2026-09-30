@@ -6,7 +6,7 @@ import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
 import com.kltb.accounting.core.domain.enums.TradeTypeEnum;
 import com.kltb.accounting.core.domain.enums.VoucherEntryStatusEnum;
 import com.kltb.accounting.core.domain.enums.VoucherStatusEnum;
-import com.kltb.accounting.core.infrastructure.account.RedisSequenceGenerator;
+import com.kltb.accounting.core.infrastructure.account.BusinessNoGenerator;
 import com.kltb.accounting.core.infrastructure.cache.AccountingDateCache;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherAuxiliaryPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherEntryPO;
@@ -55,7 +55,7 @@ public class ReversalDomainService {
     private static final String REVERSAL_LOCK_FORMAT = "reversal:%s";
 
     private final AccountingVoucherRepository voucherRepository;
-    private final RedisSequenceGenerator seqGen;
+    private final BusinessNoGenerator businessNoGenerator;
     private final DistributedLockTemplate distributedLockTemplate;
     private final TransactionTemplate transactionTemplate;
     private final PostingDomainService postingDomainService;
@@ -109,7 +109,7 @@ public class ReversalDomainService {
                 batchQueryAuxiliaries(origEntries);
 
         // 生成红冲凭证号
-        String reversalVoucherNo = seqGen.generate("REV", accountingDate, 6, 25);
+        String reversalVoucherNo = businessNoGenerator.generateVoucherNo("REV", accountingDate);
 
         // 计算红冲金额（与原凭证相同）
         BigDecimal reversalAmount = currentVoucher.getAmount();
@@ -303,7 +303,7 @@ public class ReversalDomainService {
         AccountingVoucherEntryPO entry = new AccountingVoucherEntryPO();
         entry.setVoucherNo(reversalVoucherNo);
         // 生成新分录流水号
-        entry.setEntryId(seqGen.generate("REV_ENTRY", now, "yyyyMMddHHmmssSSS", 4, 2));
+        entry.setEntryId(businessNoGenerator.generateEntryId("REV_ENTRY"));
         entry.setRowNum(rowNum);
         entry.setSubjectCode(origEntry.getSubjectCode());
         entry.setAccountNo(origEntry.getAccountNo());

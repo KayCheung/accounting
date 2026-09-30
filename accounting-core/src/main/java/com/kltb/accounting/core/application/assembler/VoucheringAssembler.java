@@ -14,6 +14,7 @@ import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVouc
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherAuxiliaryPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherEntryPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherPO;
+import com.kltb.accounting.core.shared.util.FinancialAmountUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -278,12 +279,7 @@ public class VoucheringAssembler {
         BigDecimal totalAmt = item.getDebitAmount() != null && item.getDebitAmount().compareTo(BigDecimal.ZERO) > 0
                 ? item.getDebitAmount()
                 : (item.getAmount() != null ? item.getAmount() : BigDecimal.ZERO);
-        String words;
-        try {
-            words = cn.hutool.core.convert.Convert.digitToChinese(totalAmt.doubleValue());
-        } catch (Exception e) {
-            words = totalAmt.toPlainString() + " 元整";
-        }
+        String words = FinancialAmountUtil.toChineseWords(totalAmt);
 
         return VoucherFullDetailResponse.builder()
                 .id(item.getId())

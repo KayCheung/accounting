@@ -486,6 +486,27 @@
         - 记账凭证/默认 (`GENERAL`) → `VOU`（如 `VOU20260930000001`）
       - 重构 `ManualVoucherApplicationService.executeBookkeeping`、`VoucheringDomainService.persistVoucher` 与 `PeriodEndTransferDomainService.generateTransferVoucher`，凭证编号生成全面切换至基于凭证类型的动态前缀。
       - 数据库沉淀：创建 Flyway 增量脚本 `V15__voucher_no_prefix.sql` 完善 `t_dictionary` 凭证类型扩展属性。
+  → 完成内容（Step 23.4.8 核心业务单号生成器统一抽象、看板统计DTO强类型化、科目余额方向规范化与领域枚举深度治理）：
+    - 统一业务单号与流水号生成器抽象 (`BusinessNoGenerator`)：
+      - 新增通用业务单号生成组件 `BusinessNoGenerator`，统一收拢系统内凭证号 (`voucherNo`)、事务号 (`txnNo`)、分录流水号 (`entryId`)、手工记账申请号 (`applyNo`) 及期末结转号 (`transferNo`)；
+      - 彻底根除历史私有方法中硬编码假日期（如 `"20260929"`、`"20260930"`）的严重缺陷，动态基于入参会计日期/系统时间生成；
+      - 内置高并发 Redis 原子自增并支持动态格式化时间戳降级；
+      - 全面重构 `ManualVoucherApplicationService`、`VoucheringDomainService`、`PeriodEndTransferDomainService` 与 `ReversalDomainService`，彻底消除各领域类各自为政的私有单号生成逻辑。
+    - 看板状态统计强类型 DTO 治理 (`ManualVoucherStatisticsResponse`)：
+      - 严禁在接口契约中使用 `Map<String, Object>`，定义专用响应结构体 `ManualVoucherStatisticsResponse`（`total`, `pendingAudit`, `pendingReview`, `pendingBookkeeping`, `booked`, `rejected`）；
+      - 同步重构 `ManualVoucherController.getStatistics` 与 `ManualVoucherApplicationService.getStatistics`，确立严格强类型数据契约。
+    - 财务金额中文大写工具抽象 (`FinancialAmountUtil`)：
+      - 落地 `FinancialAmountUtil.toChineseWords(BigDecimal)` 公共工具类（位于 `shared/util`），提供财务金额中文大写标准转换与防御；
+      - 统一接入 `ManualVoucherApplicationService` 与 `VoucheringAssembler`，消除各处零散重复私有转换实现。
+    - 会计科目借贷余额方向严格权威判定（彻底根绝首字符猜测）：
+      - 彻底废除 `firstChar == '2' || ...` 猜测科目借贷方向的反模式，确立科目表 `t_account_subject.debit_credit` 为唯一权威依据；
+      - 记账推导分录 `changeDirection` 时严格读取 `AccountSubjectPO.getDebitCredit()`，科目不存在或未配置借贷方向时抛出明确 `AccountException` 拦截；
+      - 分录借贷与科目余额方向一致记为增加(1)，相反记为减少(2)。
+    - 实体层枚举化与展示描述治理：
+      - `ManualVoucherApplyAuxiliaryPO.changeDirection` 字段类型由 `Integer` 升级为 `ChangeDirectionEnum`；
+      - `ManualVoucherApplyPO.tradeType` 字段类型由 `Integer` 升级为 `TradeTypeEnum`；
+      - 前端响应装配与展示一律调用枚举原生 `getDesc()`，消除所有 `po.getTradeType() == 1 ? "正常" : "调账"`、`? "减少" : "增加"` 胶水代码；
+      - 审计日志记录消除 `"ACTION"`、`"SYSTEM"`、`"OPERATOR"` 魔法字符串，统一收拢至 `ManualVoucherAuditActionEnum`、`Constants.SYSTEM_OPERATOR` 与 `ManualVoucherOperatorRoleEnum`。
   → 待进行业务页面：日切与试算平衡 (`business/eod`)、缓冲记账监控 (`business/buffer-monitor`)
 
 ---

@@ -3,10 +3,7 @@ package com.kltb.accounting.core.interfaces;
 
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.api.request.*;
-import com.kltb.accounting.api.response.ApiResponse;
-import com.kltb.accounting.api.response.ManualVoucherApplyDetailResponse;
-import com.kltb.accounting.api.response.ManualVoucherApplyPageItemResponse;
-import com.kltb.accounting.api.response.PageResponse;
+import com.kltb.accounting.api.response.*;
 import com.kltb.accounting.core.application.service.ManualVoucherApplicationService;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountSubjectPO;
 import com.kltb.accounting.core.infrastructure.persistence.repository.SubjectRepository;
@@ -123,7 +120,7 @@ public class ManualVoucherController {
      */
     @GetMapping("/statistics")
     @Operation(summary = "看板流转状态统计", description = "统计全部、待初审、待复核、待记账、已记账、被驳回数量")
-    public ApiResponse<Map<String, Long>> getStatistics() {
+    public ApiResponse<ManualVoucherStatisticsResponse> getStatistics() {
         return ApiResponse.ok(manualVoucherApplicationService.getStatistics());
     }
 

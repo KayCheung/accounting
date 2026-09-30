@@ -4,6 +4,7 @@ package com.kltb.accounting.core.infrastructure.persistence.entity;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.kltb.accounting.core.domain.enums.ManualVoucherApplyStatusEnum;
+import com.kltb.accounting.core.domain.enums.TradeTypeEnum;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
@@ -37,7 +38,7 @@ public class ManualVoucherApplyPO extends BaseEntity {
      * 交易类别：1-正常，2-调账。
      */
     @TableField("trade_type")
-    private Integer tradeType;
+    private TradeTypeEnum tradeType;
 
     /**
      * 会计日期。
