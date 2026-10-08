@@ -507,6 +507,51 @@
       - `ManualVoucherApplyPO.tradeType` 字段类型由 `Integer` 升级为 `TradeTypeEnum`；
       - 前端响应装配与展示一律调用枚举原生 `getDesc()`，消除所有 `po.getTradeType() == 1 ? "正常" : "调账"`、`? "减少" : "增加"` 胶水代码；
       - 审计日志记录消除 `"ACTION"`、`"SYSTEM"`、`"OPERATOR"` 魔法字符串，统一收拢至 `ManualVoucherAuditActionEnum`、`Constants.SYSTEM_OPERATOR` 与 `ManualVoucherOperatorRoleEnum`。
+  → 完成内容（Step 23.4.9 实时与异步过账架构纯净化治理与链路元数据完整性保障 BUG261008-002）：
+    - 根因分析与架构反思：
+      - 早期实现中为避免 `t_account_detail` 与 `t_sub_account_detail` 数据库 NOT NULL 约束报错，在过账层硬编码填充 `"INTERNAL"`、`"ACCOUNTING"`、`"SYSTEM"`、`TradeTypeEnum.NORMAL`、`TXN...000000` 等伪默认值，甚至在过账阶段临时生成事务号与事务主记录；
+      - 此举严重违背“Trace -> Txn -> Voucher -> Detail”全链路权威一致性原则，破坏了审计追溯链条与按渠道/业务维度的统计准确性，属于严重职责越界；
+      - 历史方法 `executeRealTimePosting(entries, accountingDate)` 脱离了聚合根凭证上下文，迫使内部引入 `voucherCache` 跨库查询，产生接口歧义与多余开销。
+    - 纯净化重构落地：
+      - 废除伪造默认值与职责倒置：过账引擎严禁兜底捏造事务或填充假默认值。明细的 `txnNo`、`traceNo`、`traceSeq`、`businessCode`、`tradingCode`、`payChannel`、`tradeType`、`tradeTime`、`accountingDate`、`tenantId` 必须 100% 忠实继承自所属凭证聚合根；
+      - 确立前置强契约与快速失败（Fast-Fail）：过账前严格校验 `voucher != null && StrUtil.isNotBlank(voucher.getTxnNo())`，凡上游凭证核心元数据不完备者一律立即拦截并抛出明确异常，坚决杜绝脏数据入库；
+      - 彻底清除 `voucherCache`：过账最小操作单元即为单张凭证，分录均隶属于当前凭证，无需且不应存在方法内凭证缓存；
+      - 废除脱离凭证的旧重载与冗余参数：删除 `executeRealTimePosting(entries, accountingDate)`，会计日期直接取自 `voucher.getAccountingDate()`，统一收敛为单一强类型入口：`executeRealTimePosting(AccountingVoucherPO voucher, List<AccountingVoucherEntryPO> entries)`；
+      - 瘦身依赖注入：`PostingDomainService` 移除对 `TransactionRepository`、`BusinessNoGenerator` 与 `AccountingVoucherRepository` 的无用注入，恢复过账纯粹领域职责；
+      - `PostingApplicationService`、`ReversalDomainService`、`AsyncPostingDomainService` 同步完成契约对齐，全面通过单元测试验证。
+  → 完成内容（Step 23.4.10 账户状态统一校验器抽象与风控状态一体化治理）：
+    - 统一校验器落地 (`AccountValidator`)：
+      - 新增基础组件 `AccountValidator`（位于 `infrastructure/account`，与 `AccountBalanceCalculator` 同级）；
+      - 集中统一封装：存在性校验（`validateExists`）、主状态校验（`validateNormal`）、过账主状态+风控状态联合校验（`validatePostable`）、资金冻结操作校验（`validateFreezable`）、状态机转换校验（`validateTransition`）；
+      - 全面消除散落在 `PostingDomainService`、`PostingApplicationService`、`AsyncPostingDomainService`、`FreezeDomainService`、`AccountStatusChangeDomainService` 各处的重复冗余 if-else 状态判定；
+      - 统一全链路异常状态码映射（`ACCOUNT_NOT_FOUND` 3001, `ACCOUNT_FROZEN` 3002, `ACCOUNT_CANCELLED` 3003, `ACCOUNT_RISK_BLOCKED` 3004, `ACCOUNT_STATUS_ILLEGAL` 3005），确保异常提示与前置拦截口径严格一致；
+  → 完成内容（Step 23.4.11 过账链路数据读取与校验前置治理——“读验先于写”原则落地）：
+    - 根因分析：
+      - `AsyncPostingDomainService.consumeAsyncPostingMessage` 历史逻辑中存在严重的反模式：在更新主账户与子账户余额（`accountRepository.updateById`）之后，才在第 9 步查询关联凭证 `accountingVoucherRepository.selectByVoucherNoSimple` 并校验 `voucher` 是否存在以及 `txnNo` 是否非空；
+      - 若凭证缺失或核心字段非法，或在更新主账户后子账户余额不足，数据库已被脏写或部分更新，破坏了领域模型的干净性与 Fast-Fail 前置失败原则。
+    - 纯净化与前置校验落地：
+      - **第一阶段：只读预检与快速失败（Fast-Fail）**：进入消费方法后，按严格顺序先检验 `payload` 核心参数，读取并校验分录（分录已过账则直接幂等返回），读取并校验凭证及其 `txnNo` 完整性，通过 `AccountValidator` 预检目标账户的存在性与可入账状态。在任何加锁与写操作前完成所有只读前置校验；
+      - **第二阶段：悲观行锁**：按账号加行级排他锁，获取最新持久态；
+      - **第三阶段：纯内存余额试算与绝对值法则校验**：基于行锁最新余额试算主账户与子账户的新余额，若余额不足在进入写库前立即拦截抛出 `INSUFFICIENT_BALANCE`；
+      - **第四阶段：原子落库与明细持久化**：统一执行账户更新、分录状态更新、明细落库、状态联动、消息确认与回执入库；
+      - **实时过账同步对齐**：`PostingDomainService.executeRealTimePosting` 在执行批量账户更新前，同样引入前置循环预校验，确保批次内所有分录的目标账户均有效且状态正常，彻底根绝“部分账户更新后遇到异常回滚”的脏操作隐患；
+      - **测试保障**：新增单元测试 `AsyncPostingDomainServiceTest`（10 个测试用例，覆盖参数缺失、分录不存在、幂等跳过、凭证缺失、事务号空白、账户不存在、账户冻结、余额不足先验拦截、正常主子账户过账等），并与 `PostingDomainServiceTest`、`AccountValidatorTest` 全部通过。
+  → 完成内容（Step 23.4.12 科目余额方向更新缺陷修复 BUG261008-001）：
+    - 根因分析：前端科目编辑弹窗虽然可操作单选框变更余额方向，但 `updatePayload` 漏传了 `debitCredit`；后端 `SubjectUpdateRequest` DTO 缺失 `debitCredit` 字段，且 `SubjectConverter.updatePO` 亦未映射该字段；另外编辑非顶级科目时单选框会被 `:disabled="Boolean(currentParent)"` 误锁。
+    - 修复内容：
+      - 后端 DTO：`SubjectUpdateRequest` 增加 `debitCredit` 字段（1=借方，2=贷方）；
+      - 后端转换器：`SubjectConverter.updatePO` 补充 `debitCredit` 的枚举映射与更新；
+      - 前端接口与页面：`accounting-ui/src/api/subject.ts` 的 `SubjectUpdateRequest` 接口补充 `debitCredit?: number`；`subject/index.vue` 的 `updatePayload` 补全 `debitCredit` 传参，将禁用条件放宽为 `:disabled="!isEditMode && Boolean(currentParent)"`；
+      - 质量验证：新增 `SubjectApplicationServiceTest` 单元测试验证余额方向更新逻辑，Maven 全模块编译与单测 100% 通过，前端 `vue-tsc && vite build` 生产构建 0 错误通过。
+  → 完成内容（Step 23.4.13 转换器层枚举映射坏味道治理与 SSOT 对齐）：
+    - 根因与坏味道清理：
+      - 彻底消除 `SubjectConverter`、`TemplateConverter`、`BufferRuleConverter`、`RuleConverter` 中重复硬编码定义的私有静态枚举 Map（`CATEGORY_MAP`、`NATURE_MAP`、`DEBIT_CREDIT_MAP`、`CUSTOMER_TYPE_MAP`、`BALANCE_DIR_MAP`、`BUFFER_MODE_MAP`、`STATUS_MAP`、`ACCOUNT_SCOPE_MAP`、`ALLOCATION_METHOD_MAP`）；
+      - 消除 `DictConverter` 等处的 `status == 1 ? ENABLED : DISABLED` 魔法数字判断；
+    - 统一重构落地：
+      - 统一收敛至各枚举类内聚的 `fromCode(Integer code)` 方法，实现单一事实来源（SSOT）；
+      - 补全 `AccountScopeEnum.fromCode` 方法；
+      - 修复 `AccountStatusChangeDomainServiceTest` 与 `LocalMessageRetryJobTest` 中 mock 缺失与分片上下文传递缺陷；
+      - 全模块 Maven Reactor 构建、219 个后端单元测试与前端 `npm run build` 100% 通过。
   → 待进行业务页面：日切与试算平衡 (`business/eod`)、缓冲记账监控 (`business/buffer-monitor`)
 
 ---

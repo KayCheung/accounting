@@ -1,5 +1,6 @@
 package com.kltb.accounting.core.application.converter;
 
+import com.kltb.accounting.api.constant.Constants;
 import com.kltb.accounting.api.request.AuxiliaryCreateRequest;
 import com.kltb.accounting.api.request.AuxiliaryUpdateRequest;
 import com.kltb.accounting.core.application.dto.AuxiliaryResponse;
@@ -68,10 +69,10 @@ public class SubjectTreeConverter {
         po.setRequired(request.getRequired());
         po.setDefaultAuxCode(request.getDefaultAuxCode());
         po.setTenantId(TenantContext.get());
-        po.setCreateId("system");
-        po.setCreateName("system");
-        po.setUpdateId("system");
-        po.setUpdateName("system");
+        po.setCreateId(Constants.SYSTEM_OPERATOR);
+        po.setCreateName(Constants.SYSTEM_OPERATOR);
+        po.setUpdateId(Constants.SYSTEM_OPERATOR);
+        po.setUpdateName(Constants.SYSTEM_OPERATOR);
         return po;
     }
 
@@ -85,8 +86,8 @@ public class SubjectTreeConverter {
         if (request.getDefaultAuxCode() != null) {
             po.setDefaultAuxCode(request.getDefaultAuxCode());
         }
-        po.setUpdateId("system");
-        po.setUpdateName("system");
+        po.setUpdateId(Constants.SYSTEM_OPERATOR);
+        po.setUpdateName(Constants.SYSTEM_OPERATOR);
     }
 
     /**

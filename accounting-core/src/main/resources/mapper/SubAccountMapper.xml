@@ -4,12 +4,14 @@
 
     <!-- P1-2: 显式 ORDER BY 保证加锁顺序，防止死锁 -->
     <select id="selectForUpdate" resultType="com.kltb.accounting.core.infrastructure.persistence.entity.SubAccountPO">
-        SELECT id, account_no, balance_type, balance_direction, balance, version,
-               create_time, update_time, is_delete, tenant_id
-        FROM t_sub_account
-        WHERE account_no = #{accountNo}
-          AND is_delete = 0
-        ORDER BY account_no ASC
+        SELECT * FROM (
+            SELECT id, account_no, balance_type, balance_direction, balance, version,
+                   create_time, update_time, is_delete, tenant_id
+            FROM t_sub_account
+            WHERE account_no = #{accountNo}
+              AND is_delete = 0
+            ORDER BY account_no ASC
+        ) AS t
         FOR UPDATE
     </select>
 

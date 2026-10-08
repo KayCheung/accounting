@@ -12,6 +12,7 @@ import com.kltb.accounting.core.domain.enums.VoucherStatusEnum;
 import com.kltb.accounting.core.domain.service.AsyncPostingDomainService;
 import com.kltb.accounting.core.domain.service.PostingDomainService;
 import com.kltb.accounting.core.domain.service.RollbackDomainService;
+import com.kltb.accounting.core.infrastructure.account.AccountValidator;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherEntryPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherPO;
@@ -133,18 +134,8 @@ public class PostingApplicationService {
 
         for (String accountNo : accountNos) {
             AccountPO account = accountRepository.selectByAccountNo(accountNo);
-            if (account == null) {
-                throw new AccountException(ResultCode.ACCOUNT_NOT_FOUND,
-                    "账户不存在: accountNo=" + accountNo);
-            }
-            if (account.getStatus() == AccountStatusEnum.FROZEN) {
-                throw new AccountException(ResultCode.ACCOUNT_FROZEN,
-                    "账户已冻结: accountNo=" + accountNo);
-            }
-            if (account.getStatus() == AccountStatusEnum.CANCELLED) {
-                throw new AccountException(ResultCode.ACCOUNT_CANCELLED,
-                    "账户已注销: accountNo=" + accountNo);
-            }
+            AccountValidator.validateExists(account, accountNo);
+            AccountValidator.validatePostable(account);
         }
 
         // 4. 分布式锁
@@ -175,8 +166,7 @@ public class PostingApplicationService {
                 // c. 实时过账（按 account_no 升序排列）
                 realTimeEntries.sort(Comparator.comparing(AccountingVoucherEntryPO::getAccountNo));
                 if (!realTimeEntries.isEmpty()) {
-                    postingDomainService.executeRealTimePosting(
-                        realTimeEntries, voucher.getAccountingDate());
+                    postingDomainService.executeRealTimePosting(voucher, realTimeEntries);
                 }
 
                 // d. 异步过账：写入本地消息

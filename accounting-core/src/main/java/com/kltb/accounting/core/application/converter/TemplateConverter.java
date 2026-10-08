@@ -11,7 +11,6 @@ import com.kltb.accounting.core.infrastructure.persistence.entity.AccountTemplat
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -21,17 +20,6 @@ import java.util.Optional;
  */
 public class TemplateConverter {
 
-    private static final Map<Integer, CustomerTypeEnum> CUSTOMER_TYPE_MAP = Map.of(
-            1, CustomerTypeEnum.PERSONAL,
-            2, CustomerTypeEnum.ENTERPRISE,
-            99, CustomerTypeEnum.OTHER
-    );
-
-    private static final Map<Integer, BalanceDirectionEnum> BALANCE_DIR_MAP = Map.of(
-            1, BalanceDirectionEnum.DEBIT,
-            2, BalanceDirectionEnum.CREDIT
-    );
-
     /**
      * 创建请求 → PO
      */
@@ -39,12 +27,13 @@ public class TemplateConverter {
         AccountTemplatePO po = new AccountTemplatePO();
         po.setTemplateName(request.getTemplateName());
         po.setBusinessCode(request.getBusinessCode());
-        po.setCustomerType(CUSTOMER_TYPE_MAP.getOrDefault(request.getCustomerType(), CustomerTypeEnum.OTHER));
+        po.setCustomerType(Optional.ofNullable(CustomerTypeEnum.fromCode(request.getCustomerType()))
+                .orElse(CustomerTypeEnum.OTHER));
         po.setAutoOpen(request.getAutoOpen() != null && request.getAutoOpen());
         po.setSubjectCode(request.getSubjectCode());
         po.setAccountType(request.getAccountType());
         po.setCurrency(request.getCurrency() != null ? request.getCurrency() : Constants.DEFAULT_CURRENCY);
-        po.setBalanceDirection(BALANCE_DIR_MAP.getOrDefault(request.getBalanceDirection(), BalanceDirectionEnum.DEBIT));
+        po.setBalanceDirection(BalanceDirectionEnum.fromCode(request.getBalanceDirection()));
         po.setAcctNoRule(request.getAcctNoRule());
         po.setAcctNameRule(request.getAcctNameRule());
         TemplateStatusEnum status = TemplateStatusEnum.fromCode(request.getStatus());
@@ -70,7 +59,8 @@ public class TemplateConverter {
             po.setCurrency(request.getCurrency());
         }
         if (request.getBalanceDirection() != null) {
-            po.setBalanceDirection(BALANCE_DIR_MAP.getOrDefault(request.getBalanceDirection(), po.getBalanceDirection()));
+            Optional.ofNullable(BalanceDirectionEnum.fromCode(request.getBalanceDirection()))
+                    .ifPresent(po::setBalanceDirection);
         }
         if (request.getAcctNoRule() != null) {
             po.setAcctNoRule(request.getAcctNoRule());
@@ -87,8 +77,8 @@ public class TemplateConverter {
                 po.setStatus(newStatus);
             }
         }
-        po.setUpdateId("system");
-        po.setUpdateName("system");
+        po.setUpdateId(Constants.SYSTEM_OPERATOR);
+        po.setUpdateName(Constants.SYSTEM_OPERATOR);
     }
 
     /**

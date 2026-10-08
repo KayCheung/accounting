@@ -3,57 +3,79 @@ package com.kltb.accounting.core.domain.service;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.AccountStatusEnum;
 import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
-import com.kltb.accounting.core.domain.enums.ChangeDirectionEnum;
 import com.kltb.accounting.core.domain.enums.VoucherEntryStatusEnum;
-import com.kltb.accounting.core.infrastructure.account.AccountBalanceCalculator;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountDetailRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.SubAccountDetailRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.SubAccountRepository;
-import com.kltb.accounting.core.infrastructure.persistence.repository.AccountingVoucherRepository;
 import com.kltb.accounting.core.shared.exception.AccountException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class PostingDomainServiceTest {
 
     @Mock private AccountRepository accountRepository;
     @Mock private SubAccountRepository subAccountRepository;
     @Mock private AccountDetailRepository accountDetailRepository;
     @Mock private SubAccountDetailRepository subAccountDetailRepository;
-    @Mock private AccountingVoucherRepository accountingVoucherRepository;
 
     @InjectMocks private PostingDomainService postingDomainService;
 
     @Test
     @DisplayName("实时过账: 空列表直接返回")
     void executeRealTimePosting_emptyList_shouldReturn() {
-        postingDomainService.executeRealTimePosting(List.of(), LocalDate.now());
+        AccountingVoucherPO voucher = buildVoucher("VOU1");
+        postingDomainService.executeRealTimePosting(voucher, List.of());
         verifyNoInteractions(accountRepository);
+    }
+
+    @Test
+    @DisplayName("实时过账: 凭证为空 -> 抛出 PARAM_ERROR")
+    void executeRealTimePosting_nullVoucher_shouldThrow() {
+        AccountingVoucherEntryPO entry = buildEntry("E1", "VOU1", "A001", 1, new BigDecimal("1000"));
+        assertThatThrownBy(() -> postingDomainService.executeRealTimePosting(null, List.of(entry)))
+                .isInstanceOf(AccountException.class)
+                .satisfies(ex -> assertThat(((AccountException) ex).getResultCode()).isEqualTo(ResultCode.PARAM_ERROR));
+    }
+
+    @Test
+    @DisplayName("实时过账: 凭证txnNo缺失 -> 抛出 PARAM_ERROR")
+    void executeRealTimePosting_missingTxnNo_shouldThrow() {
+        AccountingVoucherPO voucher = buildVoucher("VOU1");
+        voucher.setTxnNo("");
+        AccountingVoucherEntryPO entry = buildEntry("E1", "VOU1", "A001", 1, new BigDecimal("1000"));
+        assertThatThrownBy(() -> postingDomainService.executeRealTimePosting(voucher, List.of(entry)))
+                .isInstanceOf(AccountException.class)
+                .satisfies(ex -> assertThat(((AccountException) ex).getResultCode()).isEqualTo(ResultCode.PARAM_ERROR));
     }
 
     @Test
     @DisplayName("实时过账: 账户不存在 -> 抛出 ACCOUNT_NOT_FOUND")
     void executeRealTimePosting_accountNotFound_shouldThrow() {
+        AccountingVoucherPO voucher = buildVoucher("VOU1");
         AccountingVoucherEntryPO entry = buildEntry("E1", "VOU1", "A001", 1, new BigDecimal("1000"));
         when(accountRepository.selectForUpdateBatch(List.of("A001"))).thenReturn(Collections.emptyList());
-        assertThatThrownBy(() -> postingDomainService.executeRealTimePosting(List.of(entry), LocalDate.now()))
+        assertThatThrownBy(() -> postingDomainService.executeRealTimePosting(voucher, List.of(entry)))
                 .isInstanceOf(AccountException.class)
                 .satisfies(ex -> {
                     AccountException e = (AccountException) ex;
@@ -64,11 +86,12 @@ class PostingDomainServiceTest {
     @Test
     @DisplayName("实时过账: 账户冻结 -> 抛出 ACCOUNT_FROZEN")
     void executeRealTimePosting_accountFrozen_shouldThrow() {
+        AccountingVoucherPO voucher = buildVoucher("VOU1");
         AccountingVoucherEntryPO entry = buildEntry("E1", "VOU1", "A001", 1, new BigDecimal("1000"));
         AccountPO account = buildAccount("A001", new BigDecimal("5000"), AccountStatusEnum.FROZEN);
         when(accountRepository.selectForUpdateBatch(List.of("A001"))).thenReturn(List.of(account));
         when(subAccountRepository.selectForUpdate("A001")).thenReturn(List.of(buildSubAccount("A001")));
-        assertThatThrownBy(() -> postingDomainService.executeRealTimePosting(List.of(entry), LocalDate.now()))
+        assertThatThrownBy(() -> postingDomainService.executeRealTimePosting(voucher, List.of(entry)))
                 .isInstanceOf(AccountException.class)
                 .satisfies(ex -> {
                     AccountException e = (AccountException) ex;
@@ -79,11 +102,12 @@ class PostingDomainServiceTest {
     @Test
     @DisplayName("实时过账: 账户注销 -> 抛出 ACCOUNT_CANCELLED")
     void executeRealTimePosting_accountCancelled_shouldThrow() {
+        AccountingVoucherPO voucher = buildVoucher("VOU1");
         AccountingVoucherEntryPO entry = buildEntry("E1", "VOU1", "A001", 1, new BigDecimal("1000"));
         AccountPO account = buildAccount("A001", new BigDecimal("5000"), AccountStatusEnum.CANCELLED);
         when(accountRepository.selectForUpdateBatch(List.of("A001"))).thenReturn(List.of(account));
         when(subAccountRepository.selectForUpdate("A001")).thenReturn(List.of(buildSubAccount("A001")));
-        assertThatThrownBy(() -> postingDomainService.executeRealTimePosting(List.of(entry), LocalDate.now()))
+        assertThatThrownBy(() -> postingDomainService.executeRealTimePosting(voucher, List.of(entry)))
                 .isInstanceOf(AccountException.class)
                 .satisfies(ex -> {
                     AccountException e = (AccountException) ex;
@@ -92,37 +116,93 @@ class PostingDomainServiceTest {
     }
 
     @Test
-    @DisplayName("实时过账: 正常过账 -> 更新余额+写入明细+更新状态")
+    @DisplayName("实时过账: 正常过账 -> 更新余额+完整复制凭证元数据到明细+更新分录状态")
     void executeRealTimePosting_normalFlow_shouldUpdateBalanceAndDetails() {
+        AccountingVoucherPO voucher = buildVoucher("VOU1");
         AccountingVoucherEntryPO entry = buildEntry("E1", "VOU1", "A001", 1, new BigDecimal("1000"));
         AccountPO account = buildAccount("A001", new BigDecimal("5000"), AccountStatusEnum.NORMAL);
         SubAccountPO subAccount = buildSubAccount("A001");
         when(accountRepository.selectForUpdateBatch(List.of("A001"))).thenReturn(List.of(account));
         when(subAccountRepository.selectForUpdate("A001")).thenReturn(List.of(subAccount));
-        postingDomainService.executeRealTimePosting(List.of(entry), LocalDate.of(2026, 6, 24));
+
+        postingDomainService.executeRealTimePosting(voucher, List.of(entry));
         assertThat(account.getBalance()).isEqualTo(new BigDecimal("6000"));
         assertThat(subAccount.getBalance()).isEqualTo(new BigDecimal("6000"));
         verify(accountRepository).updateById(account);
         verify(subAccountRepository).updateById(subAccount);
-        verify(accountDetailRepository).batchInsert(anyList());
-        verify(subAccountDetailRepository).batchInsert(anyList());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<AccountDetailPO>> detailCaptor = ArgumentCaptor.forClass(List.class);
+        verify(accountDetailRepository).batchInsert(detailCaptor.capture());
+        List<AccountDetailPO> capturedDetails = detailCaptor.getValue();
+        assertThat(capturedDetails).hasSize(1);
+        AccountDetailPO detail = capturedDetails.get(0);
+        assertThat(detail.getVoucherNo()).isEqualTo("VOU1");
+        assertThat(detail.getEntryId()).isEqualTo("E1");
+        assertThat(detail.getTxnNo()).isEqualTo(voucher.getTxnNo());
+        assertThat(detail.getTraceNo()).isEqualTo(voucher.getTraceNo());
+        assertThat(detail.getTraceSeq()).isEqualTo(voucher.getTraceSeq());
+        assertThat(detail.getBusinessCode()).isEqualTo(voucher.getBusinessCode());
+        assertThat(detail.getTradingCode()).isEqualTo(voucher.getTradingCode());
+        assertThat(detail.getPayChannel()).isEqualTo(voucher.getPayChannel());
+        assertThat(detail.getTradeType()).isEqualTo(voucher.getTradeType());
+        assertThat(detail.getTradeTime()).isEqualTo(voucher.getTradeTime());
+        assertThat(detail.getAccountingDate()).isEqualTo(voucher.getAccountingDate());
+        assertThat(detail.getTenantId()).isEqualTo(voucher.getTenantId());
+        assertThat(detail.getAmount()).isEqualByComparingTo(new BigDecimal("1000"));
+        assertThat(detail.getPreBalance()).isEqualByComparingTo(new BigDecimal("5000"));
+        assertThat(detail.getPostBalance()).isEqualByComparingTo(new BigDecimal("6000"));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<SubAccountDetailPO>> subDetailCaptor = ArgumentCaptor.forClass(List.class);
+        verify(subAccountDetailRepository).batchInsert(subDetailCaptor.capture());
+        List<SubAccountDetailPO> capturedSubDetails = subDetailCaptor.getValue();
+        assertThat(capturedSubDetails).hasSize(1);
+        SubAccountDetailPO subDetail = capturedSubDetails.get(0);
+        assertThat(subDetail.getTxnNo()).isEqualTo(voucher.getTxnNo());
+        assertThat(subDetail.getTraceNo()).isEqualTo(voucher.getTraceNo());
+        assertThat(subDetail.getTraceSeq()).isEqualTo(voucher.getTraceSeq());
+        assertThat(subDetail.getTradingCode()).isEqualTo(voucher.getTradingCode());
+        assertThat(subDetail.getTradeType()).isEqualTo(voucher.getTradeType());
+        assertThat(subDetail.getTradeTime()).isEqualTo(voucher.getTradeTime());
+        assertThat(subDetail.getAccountingDate()).isEqualTo(voucher.getAccountingDate());
+        assertThat(subDetail.getTenantId()).isEqualTo(voucher.getTenantId());
+
         assertThat(entry.getStatus()).isEqualTo(VoucherEntryStatusEnum.POSTED);
     }
 
     @Test
     @DisplayName("实时过账: 余额不足 -> 抛出 INSUFFICIENT_BALANCE")
     void executeRealTimePosting_insufficientBalance_shouldThrow() {
+        AccountingVoucherPO voucher = buildVoucher("VOU1");
         AccountingVoucherEntryPO entry = buildEntry("E1", "VOU1", "A001", 2, new BigDecimal("10000"));
         AccountPO account = buildAccount("A001", new BigDecimal("5000"), AccountStatusEnum.NORMAL);
         SubAccountPO subAccount = buildSubAccount("A001");
         when(accountRepository.selectForUpdateBatch(List.of("A001"))).thenReturn(List.of(account));
         when(subAccountRepository.selectForUpdate("A001")).thenReturn(List.of(subAccount));
-        assertThatThrownBy(() -> postingDomainService.executeRealTimePosting(List.of(entry), LocalDate.now()))
+        assertThatThrownBy(() -> postingDomainService.executeRealTimePosting(voucher, List.of(entry)))
                 .isInstanceOf(AccountException.class)
                 .satisfies(ex -> {
                     AccountException e = (AccountException) ex;
                     assertThat(e.getResultCode()).isEqualTo(ResultCode.INSUFFICIENT_BALANCE);
                 });
+    }
+
+    private AccountingVoucherPO buildVoucher(String voucherNo) {
+        AccountingVoucherPO voucher = new AccountingVoucherPO();
+        voucher.setVoucherNo(voucherNo);
+        voucher.setTxnNo("TXN20260624000001");
+        voucher.setTraceNo("TRACE20260624000001");
+        voucher.setTraceSeq(1);
+        voucher.setBusinessCode("PAYMENT");
+        voucher.setTradingCode("ONLINE_PAY");
+        voucher.setPayChannel("ALIPAY");
+        voucher.setTradeType(com.kltb.accounting.core.domain.enums.TradeTypeEnum.NORMAL);
+        voucher.setTradeTime(LocalDateTime.of(2026, 6, 24, 10, 0, 0));
+        voucher.setAccountingDate(LocalDate.of(2026, 6, 24));
+        voucher.setSummary("test voucher");
+        voucher.setTenantId(1001);
+        return voucher;
     }
 
     private AccountingVoucherEntryPO buildEntry(String entryId, String voucherNo, String accountNo, int direction, BigDecimal amount) {

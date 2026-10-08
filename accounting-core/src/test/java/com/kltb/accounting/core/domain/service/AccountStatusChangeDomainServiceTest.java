@@ -12,12 +12,14 @@ import com.kltb.accounting.core.infrastructure.persistence.repository.SubAccount
 import com.kltb.accounting.core.infrastructure.redis.DistributedLockTemplate;
 import com.kltb.accounting.core.shared.exception.AccountException;
 import com.kltb.accounting.core.shared.exception.ServiceException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
@@ -52,22 +54,27 @@ class AccountStatusChangeDomainServiceTest {
     @InjectMocks
     private AccountStatusChangeDomainService accountStatusChangeDomainService;
 
+    @BeforeEach
+    void setUp() {
+        lenient().doAnswer(invocation -> {
+            Supplier<?> action = invocation.getArgument(3);
+            return action.get();
+        }).when(distributedLockTemplate).execute(anyString(), anyLong(), anyLong(), any());
+
+        lenient().doAnswer(invocation -> {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(null);
+        }).when(transactionTemplate).execute(any());
+    }
+
     // ==================== freezeAccount 测试 ====================
 
     @Test
     @DisplayName("冻结账户: 正常流程 NORMAL → FROZEN")
     void freezeAccount_normal_shouldSucceed() {
         AccountPO account = buildAccount(AccountStatusEnum.NORMAL);
-        AccountPO frozenAccount = buildAccount(AccountStatusEnum.FROZEN);
 
         when(accountRepository.selectByAccountNo("ACC001")).thenReturn(account);
-        doAnswer(invocation -> ((Supplier<?>) invocation.getArgument(3)).get())
-                .when(distributedLockTemplate).execute(anyString(), anyLong(), anyLong(), any());
-        doAnswer(invocation -> {
-            // Execute the transaction callback
-            doNothing().when(accountRepository).updateStatus(eq("ACC001"), eq(AccountStatusEnum.FROZEN), eq(0L));
-            return frozenAccount;
-        }).when(transactionTemplate).execute(any());
 
         AccountPO result = accountStatusChangeDomainService.freezeAccount("ACC001", "风控拦截");
 
@@ -141,15 +148,8 @@ class AccountStatusChangeDomainServiceTest {
     @DisplayName("解冻账户: 正常流程 FROZEN → NORMAL")
     void unfreezeAccount_normal_shouldSucceed() {
         AccountPO account = buildAccount(AccountStatusEnum.FROZEN);
-        AccountPO normalAccount = buildAccount(AccountStatusEnum.NORMAL);
 
         when(accountRepository.selectByAccountNo("ACC001")).thenReturn(account);
-        doAnswer(invocation -> ((Supplier<?>) invocation.getArgument(3)).get())
-                .when(distributedLockTemplate).execute(anyString(), anyLong(), anyLong(), any());
-        doAnswer(invocation -> {
-            doNothing().when(accountRepository).updateStatus(eq("ACC001"), eq(AccountStatusEnum.NORMAL), eq(0L));
-            return normalAccount;
-        }).when(transactionTemplate).execute(any());
 
         AccountPO result = accountStatusChangeDomainService.unfreezeAccount("ACC001");
 
@@ -191,41 +191,29 @@ class AccountStatusChangeDomainServiceTest {
     @DisplayName("注销账户: 正常流程 NORMAL → CANCELLED (余额为零)")
     void cancelAccount_normal_zeroBalance_shouldSucceed() {
         AccountPO account = buildAccountWithBalance(AccountStatusEnum.NORMAL, BigDecimal.ZERO);
-        AccountPO cancelledAccount = buildCancelledAccount();
 
         when(accountRepository.selectByAccountNo("ACC001")).thenReturn(account);
         when(subAccountRepository.selectByAccountNo("ACC001")).thenReturn(Collections.emptyList());
-        doAnswer(invocation -> ((Supplier<?>) invocation.getArgument(3)).get())
-                .when(distributedLockTemplate).execute(anyString(), anyLong(), anyLong(), any());
-        doAnswer(invocation -> {
-            when(accountRepository.updateById(any(AccountPO.class))).thenReturn(true);
-            return cancelledAccount;
-        }).when(transactionTemplate).execute(any());
 
         AccountPO result = accountStatusChangeDomainService.cancelAccount("ACC001", "客户申请销户");
 
         assertThat(result.getStatus()).isEqualTo(AccountStatusEnum.CANCELLED);
         assertThat(result.getInactiveDate()).isNotNull();
+        verify(accountRepository).updateById(any(AccountPO.class));
     }
 
     @Test
     @DisplayName("注销账户: 冻结账户可注销 FROZEN → CANCELLED")
     void cancelAccount_frozen_zeroBalance_shouldSucceed() {
         AccountPO account = buildAccountWithBalance(AccountStatusEnum.FROZEN, BigDecimal.ZERO);
-        AccountPO cancelledAccount = buildCancelledAccount();
 
         when(accountRepository.selectByAccountNo("ACC001")).thenReturn(account);
         when(subAccountRepository.selectByAccountNo("ACC001")).thenReturn(Collections.emptyList());
-        doAnswer(invocation -> ((Supplier<?>) invocation.getArgument(3)).get())
-                .when(distributedLockTemplate).execute(anyString(), anyLong(), anyLong(), any());
-        doAnswer(invocation -> {
-            when(accountRepository.updateById(any(AccountPO.class))).thenReturn(true);
-            return cancelledAccount;
-        }).when(transactionTemplate).execute(any());
 
         AccountPO result = accountStatusChangeDomainService.cancelAccount("ACC001", "客户申请销户");
 
         assertThat(result.getStatus()).isEqualTo(AccountStatusEnum.CANCELLED);
+        verify(accountRepository).updateById(any(AccountPO.class));
     }
 
     @Test
@@ -310,14 +298,8 @@ class AccountStatusChangeDomainServiceTest {
     void changeRiskStatus_normal_shouldSucceed() {
         AccountPO account = buildAccount(AccountStatusEnum.NORMAL);
         account.setRiskStatus(RiskStatusEnum.NORMAL);
-        AccountPO updatedAccount = buildAccount(AccountStatusEnum.NORMAL);
-        updatedAccount.setRiskStatus(RiskStatusEnum.NO_IN);
 
         when(accountRepository.selectByAccountNo("ACC001")).thenReturn(account);
-        doAnswer(invocation -> {
-            doNothing().when(accountRepository).updateRiskStatus(eq("ACC001"), eq(RiskStatusEnum.NO_IN), eq(0L));
-            return updatedAccount;
-        }).when(transactionTemplate).execute(any());
 
         AccountPO result = accountStatusChangeDomainService.changeRiskStatus("ACC001", RiskStatusEnum.NO_IN);
 

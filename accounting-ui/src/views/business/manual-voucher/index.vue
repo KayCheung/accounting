@@ -722,7 +722,6 @@
             <div class="meta-no">
               <strong>凭证字号：</strong>
               <span class="mono-font">{{ detailData.voucherWord || detailData.voucherNo || detailData.applyNo }}</span>
-              <el-tag size="small" type="warning" class="ml-2">手工凭证</el-tag>
             </div>
             <div class="meta-attachment">
               附单据 <span class="mono-font underline">{{ detailData.attachmentCount || detailData.attachments?.length || 0 }}</span> 张
@@ -740,58 +739,64 @@
             </div>
           </div>
 
-          <!-- 借贷分录对照表格 -->
-          <table class="voucher-entries-table">
-            <thead>
-              <tr>
-                <th style="width: 50px">行号</th>
-                <th style="width: 220px">摘 &nbsp; 要</th>
-                <th style="min-width: 260px">会计科目 / 账户编号</th>
-                <th style="width: 140px" class="text-right">借方金额 (DEBIT)</th>
-                <th style="width: 140px" class="text-right">贷方金额 (CREDIT)</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="item in detailData.entries" :key="item.rowNum">
-                <td class="text-center">{{ item.rowNum }}</td>
-                <td>{{ item.summary }}</td>
-                <td>
-                  <div class="subject-title">({{ item.subjectCode }}) {{ item.subjectName }}</div>
-                  <div v-if="item.accountNo" class="account-sub mono-font">账号: {{ item.accountNo }}</div>
-                </td>
-                <td class="text-right mono-font">
-                  {{ item.debitCredit === 1 ? formatAmount(item.amount) : '' }}
-                </td>
-                <td class="text-right mono-font">
-                  {{ item.debitCredit === 2 ? formatAmount(item.amount) : '' }}
-                </td>
-              </tr>
-              <!-- 空行补齐以呈现经典凭证版面 -->
-              <tr v-if="detailData.entries.length < 3">
-                <td class="text-center">-</td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-              </tr>
-            </tbody>
-            <!-- 合计行 -->
-            <tfoot>
-              <tr class="total-row">
-                <td colspan="2" class="text-center font-bold">合计金额</td>
-                <td class="chinese-total">
-                  <span>人民币 (大写): </span>
-                  <strong>{{ detailData.totalAmountInWords }}</strong>
-                </td>
-                <td class="text-right mono-font font-bold">
-                  ¥ {{ formatAmount(detailData.totalDebitAmount) }}
-                </td>
-                <td class="text-right mono-font font-bold">
-                  ¥ {{ formatAmount(detailData.totalCreditAmount) }}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
+          <!-- 借贷分录对照表格与右外侧单据属性竖标 -->
+          <div class="voucher-table-wrapper">
+            <table class="voucher-entries-table">
+              <thead>
+                <tr>
+                  <th style="width: 50px">行号</th>
+                  <th style="width: 220px">摘 &nbsp; 要</th>
+                  <th style="min-width: 260px">会计科目 / 账户编号</th>
+                  <th style="width: 140px" class="text-right">借方金额 (DEBIT)</th>
+                  <th style="width: 140px" class="text-right">贷方金额 (CREDIT)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in detailData.entries" :key="item.rowNum">
+                  <td class="text-center">{{ item.rowNum }}</td>
+                  <td>{{ item.summary }}</td>
+                  <td>
+                    <div class="subject-title">({{ item.subjectCode }}) {{ item.subjectName }}</div>
+                    <div v-if="item.accountNo" class="account-sub mono-font">账号: {{ item.accountNo }}</div>
+                  </td>
+                  <td class="text-right mono-font">
+                    {{ item.debitCredit === 1 ? formatAmount(item.amount) : '' }}
+                  </td>
+                  <td class="text-right mono-font">
+                    {{ item.debitCredit === 2 ? formatAmount(item.amount) : '' }}
+                  </td>
+                </tr>
+                <!-- 空行补齐以呈现经典凭证版面 -->
+                <tr v-if="detailData.entries.length < 3">
+                  <td class="text-center">-</td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                </tr>
+              </tbody>
+              <!-- 合计行 -->
+              <tfoot>
+                <tr class="total-row">
+                  <td colspan="2" class="text-center font-bold">合计金额</td>
+                  <td class="chinese-total">
+                    <span>人民币 (大写): </span>
+                    <strong>{{ detailData.totalAmountInWords }}</strong>
+                  </td>
+                  <td class="text-right mono-font font-bold">
+                    ¥ {{ formatAmount(detailData.totalDebitAmount) }}
+                  </td>
+                  <td class="text-right mono-font font-bold">
+                    ¥ {{ formatAmount(detailData.totalCreditAmount) }}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+            <!-- 表格最右侧外边竖排标志（黑色字体，无边框，每行一字） -->
+            <div class="voucher-side-mark">
+              手工凭证
+            </div>
+          </div>
 
           <!-- 经典四方签章栏 (根据原型《凭证详情.html》行 391-422 精确还原) -->
           <div class="voucher-signatures-bar">
@@ -2012,9 +2017,18 @@ onMounted(() => {
   font-weight: 600;
 }
 
+.meta-no {
+  font-weight: 500;
+}
+
 .meta-attachment .underline {
   text-decoration: underline;
   padding: 0 4px;
+}
+
+.voucher-table-wrapper {
+  position: relative;
+  width: 100%;
 }
 
 .voucher-entries-table {
@@ -2022,6 +2036,22 @@ onMounted(() => {
   border-collapse: collapse;
   border: 1px solid #333333;
   font-size: 13px;
+}
+
+.voucher-side-mark {
+  position: absolute;
+  left: calc(100% + 6px);
+  top: 50%;
+  transform: translateY(-50%);
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  letter-spacing: 6px;
+  font-size: 12px;
+  font-weight: normal;
+  color: #333333;
+  line-height: 1;
+  white-space: nowrap;
+  user-select: none;
 }
 
 .voucher-entries-table th,
@@ -2098,5 +2128,42 @@ onMounted(() => {
 
 .timeline-action {
   font-weight: 600;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .classic-voucher-dialog,
+  .voucher-preview-container,
+  .voucher-preview-container * {
+    visibility: visible;
+  }
+  .voucher-preview-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+  .el-dialog__header,
+  .el-dialog__footer,
+  .timeline-section,
+  .el-button {
+    display: none !important;
+  }
+  .voucher-side-mark {
+    position: absolute !important;
+    left: calc(100% + 5px) !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    color: #000 !important;
+    font-weight: normal !important;
+    font-size: 11px !important;
+    letter-spacing: 6px !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }
 </style>

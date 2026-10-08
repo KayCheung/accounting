@@ -47,6 +47,7 @@ export interface SubjectUpdateRequest {
   subjectName?: string
   subjectCategory?: number
   nature?: number
+  debitCredit?: number
   leaf?: boolean
   allowPost?: boolean
   allowOpenAccount?: boolean

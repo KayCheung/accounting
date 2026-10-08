@@ -265,7 +265,7 @@
             <el-form-item label="余额方向" prop="debitCredit">
               <el-radio-group
                 v-model="subjectForm.debitCredit"
-                :disabled="Boolean(currentParent)"
+                :disabled="!isEditMode && Boolean(currentParent)"
               >
                 <el-radio :value="1">借方</el-radio>
                 <el-radio :value="2">贷方</el-radio>
@@ -789,6 +789,7 @@ async function handleSubmitSubject() {
         subjectName: subjectForm.subjectName,
         subjectCategory: subjectForm.subjectCategory,
         nature: subjectForm.nature,
+        debitCredit: subjectForm.debitCredit,
         leaf: subjectForm.leaf,
         allowPost: subjectForm.allowPost,
         allowOpenAccount: subjectForm.allowOpenAccount,

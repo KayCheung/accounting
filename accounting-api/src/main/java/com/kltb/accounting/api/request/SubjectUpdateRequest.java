@@ -31,6 +31,9 @@ public class SubjectUpdateRequest {
     @Schema(description = "是否允许建明细账户")
     private Boolean allowOpenAccount;
 
+    @Schema(description = "余额方向：1=借方，2=贷方")
+    private Integer debitCredit;
+
     @Schema(description = "状态：1=启用，2=停用")
     private Integer status;
 }

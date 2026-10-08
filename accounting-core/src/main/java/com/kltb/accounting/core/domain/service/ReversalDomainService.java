@@ -1,5 +1,6 @@
 package com.kltb.accounting.core.domain.service;
 
+import cn.hutool.core.util.StrUtil;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.ChangeDirectionEnum;
 import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
@@ -156,7 +157,7 @@ public class ReversalDomainService {
                 }
 
                 // 4. 执行过账（红冲分录走标准过账链路）
-                postingDomainService.executeRealTimePosting(reversalEntries, accountingDate);
+                postingDomainService.executeRealTimePosting(reversalVoucher, reversalEntries);
 
                 // 5. 更新红冲凭证状态为 POSTED
                 reversalVoucher.setStatus(VoucherStatusEnum.POSTED);
@@ -269,7 +270,7 @@ public class ReversalDomainService {
 
         AccountingVoucherPO voucher = new AccountingVoucherPO();
         voucher.setVoucherNo(reversalVoucherNo);
-        voucher.setTxnNo("");
+        voucher.setTxnNo(StrUtil.isNotBlank(origVoucher.getTxnNo()) ? origVoucher.getTxnNo() : businessNoGenerator.generateTxnNo(accountingDate));
         voucher.setTraceNo(origVoucher.getTraceNo());
         voucher.setTraceSeq(origVoucher.getTraceSeq());
         voucher.setVoucherType(origVoucher.getVoucherType());

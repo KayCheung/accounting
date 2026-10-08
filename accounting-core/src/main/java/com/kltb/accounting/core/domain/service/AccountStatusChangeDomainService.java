@@ -3,6 +3,7 @@ package com.kltb.accounting.core.domain.service;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.AccountStatusEnum;
 import com.kltb.accounting.core.domain.enums.RiskStatusEnum;
+import com.kltb.accounting.core.infrastructure.account.AccountValidator;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.SubAccountPO;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountRepository;
@@ -17,7 +18,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -54,7 +54,7 @@ public class AccountStatusChangeDomainService {
         if (account == null) {
             throw new AccountException(ResultCode.ACCOUNT_NOT_FOUND, "账户不存在: " + accountNo);
         }
-        validateTransition(account.getStatus(), AccountStatusEnum.FROZEN);
+        AccountValidator.validateTransition(account.getStatus(), AccountStatusEnum.FROZEN);
         if (account.getStatus() == AccountStatusEnum.FROZEN) {
             return account;
         }
@@ -67,7 +67,7 @@ public class AccountStatusChangeDomainService {
                     if (current == null) {
                         throw new AccountException(ResultCode.ACCOUNT_NOT_FOUND, "账户不存在: " + accountNo);
                     }
-                    validateTransition(current.getStatus(), AccountStatusEnum.FROZEN);
+                    AccountValidator.validateTransition(current.getStatus(), AccountStatusEnum.FROZEN);
 
                     MDC.put("accountNo", accountNo);
                     try {
@@ -96,7 +96,7 @@ public class AccountStatusChangeDomainService {
         if (account == null) {
             throw new AccountException(ResultCode.ACCOUNT_NOT_FOUND, "账户不存在: " + accountNo);
         }
-        validateTransition(account.getStatus(), AccountStatusEnum.NORMAL);
+        AccountValidator.validateTransition(account.getStatus(), AccountStatusEnum.NORMAL);
         if (account.getStatus() == AccountStatusEnum.NORMAL) {
             return account;
         }
@@ -109,7 +109,7 @@ public class AccountStatusChangeDomainService {
                     if (current == null) {
                         throw new AccountException(ResultCode.ACCOUNT_NOT_FOUND, "账户不存在: " + accountNo);
                     }
-                    validateTransition(current.getStatus(), AccountStatusEnum.NORMAL);
+                    AccountValidator.validateTransition(current.getStatus(), AccountStatusEnum.NORMAL);
 
                     MDC.put("accountNo", accountNo);
                     try {
@@ -137,7 +137,7 @@ public class AccountStatusChangeDomainService {
         if (account == null) {
             throw new AccountException(ResultCode.ACCOUNT_NOT_FOUND, "账户不存在: " + accountNo);
         }
-        validateTransition(account.getStatus(), AccountStatusEnum.CANCELLED);
+        AccountValidator.validateTransition(account.getStatus(), AccountStatusEnum.CANCELLED);
         if (account.getStatus() == AccountStatusEnum.CANCELLED) {
             return account;
         }
@@ -150,7 +150,7 @@ public class AccountStatusChangeDomainService {
                     if (current == null) {
                         throw new AccountException(ResultCode.ACCOUNT_NOT_FOUND, "账户不存在: " + accountNo);
                     }
-                    validateTransition(current.getStatus(), AccountStatusEnum.CANCELLED);
+                    AccountValidator.validateTransition(current.getStatus(), AccountStatusEnum.CANCELLED);
 
                     validateBalanceZero(current);
                     validateSubAccountsBalanceZero(accountNo);
@@ -225,17 +225,6 @@ public class AccountStatusChangeDomainService {
             throw new AccountException(ResultCode.ACCOUNT_NOT_FOUND, "账户不存在: " + accountNo);
         }
         return account;
-    }
-
-    private void validateTransition(AccountStatusEnum current, AccountStatusEnum target) {
-        if (current == target) {
-            return;
-        }
-        List<AccountStatusEnum> allowed = VALID_TRANSITIONS.getOrDefault(current, Collections.emptyList());
-        if (!allowed.contains(target)) {
-            throw new AccountException(ResultCode.ACCOUNT_STATUS_TRANSITION_INVALID,
-                    String.format("账户状态不允许转换: %s → %s", current.getDesc(), target.getDesc()));
-        }
     }
 
     private AccountPO constructUpdated(AccountPO original, AccountStatusEnum status, RiskStatusEnum riskStatus) {

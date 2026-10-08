@@ -116,6 +116,8 @@ class LocalMessageRetryJobTest {
     private static class TestableLocalMessageRetryJob extends LocalMessageRetryJob {
 
         private final LocalDateTime fixedNow;
+        private final int testShardIndex;
+        private final int testShardTotal;
 
         private TestableLocalMessageRetryJob(LocalMessageService localMessageService,
                                              OnsProducerTemplate onsProducerTemplate,
@@ -124,6 +126,14 @@ class LocalMessageRetryJobTest {
                                              int shardTotal) {
             super(localMessageService, onsProducerTemplate);
             this.fixedNow = fixedNow;
+            this.testShardIndex = shardIndex;
+            this.testShardTotal = shardTotal;
+        }
+
+        @Override
+        public void execute() {
+            initContext();
+            retryPendingMessages(testShardIndex, testShardTotal);
         }
 
         @Override

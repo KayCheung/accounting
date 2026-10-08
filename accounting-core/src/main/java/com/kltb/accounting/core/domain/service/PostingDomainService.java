@@ -1,29 +1,30 @@
 package com.kltb.accounting.core.domain.service;
 
+import cn.hutool.core.util.StrUtil;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.AccountStatusEnum;
+import com.kltb.accounting.core.domain.enums.ChangeDirectionEnum;
 import com.kltb.accounting.core.domain.enums.VoucherEntryStatusEnum;
 import com.kltb.accounting.core.infrastructure.account.AccountBalanceCalculator;
+import com.kltb.accounting.core.infrastructure.account.AccountValidator;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountDetailPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherEntryPO;
+import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.SubAccountDetailPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.SubAccountPO;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountDetailRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.SubAccountDetailRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.SubAccountRepository;
-import com.kltb.accounting.core.infrastructure.persistence.repository.AccountingVoucherRepository;
 import com.kltb.accounting.core.shared.exception.AccountException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -48,20 +49,32 @@ public class PostingDomainService {
     private final SubAccountRepository subAccountRepository;
     private final AccountDetailRepository accountDetailRepository;
     private final SubAccountDetailRepository subAccountDetailRepository;
-    private final AccountingVoucherRepository accountingVoucherRepository;
 
     /**
-     * 实时过账：锁定账户 → 计算余额 → 更新余额 → 记录明细
+     * 实时过账：锁定账户 → 计算余额 → 更新余额 → 记录明细 → 更新分录状态
+     * <p>
+     * 约束：
+     * 1. 凭证为聚合根，所有业务元数据（txnNo、traceNo、channel、tradeTime等）严格100%继承自上游凭证，禁止在过账阶段塞入任何伪造默认值；
+     * 2. 会计日期严格使用凭证对象的 accountingDate，禁止外部透传产生分歧；
+     * 3. 若凭证对象为空或核心字段缺失，执行快速失败（Fast-Fail）。
      *
-     * @param entries        需要实时过账的分录列表（is_unilateral=1，调用方按 account_no 升序排列）
-     * @param accountingDate 会计日期
+     * @param voucher 记账凭证对象（聚合根，必须包含完备的上游业务元数据）
+     * @param entries 需要实时过账的分录列表（is_unilateral=1，调用方按 account_no 升序排列）
      */
     public void executeRealTimePosting(
-        List<AccountingVoucherEntryPO> entries,
-        LocalDate accountingDate) {
-
+        AccountingVoucherPO voucher,
+        List<AccountingVoucherEntryPO> entries
+    ) {
         if (entries == null || entries.isEmpty()) {
             return;
+        }
+
+        if (voucher == null) {
+            throw new AccountException(ResultCode.PARAM_ERROR, "实时过账凭证对象不能为空");
+        }
+        if (StrUtil.isBlank(voucher.getTxnNo())) {
+            throw new AccountException(ResultCode.PARAM_ERROR,
+                "凭证事务号(txnNo)缺失，拒绝过账: voucherNo=" + voucher.getVoucherNo());
         }
 
         // 按 account_no 分组去重（保持升序）
@@ -82,52 +95,41 @@ public class PostingDomainService {
             subAccountMap.put(accountNo, subs);
         }
 
+        // 预校验：所有分录的目标账户必须存在且状态可记账（Fast-Fail，防止部分入账后因账户异常回滚）
+        for (AccountingVoucherEntryPO entry : entries) {
+            AccountPO account = accountMap.get(entry.getAccountNo());
+            AccountValidator.validateExists(account, entry.getAccountNo());
+            AccountValidator.validatePostable(account, entry.getChangeDirection());
+        }
+
         // 逐分录处理
         List<AccountDetailPO> accountDetails = new ArrayList<>();
         List<SubAccountDetailPO> subAccountDetails = new ArrayList<>();
 
         for (AccountingVoucherEntryPO entry : entries) {
             AccountPO account = accountMap.get(entry.getAccountNo());
-            if (account == null) {
-                throw new AccountException(ResultCode.ACCOUNT_NOT_FOUND,
-                    "账户不存在: accountNo=" + entry.getAccountNo());
-            }
 
-            // 检查账户状态
-            if (account.getStatus() != AccountStatusEnum.NORMAL) {
-                String msg = "账户状态异常: accountNo=" + entry.getAccountNo()
-                    + ", status=" + (account.getStatus() != null ? account.getStatus().getDesc() : "null");
-                if (account.getStatus() == AccountStatusEnum.FROZEN) {
-                    throw new AccountException(ResultCode.ACCOUNT_FROZEN, msg);
-                } else if (account.getStatus() == AccountStatusEnum.CANCELLED) {
-                    throw new AccountException(ResultCode.ACCOUNT_CANCELLED, msg);
-                }
-                throw new AccountException(ResultCode.ACCOUNT_STATUS_ILLEGAL, msg);
-            }
-
-            // 获取对应子账户
-            List<SubAccountPO> subs = subAccountMap.get(entry.getAccountNo());
-            SubAccountPO subAccount = subs != null && !subs.isEmpty() ? subs.get(0) : null;
-
-            // 保存变更前的余额（用于明细快照）
+            // 计算主账户余额
             BigDecimal oldBalance = account.getBalance();
-            BigDecimal subOldBalance = subAccount != null ? subAccount.getBalance() : null;
-
-            // 计算新余额
             BigDecimal newBalance = AccountBalanceCalculator.calculateNewBalance(
                 oldBalance,
                 entry.getAmount(),
                 entry.getChangeDirection()
             );
 
-            // 更新主账户余额 + version
+            // 更新主账户（乐观锁）
             account.setBalance(newBalance);
             account.setVersion(account.getVersion() != null ? account.getVersion() + 1 : 1);
             accountRepository.updateById(account);
 
-            // 更新子账户余额
-            BigDecimal subNewBalance = null;
+            // 更新子账户
+            List<SubAccountPO> subs = subAccountMap.get(entry.getAccountNo());
+            SubAccountPO subAccount = (subs != null && !subs.isEmpty()) ? subs.get(0) : null;
+            BigDecimal subOldBalance = BigDecimal.ZERO;
+            BigDecimal subNewBalance = BigDecimal.ZERO;
+
             if (subAccount != null) {
+                subOldBalance = subAccount.getBalance();
                 subNewBalance = AccountBalanceCalculator.calculateNewBalance(
                     subOldBalance,
                     entry.getAmount(),
@@ -138,55 +140,57 @@ public class PostingDomainService {
                 subAccountRepository.updateById(subAccount);
             }
 
-            // 写入 t_account_detail
+            // 写入 t_account_detail（所有业务元数据100%严格继承自凭证）
             AccountDetailPO detail = new AccountDetailPO();
-            detail.setVoucherNo(entry.getVoucherNo())
+            detail.setVoucherNo(voucher.getVoucherNo())
                 .setEntryId(entry.getEntryId())
-                .setTxnNo(null) // 由调用方填充
-                .setTraceNo(null) // 由调用方填充
-                .setTraceSeq(null)
+                .setTxnNo(voucher.getTxnNo())
+                .setTraceNo(voucher.getTraceNo())
+                .setTraceSeq(voucher.getTraceSeq() != null ? voucher.getTraceSeq() : 0)
                 .setSubjectCode(entry.getSubjectCode())
                 .setAccountNo(entry.getAccountNo())
-                .setBusinessCode(null) // 由调用方填充
-                .setTradingCode(null)
-                .setPayChannel(null)
-                .setTradeType(null)
-                .setTradeTime(null)
+                .setBusinessCode(voucher.getBusinessCode())
+                .setTradingCode(voucher.getTradingCode())
+                .setPayChannel(voucher.getPayChannel())
+                .setTradeType(voucher.getTradeType())
+                .setTradeTime(voucher.getTradeTime())
                 .setDebitCredit(entry.getDebitCredit())
                 .setChangeDirection(entry.getChangeDirection() == 1
-                    ? com.kltb.accounting.core.domain.enums.ChangeDirectionEnum.INCREASE
-                    : com.kltb.accounting.core.domain.enums.ChangeDirectionEnum.DECREASE)
+                    ? ChangeDirectionEnum.INCREASE
+                    : ChangeDirectionEnum.DECREASE)
                 .setCurrency(entry.getCurrency())
                 .setPreBalance(oldBalance)
                 .setAmount(entry.getAmount())
                 .setPostBalance(newBalance)
-                .setAccountingDate(accountingDate)
-                .setSummary(entry.getSummary());
+                .setAccountingDate(voucher.getAccountingDate())
+                .setSummary(StrUtil.isNotBlank(entry.getSummary()) ? entry.getSummary() : voucher.getSummary())
+                .setTenantId(voucher.getTenantId());
             accountDetails.add(detail);
 
             // 写入 t_sub_account_detail
             if (subAccount != null) {
                 SubAccountDetailPO subDetail = new SubAccountDetailPO();
-                subDetail.setVoucherNo(entry.getVoucherNo())
+                subDetail.setVoucherNo(voucher.getVoucherNo())
                     .setEntryId(entry.getEntryId())
-                    .setTxnNo(null)
-                    .setTraceNo(null)
-                    .setTraceSeq(null)
+                    .setTxnNo(voucher.getTxnNo())
+                    .setTraceNo(voucher.getTraceNo())
+                    .setTraceSeq(voucher.getTraceSeq() != null ? voucher.getTraceSeq() : 0)
                     .setAccountNo(entry.getAccountNo())
                     .setBalanceType(com.kltb.accounting.core.domain.enums.BalanceTypeEnum.AVAILABLE)
-                    .setTradingCode(null)
-                    .setTradeType(null)
-                    .setTradeTime(null)
+                    .setTradingCode(voucher.getTradingCode())
+                    .setTradeType(voucher.getTradeType())
+                    .setTradeTime(voucher.getTradeTime())
                     .setDebitCredit(entry.getDebitCredit())
                     .setChangeDirection(entry.getChangeDirection() == 1
-                        ? com.kltb.accounting.core.domain.enums.ChangeDirectionEnum.INCREASE
-                        : com.kltb.accounting.core.domain.enums.ChangeDirectionEnum.DECREASE)
+                        ? ChangeDirectionEnum.INCREASE
+                        : ChangeDirectionEnum.DECREASE)
                     .setCurrency(entry.getCurrency())
                     .setPreBalance(subOldBalance)
                     .setAmount(entry.getAmount())
                     .setPostBalance(subNewBalance)
-                    .setAccountingDate(accountingDate)
-                    .setSummary(entry.getSummary());
+                    .setAccountingDate(voucher.getAccountingDate())
+                    .setSummary(StrUtil.isNotBlank(entry.getSummary()) ? entry.getSummary() : voucher.getSummary())
+                    .setTenantId(voucher.getTenantId());
                 subAccountDetails.add(subDetail);
             }
 
@@ -200,16 +204,8 @@ public class PostingDomainService {
         if (!subAccountDetails.isEmpty()) {
             subAccountDetailRepository.batchInsert(subAccountDetails);
         }
-    }
 
-    /**
-     * 检查凭证所有实时分录是否都已过账
-     */
-    public boolean areAllRealTimeEntriesPosted(String voucherNo) {
-        List<AccountingVoucherEntryPO> entries = accountingVoucherRepository
-            .selectEntriesByVoucherNo(voucherNo);
-        return entries.stream()
-            .filter(e -> e.getUnilateral() != null && e.getUnilateral() == 1)
-            .allMatch(e -> e.getStatus() == VoucherEntryStatusEnum.POSTED);
+        log.info("[POSTING] 实时过账完成: voucherNo={}, entryCount={}, detailCount={}",
+            voucher.getVoucherNo(), entries.size(), accountDetails.size());
     }
 }

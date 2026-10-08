@@ -7,6 +7,7 @@ import com.kltb.accounting.core.domain.enums.ChangeDirectionEnum;
 import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
 import com.kltb.accounting.core.domain.enums.FreezeStatusEnum;
 import com.kltb.accounting.core.domain.enums.TradeTypeEnum;
+import com.kltb.accounting.core.infrastructure.account.AccountValidator;
 import com.kltb.accounting.core.infrastructure.account.FreezeIdGenerator;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountDetailPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountFreezeDetailPO;
@@ -76,13 +77,8 @@ public class FreezeDomainService {
 
         // 锁外预检查
         AccountPO account = accountRepository.selectByAccountNo(accountNo);
-        if (account == null) {
-            throw new AccountException(ResultCode.ACCOUNT_NOT_FOUND, "账户不存在: " + accountNo);
-        }
-        if (account.getStatus() != AccountStatusEnum.NORMAL) {
-            throw new AccountException(ResultCode.ACCOUNT_FROZEN_CANNOT_FREEZE,
-                    "账户状态非 NORMAL，无法执行资金冻结: " + accountNo + ", status=" + account.getStatus().getDesc());
-        }
+        AccountValidator.validateExists(account, accountNo);
+        AccountValidator.validateFreezable(account);
 
         SubAccountPO availableSub = subAccountRepository.selectByAccountNoAndType(accountNo, BalanceTypeEnum.AVAILABLE.getCode());
         if (availableSub == null) {

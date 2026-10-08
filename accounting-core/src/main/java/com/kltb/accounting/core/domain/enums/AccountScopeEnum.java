@@ -21,4 +21,14 @@ public enum AccountScopeEnum {
     private final Integer code;
 
     private final String desc;
+
+    public static AccountScopeEnum fromCode(Integer code) {
+        if (code == null) return null;
+        for (AccountScopeEnum value : values()) {
+            if (value.code.equals(code)) {
+                return value;
+            }
+        }
+        return null;
+    }
 }

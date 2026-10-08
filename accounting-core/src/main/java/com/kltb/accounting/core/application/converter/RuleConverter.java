@@ -1,5 +1,6 @@
 package com.kltb.accounting.core.application.converter;
 
+import com.kltb.accounting.api.constant.Constants;
 import com.kltb.accounting.api.request.RuleAuxiliaryRequest;
 import com.kltb.accounting.api.request.RuleCreateRequest;
 import com.kltb.accounting.api.request.RuleEntryRequest;
@@ -19,7 +20,6 @@ import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingRule
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -28,28 +28,6 @@ import java.util.Optional;
  * 是否记账：否
  */
 public class RuleConverter {
-
-    private static final Map<Integer, RuleStatusEnum> STATUS_MAP = Map.of(
-            1, RuleStatusEnum.PENDING,
-            2, RuleStatusEnum.ENABLED,
-            3, RuleStatusEnum.DISABLED
-    );
-
-    private static final Map<Integer, DebitCreditEnum> DEBIT_CREDIT_MAP = Map.of(
-            1, DebitCreditEnum.DEBIT,
-            2, DebitCreditEnum.CREDIT
-    );
-
-    private static final Map<Integer, AccountScopeEnum> ACCOUNT_SCOPE_MAP = Map.of(
-            1, AccountScopeEnum.INTERNAL,
-            2, AccountScopeEnum.EXTERNAL
-    );
-
-    private static final Map<Integer, AllocationMethodEnum> ALLOCATION_METHOD_MAP = Map.of(
-            1, AllocationMethodEnum.NONE,
-            2, AllocationMethodEnum.FIXED_AMOUNT,
-            3, AllocationMethodEnum.PERCENTAGE
-    );
 
     /**
      * 创建请求 → PO
@@ -65,11 +43,12 @@ public class RuleConverter {
                 ? OpenAccountFlagEnum.ENABLED : OpenAccountFlagEnum.DISABLED);
         po.setFreezeDuration(request.getFreezeDuration() != null ? request.getFreezeDuration() : 0);
         po.setPreRuleId(request.getPreRuleId() != null ? request.getPreRuleId() : 0L);
-        po.setStatus(STATUS_MAP.getOrDefault(request.getStatus(), RuleStatusEnum.PENDING));
-        po.setCreateId("system");
-        po.setCreateName("system");
-        po.setUpdateId("system");
-        po.setUpdateName("system");
+        po.setStatus(Optional.ofNullable(RuleStatusEnum.fromCode(request.getStatus()))
+                .orElse(RuleStatusEnum.PENDING));
+        po.setCreateId(Constants.SYSTEM_OPERATOR);
+        po.setCreateName(Constants.SYSTEM_OPERATOR);
+        po.setUpdateId(Constants.SYSTEM_OPERATOR);
+        po.setUpdateName(Constants.SYSTEM_OPERATOR);
         return po;
     }
 
@@ -93,10 +72,11 @@ public class RuleConverter {
             po.setPreRuleId(request.getPreRuleId());
         }
         if (request.getStatus() != null) {
-            po.setStatus(STATUS_MAP.getOrDefault(request.getStatus(), po.getStatus()));
+            Optional.ofNullable(RuleStatusEnum.fromCode(request.getStatus()))
+                    .ifPresent(po::setStatus);
         }
-        po.setUpdateId("system");
-        po.setUpdateName("system");
+        po.setUpdateId(Constants.SYSTEM_OPERATOR);
+        po.setUpdateName(Constants.SYSTEM_OPERATOR);
     }
 
     /**
@@ -108,16 +88,18 @@ public class RuleConverter {
         po.setRowNum(request.getRowNum());
         po.setFundsType(request.getFundsType());
         po.setSubjectCode(request.getSubjectCode());
-        po.setAccountScope(ACCOUNT_SCOPE_MAP.getOrDefault(request.getAccountScope(), AccountScopeEnum.INTERNAL));
-        po.setDebitCredit(DEBIT_CREDIT_MAP.getOrDefault(request.getDebitCredit(), DebitCreditEnum.DEBIT));
+        po.setAccountScope(Optional.ofNullable(AccountScopeEnum.fromCode(request.getAccountScope()))
+                .orElse(AccountScopeEnum.INTERNAL));
+        po.setDebitCredit(Optional.ofNullable(DebitCreditEnum.fromCode(request.getDebitCredit()))
+                .orElse(DebitCreditEnum.DEBIT));
         po.setCurrency(request.getCurrency() != null ? request.getCurrency() : "CNY");
         po.setUnilateral(request.getIsUnilateral() != null && request.getIsUnilateral());
         po.setExtendScript(request.getExtendScript() != null ? request.getExtendScript() : "");
         po.setSummary(request.getSummary() != null ? request.getSummary() : "");
-        po.setCreateId("system");
-        po.setCreateName("system");
-        po.setUpdateId("system");
-        po.setUpdateName("system");
+        po.setCreateId(Constants.SYSTEM_OPERATOR);
+        po.setCreateName(Constants.SYSTEM_OPERATOR);
+        po.setUpdateId(Constants.SYSTEM_OPERATOR);
+        po.setUpdateName(Constants.SYSTEM_OPERATOR);
         return po;
     }
 
@@ -131,14 +113,14 @@ public class RuleConverter {
         po.setRuleDetailId(ruleDetailId);
         po.setAuxType(request.getAuxType());
         po.setAuxCode(request.getAuxCode());
-        po.setAllocationMethod(ALLOCATION_METHOD_MAP.getOrDefault(request.getAllocationMethod(),
-                AllocationMethodEnum.NONE));
+        po.setAllocationMethod(Optional.ofNullable(AllocationMethodEnum.fromCode(request.getAllocationMethod()))
+                .orElse(AllocationMethodEnum.NONE));
         po.setAllocationValue(request.getAllocationValue() != null ? request.getAllocationValue() : BigDecimal.ZERO);
         po.setExtendScript(request.getExtendScript() != null ? request.getExtendScript() : "");
-        po.setCreateId("system");
-        po.setCreateName("system");
-        po.setUpdateId("system");
-        po.setUpdateName("system");
+        po.setCreateId(Constants.SYSTEM_OPERATOR);
+        po.setCreateName(Constants.SYSTEM_OPERATOR);
+        po.setUpdateId(Constants.SYSTEM_OPERATOR);
+        po.setUpdateName(Constants.SYSTEM_OPERATOR);
         return po;
     }
 

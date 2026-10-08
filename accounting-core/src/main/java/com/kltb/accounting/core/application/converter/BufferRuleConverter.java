@@ -1,5 +1,6 @@
 package com.kltb.accounting.core.application.converter;
 
+import com.kltb.accounting.api.constant.Constants;
 import com.kltb.accounting.api.request.BufferRuleCreateRequest;
 import com.kltb.accounting.api.request.BufferRuleUpdateRequest;
 import com.kltb.accounting.core.application.dto.BufferRuleResponse;
@@ -10,7 +11,6 @@ import com.kltb.accounting.core.infrastructure.persistence.entity.BufferPostingR
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -20,37 +20,28 @@ import java.util.Optional;
  */
 public class BufferRuleConverter {
 
-    private static final Map<Integer, BufferModeEnum> BUFFER_MODE_MAP = Map.of(
-            1, BufferModeEnum.ASYNC_SINGLE,
-            2, BufferModeEnum.DAILY_BATCH,
-            3, BufferModeEnum.EOD_BATCH
-    );
-
-    private static final Map<Integer, DebitCreditEnum> DEBIT_CREDIT_MAP = Map.of(
-            1, DebitCreditEnum.DEBIT,
-            2, DebitCreditEnum.CREDIT
-    );
-
     /**
      * 创建请求 → PO
      */
     public static BufferPostingRulePO toPO(BufferRuleCreateRequest request) {
         BufferPostingRulePO po = new BufferPostingRulePO();
         po.setRuleName(request.getRuleName());
-        po.setBufferMode(BUFFER_MODE_MAP.getOrDefault(request.getBufferMode(), BufferModeEnum.ASYNC_SINGLE));
+        po.setBufferMode(Optional.ofNullable(BufferModeEnum.fromCode(request.getBufferMode()))
+                .orElse(BufferModeEnum.ASYNC_SINGLE));
         po.setBusinessCode(request.getBusinessCode());
         po.setTradingCode(request.getTradingCode());
         po.setPayChannel(request.getPayChannel());
         po.setSubjectCode(request.getSubjectCode() != null ? request.getSubjectCode() : "");
         po.setAccountNo(request.getAccountNo() != null ? request.getAccountNo() : "");
-        po.setDebitCredit(DEBIT_CREDIT_MAP.getOrDefault(request.getDebitCredit(), DebitCreditEnum.DEBIT));
+        po.setDebitCredit(Optional.ofNullable(DebitCreditEnum.fromCode(request.getDebitCredit()))
+                .orElse(DebitCreditEnum.DEBIT));
         po.setEffectiveTime(request.getEffectiveTime());
         po.setExpirationTime(request.getExpirationTime());
         po.setStatus(RuleStatusEnum.PENDING);
-        po.setCreateId("system");
-        po.setCreateName("system");
-        po.setUpdateId("system");
-        po.setUpdateName("system");
+        po.setCreateId(Constants.SYSTEM_OPERATOR);
+        po.setCreateName(Constants.SYSTEM_OPERATOR);
+        po.setUpdateId(Constants.SYSTEM_OPERATOR);
+        po.setUpdateName(Constants.SYSTEM_OPERATOR);
         return po;
     }
 
@@ -62,7 +53,8 @@ public class BufferRuleConverter {
             po.setRuleName(request.getRuleName());
         }
         if (request.getBufferMode() != null) {
-            po.setBufferMode(BUFFER_MODE_MAP.getOrDefault(request.getBufferMode(), po.getBufferMode()));
+            Optional.ofNullable(BufferModeEnum.fromCode(request.getBufferMode()))
+                    .ifPresent(po::setBufferMode);
         }
         if (request.getSubjectCode() != null) {
             po.setSubjectCode(request.getSubjectCode());
@@ -71,7 +63,8 @@ public class BufferRuleConverter {
             po.setAccountNo(request.getAccountNo());
         }
         if (request.getDebitCredit() != null) {
-            po.setDebitCredit(DEBIT_CREDIT_MAP.getOrDefault(request.getDebitCredit(), po.getDebitCredit()));
+            Optional.ofNullable(DebitCreditEnum.fromCode(request.getDebitCredit()))
+                    .ifPresent(po::setDebitCredit);
         }
         if (request.getEffectiveTime() != null) {
             po.setEffectiveTime(request.getEffectiveTime());
@@ -79,8 +72,8 @@ public class BufferRuleConverter {
         if (request.getExpirationTime() != null) {
             po.setExpirationTime(request.getExpirationTime());
         }
-        po.setUpdateId("system");
-        po.setUpdateName("system");
+        po.setUpdateId(Constants.SYSTEM_OPERATOR);
+        po.setUpdateName(Constants.SYSTEM_OPERATOR);
     }
 
     /**

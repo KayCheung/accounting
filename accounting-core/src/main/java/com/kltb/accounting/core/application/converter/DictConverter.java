@@ -1,5 +1,6 @@
 package com.kltb.accounting.core.application.converter;
 
+import com.kltb.accounting.api.constant.Constants;
 import com.kltb.accounting.api.request.DictCreateRequest;
 import com.kltb.accounting.api.request.DictUpdateRequest;
 import com.kltb.accounting.core.application.dto.DictResponse;
@@ -33,14 +34,14 @@ public class DictConverter {
         po.setDictNameEn(request.getDictNameEn());
         po.setSortOrder(request.getSortOrder() != null ? request.getSortOrder() : 0);
         po.setGroupKey(request.getGroupKey());
-        po.setStatus(request.getStatus() != null && request.getStatus() == 1
-                ? AvailableStatusEnum.ENABLED : AvailableStatusEnum.DISABLED);
+        po.setStatus(Optional.ofNullable(AvailableStatusEnum.fromCode(request.getStatus()))
+                .orElse(AvailableStatusEnum.ENABLED));
         po.setSystem(false);
         po.setExtJson(request.getExtJson());
-        po.setCreateId("system");
-        po.setCreateName("system");
-        po.setUpdateId("system");
-        po.setUpdateName("system");
+        po.setCreateId(Constants.SYSTEM_OPERATOR);
+        po.setCreateName(Constants.SYSTEM_OPERATOR);
+        po.setUpdateId(Constants.SYSTEM_OPERATOR);
+        po.setUpdateName(Constants.SYSTEM_OPERATOR);
         return po;
     }
 
@@ -64,13 +65,14 @@ public class DictConverter {
             po.setGroupKey(request.getGroupKey());
         }
         if (request.getStatus() != null) {
-            po.setStatus(request.getStatus() == 1 ? AvailableStatusEnum.ENABLED : AvailableStatusEnum.DISABLED);
+            Optional.ofNullable(AvailableStatusEnum.fromCode(request.getStatus()))
+                    .ifPresent(po::setStatus);
         }
         if (request.getExtJson() != null) {
             po.setExtJson(request.getExtJson());
         }
-        po.setUpdateId("system");
-        po.setUpdateName("system");
+        po.setUpdateId(Constants.SYSTEM_OPERATOR);
+        po.setUpdateName(Constants.SYSTEM_OPERATOR);
     }
 
     /**

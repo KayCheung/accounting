@@ -1,5 +1,6 @@
 package com.kltb.accounting.core.domain.service;
 
+import com.kltb.accounting.core.application.service.PostingApplicationService;
 import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
 import com.kltb.accounting.core.domain.enums.VoucherEntryStatusEnum;
 import com.kltb.accounting.core.domain.enums.VoucherStatusEnum;
@@ -10,12 +11,17 @@ import com.kltb.accounting.core.infrastructure.persistence.repository.Accounting
 import com.kltb.accounting.core.infrastructure.persistence.repository.TransactionRepository;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.TransactionMapper;
 import com.kltb.accounting.core.shared.exception.ServiceException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -28,13 +34,24 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class PostingMonitorDomainServiceTest {
 
     @Mock private AccountingVoucherRepository accountingVoucherRepository;
     @Mock private TransactionRepository transactionRepository;
     @Mock private TransactionMapper transactionMapper;
     @Mock private PostingEngineDomainService postingEngineDomainService;
+    @Mock private PostingApplicationService postingApplicationService;
+    @Mock private TransactionTemplate transactionTemplate;
     @InjectMocks private PostingMonitorDomainService postingMonitorDomainService;
+
+    @BeforeEach
+    void setUp() {
+        lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(null);
+        });
+    }
 
     @Test
     @DisplayName("凭证过账进度: 全部分录已过账")
@@ -42,7 +59,7 @@ class PostingMonitorDomainServiceTest {
         AccountingVoucherPO voucher = buildVoucher("VOU001", VoucherStatusEnum.POSTED);
         AccountingVoucherEntryPO e1 = buildEntry("E1", "VOU001", VoucherEntryStatusEnum.POSTED, 1, 0, 0);
         AccountingVoucherEntryPO e2 = buildEntry("E2", "VOU001", VoucherEntryStatusEnum.POSTED, 1, 0, 0);
-        when(accountingVoucherRepository.selectByVoucherNo("VOU001")).thenReturn(voucher);
+        when(accountingVoucherRepository.selectByVoucherNoSimple("VOU001")).thenReturn(voucher);
         when(accountingVoucherRepository.selectEntriesByVoucherNo("VOU001")).thenReturn(List.of(e1, e2));
         var result = postingMonitorDomainService.getVoucherProgress("VOU001");
         assertThat(result.getProgressPercent().compareTo(new BigDecimal("100.00")) == 0).isTrue();
@@ -54,7 +71,7 @@ class PostingMonitorDomainServiceTest {
         AccountingVoucherPO voucher = buildVoucher("VOU001", VoucherStatusEnum.POSTING);
         AccountingVoucherEntryPO e1 = buildEntry("E1", "VOU001", VoucherEntryStatusEnum.POSTED, 1, 0, 0);
         AccountingVoucherEntryPO e2 = buildEntry("E2", "VOU001", VoucherEntryStatusEnum.PENDING, 1, 0, 0);
-        when(accountingVoucherRepository.selectByVoucherNo("VOU001")).thenReturn(voucher);
+        when(accountingVoucherRepository.selectByVoucherNoSimple("VOU001")).thenReturn(voucher);
         when(accountingVoucherRepository.selectEntriesByVoucherNo("VOU001")).thenReturn(List.of(e1, e2));
         var result = postingMonitorDomainService.getVoucherProgress("VOU001");
         assertThat(result.getProgressPercent().compareTo(new BigDecimal("50.00")) == 0).isTrue();
@@ -88,10 +105,14 @@ class PostingMonitorDomainServiceTest {
         AccountingVoucherPO voucher = buildVoucher("VOU001", VoucherStatusEnum.FAILED);
         voucher.setRetryCount(0);
         when(accountingVoucherRepository.selectByVoucherNoSimple("VOU001")).thenReturn(voucher);
-        PostingEngineDomainService.PostingExecuteResult postResult = new PostingEngineDomainService.PostingExecuteResult("VOU001", 3, "POSTED");
-        when(postingEngineDomainService.postSingleVoucher("VOU001")).thenReturn(postResult);
+        com.kltb.accounting.api.response.PostingExecuteResponse postResult = new com.kltb.accounting.api.response.PostingExecuteResponse();
+        postResult.setVoucherNo("VOU001");
+        postResult.setVoucherStatus(3);
+        postResult.setVoucherStatusDesc("已过账");
+        when(postingApplicationService.executePosting(any())).thenReturn(postResult);
         var result = postingMonitorDomainService.retryAbnormalVoucher("VOU001", "admin", "retry");
         assertThat(result).isNotNull();
+        assertThat(result.isSuccess()).isTrue();
     }
 
     @Test

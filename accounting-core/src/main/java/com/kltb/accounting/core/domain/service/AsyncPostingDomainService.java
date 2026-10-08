@@ -1,11 +1,11 @@
 package com.kltb.accounting.core.domain.service;
 
+import cn.hutool.core.util.StrUtil;
 import com.alibaba.fastjson2.JSON;
 import com.kltb.accounting.api.constant.ResultCode;
-import com.kltb.accounting.core.domain.enums.MessageStatusEnum;
-import com.kltb.accounting.core.domain.enums.VoucherEntryStatusEnum;
-import com.kltb.accounting.core.domain.enums.VoucherStatusEnum;
+import com.kltb.accounting.core.domain.enums.*;
 import com.kltb.accounting.core.infrastructure.account.AccountBalanceCalculator;
+import com.kltb.accounting.core.infrastructure.account.AccountValidator;
 import com.kltb.accounting.core.infrastructure.messaging.LocalMessageService;
 import com.kltb.accounting.core.infrastructure.messaging.PostingMessagePayload;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
@@ -17,6 +17,7 @@ import com.kltb.accounting.core.infrastructure.persistence.repository.Accounting
 import com.kltb.accounting.core.infrastructure.persistence.repository.SubAccountRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.TransactionRepository;
 import com.kltb.accounting.core.shared.exception.AccountException;
+import com.kltb.accounting.core.shared.exception.ServiceException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -95,60 +96,77 @@ public class AsyncPostingDomainService {
      * 幂等：先检查分录 status 是否已是 2，是则直接返回成功
      */
     public void consumeAsyncPostingMessage(PostingMessagePayload payload) {
-        // 1. 幂等检查
+        // 1. 参数预校验（Fast-Fail）
+        if (payload == null) {
+            throw new ServiceException(ResultCode.PARAM_ERROR, "异步过账消息体不能为空");
+        }
+        if (StrUtil.isBlank(payload.getVoucherNo()) || StrUtil.isBlank(payload.getEntryId())
+            || StrUtil.isBlank(payload.getAccountNo())) {
+            throw new ServiceException(ResultCode.PARAM_ERROR, "异步过账消息体核心参数缺失");
+        }
+        if (payload.getAmount() == null || payload.getChangeDirection() == null) {
+            throw new ServiceException(ResultCode.PARAM_ERROR, "异步过账消息体金额或变动方向缺失");
+        }
+
+        // 2. 查询并校验分录（幂等检查）
         AccountingVoucherEntryPO entry = accountingVoucherRepository
             .selectEntriesByVoucherNo(payload.getVoucherNo())
             .stream()
-            .filter(e -> e.getEntryId().equals(payload.getEntryId()))
+            .filter(e -> payload.getEntryId().equals(e.getEntryId()))
             .findFirst()
             .orElse(null);
 
         if (entry == null) {
-            log.error("[ASYNC-POSTING] 分录不存在: entryId={}", payload.getEntryId());
+            log.error("[ASYNC-POSTING] 分录不存在: entryId={}, voucherNo={}", payload.getEntryId(), payload.getVoucherNo());
             throw new AccountException(ResultCode.DATA_NOT_FOUND, "分录不存在: " + payload.getEntryId());
         }
 
         if (entry.getStatus() == VoucherEntryStatusEnum.POSTED) {
-            log.info("[ASYNC-POSTING] 分录已过账，跳过: entryId={}", payload.getEntryId());
+            log.info("[ASYNC-POSTING] 分录已过账，幂等跳过: entryId={}", payload.getEntryId());
             return;
         }
 
-        // 2. 查询账户
-        AccountPO account = accountRepository.selectByAccountNo(payload.getAccountNo());
-        if (account == null) {
-            throw new AccountException(ResultCode.ACCOUNT_NOT_FOUND,
-                "账户不存在: accountNo=" + payload.getAccountNo());
+        // 3. 查询并校验关联凭证（严格由凭证驱动，元数据完整性预检）
+        AccountingVoucherPO voucher = accountingVoucherRepository.selectByVoucherNoSimple(payload.getVoucherNo());
+        if (voucher == null) {
+            log.error("[ASYNC-POSTING] 异步过账凭证不存在: voucherNo={}", payload.getVoucherNo());
+            throw new ServiceException(ResultCode.VOUCHER_NOT_FOUND, "异步过账凭证不存在: voucherNo=" + payload.getVoucherNo());
+        }
+        if (StrUtil.isBlank(voucher.getTxnNo())) {
+            log.error("[ASYNC-POSTING] 异步过账凭证事务号缺失: voucherNo={}", payload.getVoucherNo());
+            throw new ServiceException(ResultCode.PARAM_ERROR, "异步过账凭证事务号(txnNo)缺失，拒绝过账: voucherNo=" + payload.getVoucherNo());
         }
 
-        // 3. 按 account_no 加锁
+        // 4. 查询主账户并校验状态（Fast-Fail）
+        AccountPO account = accountRepository.selectByAccountNo(payload.getAccountNo());
+        AccountValidator.validateExists(account, payload.getAccountNo());
+        AccountValidator.validatePostable(account, payload.getChangeDirection());
+
+        // 5. 按 account_no 加悲观锁（行锁，获取最新持久态）
         List<AccountPO> lockedAccounts = accountRepository.selectForUpdateBatch(
             Collections.singletonList(payload.getAccountNo()));
         if (lockedAccounts.isEmpty()) {
             throw new AccountException(ResultCode.ACCOUNT_NOT_FOUND,
                 "加锁查询账户为空: accountNo=" + payload.getAccountNo());
         }
+        AccountPO lockedAccount = lockedAccounts.get(0);
+        AccountValidator.validatePostable(lockedAccount, payload.getChangeDirection());
 
-        // 4. 查询子账户并加锁
+        // 6. 查询子账户并加锁
         List<SubAccountPO> subs = subAccountRepository.selectForUpdate(payload.getAccountNo());
         SubAccountPO subAccount = subs != null && !subs.isEmpty() ? subs.get(0) : null;
 
-        // 5. 保存变更前余额
-        BigDecimal oldBalance = account.getBalance();
+        // 7. 保存变更前余额
+        BigDecimal oldBalance = lockedAccount.getBalance();
         BigDecimal subOldBalance = subAccount != null ? subAccount.getBalance() : null;
 
-        // 6. 余额计算
+        // 8. 试算新余额（遵循绝对值法则，若余额不足在此阶段直接抛出异常，此时数据库未发生任何变更）
         BigDecimal newBalance = AccountBalanceCalculator.calculateNewBalance(
             oldBalance,
             payload.getAmount(),
             payload.getChangeDirection()
         );
 
-        // 7. 更新主账户余额 + version
-        account.setBalance(newBalance);
-        account.setVersion(account.getVersion() != null ? account.getVersion() + 1 : 1);
-        accountRepository.updateById(account);
-
-        // 8. 更新子账户余额
         BigDecimal subNewBalance = null;
         if (subAccount != null) {
             subNewBalance = AccountBalanceCalculator.calculateNewBalance(
@@ -156,65 +174,90 @@ public class AsyncPostingDomainService {
                 payload.getAmount(),
                 payload.getChangeDirection()
             );
+        }
+
+        // 9. 更新主账户余额 + version
+        lockedAccount.setBalance(newBalance);
+        lockedAccount.setVersion(lockedAccount.getVersion() != null ? lockedAccount.getVersion() + 1 : 1);
+        accountRepository.updateById(lockedAccount);
+
+        // 10. 更新子账户余额 + version
+        if (subAccount != null) {
             subAccount.setBalance(subNewBalance);
             subAccount.setVersion(subAccount.getVersion() != null ? subAccount.getVersion() + 1 : 1);
             subAccountRepository.updateById(subAccount);
         }
 
-        // 9. 写入 t_account_detail
+        // 11. 写入 t_account_detail
         AccountDetailPO detail = new AccountDetailPO();
-        detail.setVoucherNo(payload.getVoucherNo())
+        detail.setVoucherNo(voucher.getVoucherNo())
             .setEntryId(payload.getEntryId())
+            .setTxnNo(voucher.getTxnNo())
+            .setTraceNo(voucher.getTraceNo())
+            .setTraceSeq(voucher.getTraceSeq() != null ? voucher.getTraceSeq() : 0)
             .setSubjectCode(payload.getSubjectCode())
             .setAccountNo(payload.getAccountNo())
-            .setDebitCredit(com.kltb.accounting.core.domain.enums.DebitCreditEnum.fromCode(payload.getDebitCredit()))
+            .setBusinessCode(voucher.getBusinessCode())
+            .setTradingCode(voucher.getTradingCode())
+            .setPayChannel(voucher.getPayChannel())
+            .setTradeType(voucher.getTradeType())
+            .setTradeTime(voucher.getTradeTime())
+            .setDebitCredit(DebitCreditEnum.fromCode(payload.getDebitCredit()))
             .setChangeDirection(payload.getChangeDirection() == 1
-                ? com.kltb.accounting.core.domain.enums.ChangeDirectionEnum.INCREASE
-                : com.kltb.accounting.core.domain.enums.ChangeDirectionEnum.DECREASE)
+                ? ChangeDirectionEnum.INCREASE
+                : ChangeDirectionEnum.DECREASE)
             .setCurrency(payload.getCurrency())
             .setPreBalance(oldBalance)
             .setAmount(payload.getAmount())
             .setPostBalance(newBalance)
-            .setAccountingDate(payload.getAccountingDate())
-            .setSummary(payload.getSummary());
+            .setAccountingDate(voucher.getAccountingDate())
+            .setSummary(StrUtil.isNotBlank(payload.getSummary()) ? payload.getSummary() : voucher.getSummary())
+            .setTenantId(voucher.getTenantId());
         accountDetailMapper.insert(detail);
 
-        // 10. 写入 t_sub_account_detail
+        // 12. 写入 t_sub_account_detail
         if (subAccount != null) {
             SubAccountDetailPO subDetail = new SubAccountDetailPO();
-            subDetail.setVoucherNo(payload.getVoucherNo())
+            subDetail.setVoucherNo(voucher.getVoucherNo())
                 .setEntryId(payload.getEntryId())
+                .setTxnNo(voucher.getTxnNo())
+                .setTraceNo(voucher.getTraceNo())
+                .setTraceSeq(voucher.getTraceSeq() != null ? voucher.getTraceSeq() : 0)
                 .setAccountNo(payload.getAccountNo())
-                .setBalanceType(com.kltb.accounting.core.domain.enums.BalanceTypeEnum.AVAILABLE)
-                .setDebitCredit(com.kltb.accounting.core.domain.enums.DebitCreditEnum.fromCode(payload.getDebitCredit()))
+                .setBalanceType(BalanceTypeEnum.AVAILABLE)
+                .setTradingCode(voucher.getTradingCode())
+                .setTradeType(voucher.getTradeType())
+                .setTradeTime(voucher.getTradeTime())
+                .setDebitCredit(DebitCreditEnum.fromCode(payload.getDebitCredit()))
                 .setChangeDirection(payload.getChangeDirection() == 1
-                    ? com.kltb.accounting.core.domain.enums.ChangeDirectionEnum.INCREASE
-                    : com.kltb.accounting.core.domain.enums.ChangeDirectionEnum.DECREASE)
+                    ? ChangeDirectionEnum.INCREASE
+                    : ChangeDirectionEnum.DECREASE)
                 .setCurrency(payload.getCurrency())
                 .setPreBalance(subOldBalance)
                 .setAmount(payload.getAmount())
                 .setPostBalance(subNewBalance)
-                .setAccountingDate(payload.getAccountingDate())
-                .setSummary(payload.getSummary());
+                .setAccountingDate(voucher.getAccountingDate())
+                .setSummary(StrUtil.isNotBlank(payload.getSummary()) ? payload.getSummary() : voucher.getSummary())
+                .setTenantId(voucher.getTenantId());
             subAccountDetailMapper.insert(subDetail);
         }
 
-        // 11. 更新分录状态为已过账
+        // 13. 更新分录状态为已过账
         entry.setStatus(VoucherEntryStatusEnum.POSTED);
         entry.setBalanceUpdateTime(LocalDateTime.now());
         accountingVoucherRepository.updateEntryById(entry);
 
-        // 12. 检查并联动更新凭证/事务状态
+        // 14. 检查并联动更新凭证/事务状态
         updateStatusIfAllNonBufferPosted(payload.getVoucherNo());
 
-        // 13. 更新本地消息状态为已发送
+        // 15. 更新本地消息状态为已发送
         localMessageService.markSent(payload.getEntryId());
 
-        // 14. 写入消息回执
+        // 16. 写入消息回执
         MessageReceiptPO receipt = new MessageReceiptPO();
         receipt.setMessageId(payload.getEntryId());
         receipt.setBusinessKey(payload.getEntryId());
-        receipt.setStatus(com.kltb.accounting.core.domain.enums.ReceiptStatusEnum.SUCCESS);
+        receipt.setStatus(ReceiptStatusEnum.SUCCESS);
         receipt.setReceivedTime(LocalDateTime.now());
         receipt.setProcessedTime(LocalDateTime.now());
         messageReceiptMapper.insert(receipt);

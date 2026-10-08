@@ -1,0 +1,7 @@
+BUG261008-001：科目编辑时无法更新余额方向，但是余额方向可以选择。已修复：
+- 后端：在 `SubjectUpdateRequest` DTO 补充 `debitCredit` 字段，并在 `SubjectConverter.updatePO` 中补全从入参到 `AccountSubjectPO.debitCredit` 的映射更新。
+- 前端：在 `accounting-ui/src/api/subject.ts` 的 `SubjectUpdateRequest` 接口补充 `debitCredit?: number`；在 `views/config/subject/index.vue` 编辑提交载荷中加入 `debitCredit: subjectForm.debitCredit`，并将单选框禁用条件优化为 `:disabled="!isEditMode && Boolean(currentParent)"`。
+
+BUG261008-002：PostingDomainService.executeRealTimePosting 实时入账的账务明细 detail txnNo、TraceNo、TraceSeq、TradeTime、TradingCode、BusinessCode、PayChannel、TradeType 等字段都设置为空导致无法保存，并且数据库数据也不完整。
+
+BUG261008-003：AsyncPostingDomainService.consumeAsyncPostingMessage 数据读取与参数校验滞后，在更新账户后才读取凭证和校验参数，未遵循 Fast-Fail 和“读验先于写”原则。已重构为四阶段严格前置校验（只读预检 Fast-Fail → 悲观加锁 → 纯内存试算校验 → 原子落库）。

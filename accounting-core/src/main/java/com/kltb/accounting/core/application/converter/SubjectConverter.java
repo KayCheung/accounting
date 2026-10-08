@@ -1,5 +1,6 @@
 package com.kltb.accounting.core.application.converter;
 
+import com.kltb.accounting.api.constant.Constants;
 import com.kltb.accounting.api.request.SubjectCreateRequest;
 import com.kltb.accounting.api.request.SubjectUpdateRequest;
 import com.kltb.accounting.core.application.dto.SubjectResponse;
@@ -12,7 +13,6 @@ import com.kltb.accounting.core.shared.context.TenantContext;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -21,28 +21,6 @@ import java.util.Optional;
  * 是否记账：否
  */
 public class SubjectConverter {
-
-    private static final Map<Integer, SubjectCategoryEnum> CATEGORY_MAP = Map.of(
-            0, SubjectCategoryEnum.OFF_BALANCE,
-            1, SubjectCategoryEnum.ASSET,
-            2, SubjectCategoryEnum.LIABILITY,
-            3, SubjectCategoryEnum.EQUITY,
-            4, SubjectCategoryEnum.COMMON,
-            5, SubjectCategoryEnum.COST,
-            6, SubjectCategoryEnum.PROFIT_LOSS
-    );
-
-    private static final Map<Integer, SubjectNatureEnum> NATURE_MAP = Map.of(
-            1, SubjectNatureEnum.NORMAL,
-            2, SubjectNatureEnum.WRITE_OFF,
-            3, SubjectNatureEnum.LOAN,
-            4, SubjectNatureEnum.CASH
-    );
-
-    private static final Map<Integer, DebitCreditEnum> DEBIT_CREDIT_MAP = Map.of(
-            1, DebitCreditEnum.DEBIT,
-            2, DebitCreditEnum.CREDIT
-    );
 
     /**
      * 创建请求 → PO
@@ -53,19 +31,22 @@ public class SubjectConverter {
         po.setSubjectName(request.getSubjectName());
         po.setSubjectLevel(request.getSubjectLevel());
         po.setParentSubjectId(request.getParentSubjectId());
-        po.setSubjectCategory(CATEGORY_MAP.getOrDefault(request.getSubjectCategory(), SubjectCategoryEnum.OFF_BALANCE));
-        po.setNature(NATURE_MAP.getOrDefault(request.getNature(), SubjectNatureEnum.NORMAL));
-        po.setDebitCredit(DEBIT_CREDIT_MAP.getOrDefault(request.getDebitCredit(), DebitCreditEnum.DEBIT));
+        po.setSubjectCategory(Optional.ofNullable(SubjectCategoryEnum.fromCode(request.getSubjectCategory()))
+                .orElse(SubjectCategoryEnum.OFF_BALANCE));
+        po.setNature(Optional.ofNullable(SubjectNatureEnum.fromCode(request.getNature()))
+                .orElse(SubjectNatureEnum.NORMAL));
+        po.setDebitCredit(Optional.ofNullable(DebitCreditEnum.fromCode(request.getDebitCredit()))
+                .orElse(DebitCreditEnum.DEBIT));
         po.setLeaf(request.getLeaf() != null && request.getLeaf());
         po.setAllowPost(request.getAllowPost() != null && request.getAllowPost());
         po.setAllowOpenAccount(request.getAllowOpenAccount() != null && request.getAllowOpenAccount());
-        po.setStatus(request.getStatus() != null && request.getStatus() == 1
-                ? AvailableStatusEnum.ENABLED : AvailableStatusEnum.DISABLED);
+        po.setStatus(Optional.ofNullable(AvailableStatusEnum.fromCode(request.getStatus()))
+                .orElse(AvailableStatusEnum.ENABLED));
         po.setTenantId(TenantContext.get());
-        po.setCreateId("system");
-        po.setCreateName("system");
-        po.setUpdateId("system");
-        po.setUpdateName("system");
+        po.setCreateId(Constants.SYSTEM_OPERATOR);
+        po.setCreateName(Constants.SYSTEM_OPERATOR);
+        po.setUpdateId(Constants.SYSTEM_OPERATOR);
+        po.setUpdateName(Constants.SYSTEM_OPERATOR);
         return po;
     }
 
@@ -77,10 +58,16 @@ public class SubjectConverter {
             po.setSubjectName(request.getSubjectName());
         }
         if (request.getSubjectCategory() != null) {
-            po.setSubjectCategory(CATEGORY_MAP.getOrDefault(request.getSubjectCategory(), po.getSubjectCategory()));
+            Optional.ofNullable(SubjectCategoryEnum.fromCode(request.getSubjectCategory()))
+                    .ifPresent(po::setSubjectCategory);
         }
         if (request.getNature() != null) {
-            po.setNature(NATURE_MAP.getOrDefault(request.getNature(), po.getNature()));
+            Optional.ofNullable(SubjectNatureEnum.fromCode(request.getNature()))
+                    .ifPresent(po::setNature);
+        }
+        if (request.getDebitCredit() != null) {
+            Optional.ofNullable(DebitCreditEnum.fromCode(request.getDebitCredit()))
+                    .ifPresent(po::setDebitCredit);
         }
         if (request.getLeaf() != null) {
             po.setLeaf(request.getLeaf());
@@ -92,10 +79,11 @@ public class SubjectConverter {
             po.setAllowOpenAccount(request.getAllowOpenAccount());
         }
         if (request.getStatus() != null) {
-            po.setStatus(request.getStatus() == 1 ? AvailableStatusEnum.ENABLED : AvailableStatusEnum.DISABLED);
+            Optional.ofNullable(AvailableStatusEnum.fromCode(request.getStatus()))
+                    .ifPresent(po::setStatus);
         }
-        po.setUpdateId("system");
-        po.setUpdateName("system");
+        po.setUpdateId(Constants.SYSTEM_OPERATOR);
+        po.setUpdateName(Constants.SYSTEM_OPERATOR);
     }
 
     /**
