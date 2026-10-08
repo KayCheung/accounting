@@ -14,3 +14,12 @@ BUG261008-004：过账成功但主账户与子账户余额未发生变化（明�
 修复：
 1. 移除 PostingDomainService、AsyncPostingDomainService、RollbackDomainService 中手动自增 version 的代码，由 MyBatis-Plus 乐观锁插件全权自动管理 CAS 条件与自增；
 2. 遵循“真正的成功”原则，强化仓储层（AccountRepository、SubAccountRepository、AccountDetailRepository、SubAccountDetailRepository、AccountingVoucherRepository）写操作的受影响行数校验（affected > 0），更新 0 行显式抛出 OPTIMISTIC_LOCK_FAILED，插入 0 行显式抛出 SYSTEM_ERROR，从底层彻底杜绝静默放行与脏事务提交。
+
+BUG261008-005：实时过账完成凭证变为已过账，但分录未持久化更新，导致红冲前置校验拦截（code=2036，原凭证分录未全部过账）。
+根因：
+1. `PostingDomainService.executeRealTimePosting` 执行实时入账时，仅在内存中执行了 `entry.setStatus(POSTED)` 和 `entry.setBalanceUpdateTime(now)`，由于早期重构中移除了 `AccountingVoucherRepository` 的依赖注入，漏掉了调用 `accountingVoucherRepository.updateEntryById(entry)` 持久化落库分录最新状态；
+2. 上层 `PostingApplicationService.doExecutePosting` 仅持久化了凭证主表 `voucher.setStatus(POSTED)`，导致凭证状态为 POSTED，但数据库分录表中记录仍为未过账（status=1）；后续红冲执行 `validateReversable` 校验分录表时，抛出 `REVERSAL_ENTRIES_NOT_ALL_POSTED`（2036）。
+修复：
+1. `PostingDomainService` 重新注入 `AccountingVoucherRepository`，在实时过账循环中执行 `accountingVoucherRepository.updateEntryById(entry)`，使分录状态、动支时间与余额明细在同一事务内原子落库；
+2. 增强 `AccountingVoucherRepository.updateEntryById`：兼顾带实体主键 id 更新与按业务流水号 entryId 更新两种场景，结合受影响行数校验，确保分录状态真正落库；
+3. 更新 `PostingDomainServiceTest` 单元测试，增加持久化 `updateEntryById` 验证，全量 230 个单测全部通过。

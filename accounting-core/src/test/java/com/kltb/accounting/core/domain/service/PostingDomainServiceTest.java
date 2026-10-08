@@ -7,6 +7,7 @@ import com.kltb.accounting.core.domain.enums.VoucherEntryStatusEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountDetailRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountRepository;
+import com.kltb.accounting.core.infrastructure.persistence.repository.AccountingVoucherRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.SubAccountDetailRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.SubAccountRepository;
 import com.kltb.accounting.core.shared.exception.AccountException;
@@ -38,6 +39,7 @@ class PostingDomainServiceTest {
     @Mock private SubAccountRepository subAccountRepository;
     @Mock private AccountDetailRepository accountDetailRepository;
     @Mock private SubAccountDetailRepository subAccountDetailRepository;
+    @Mock private AccountingVoucherRepository accountingVoucherRepository;
 
     @InjectMocks private PostingDomainService postingDomainService;
 
@@ -171,6 +173,7 @@ class PostingDomainServiceTest {
         assertThat(subDetail.getTenantId()).isEqualTo(voucher.getTenantId());
 
         assertThat(entry.getStatus()).isEqualTo(VoucherEntryStatusEnum.POSTED);
+        verify(accountingVoucherRepository).updateEntryById(entry);
     }
 
     @Test

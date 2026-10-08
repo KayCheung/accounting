@@ -26,6 +26,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -41,6 +43,7 @@ import static org.mockito.Mockito.when;
  * 验证核心财务原则：不管是 update、insert 还是 delete 必须是真正的成功（受影响行数 > 0），严禁静默吞错
  */
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class PersistenceAffectedRowsEnforcementTest {
 
     @Mock
@@ -199,7 +202,9 @@ class PersistenceAffectedRowsEnforcementTest {
     @Test
     @DisplayName("AccountingVoucherRepository.updateEntryById: 受影响行数等于0时抛出 OPTIMISTIC_LOCK_FAILED")
     void voucherRepository_updateEntryById_zeroAffected_throwsOptimisticLockFailed() {
-        AccountingVoucherEntryPO entry = new AccountingVoucherEntryPO().setEntryId("E001");
+        AccountingVoucherEntryPO entry = new AccountingVoucherEntryPO();
+        entry.setId(1L);
+        entry.setEntryId("E001");
         when(entryMapper.updateById(entry)).thenReturn(0);
 
         assertThatThrownBy(() -> accountingVoucherRepository.updateEntryById(entry))

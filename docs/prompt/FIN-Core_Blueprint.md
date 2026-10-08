@@ -561,6 +561,14 @@
       - **彻底剥离业务层 version 干扰**：从 `PostingDomainService`、`AsyncPostingDomainService`、`RollbackDomainService` 中彻底删除手动 `setVersion(...)` 代码，保留实体查出的原生版本号，全权交由 MyBatis-Plus 乐观锁拦截器安全处理 CAS 匹配与版本号自增；
       - **仓储层“真正的成功”强校验**：严格贯彻金融核心铁律，在 `AccountRepository`、`SubAccountRepository`、`AccountDetailRepository`、`SubAccountDetailRepository`、`AccountingVoucherRepository` 的 `insert`、`updateById`、`updateEntryById` 等写操作中实施受影响行数强校验（`affected > 0`）。更新 0 行显式抛出 `OPTIMISTIC_LOCK_FAILED`，插入 0 行显式抛出 `SYSTEM_ERROR`，严禁任何形式的静默放行；
       - **自动化测试保障**：新增仓储受影响行数专项单元测试 `PersistenceAffectedRowsEnforcementTest`（11 个用例），并在 `PostingDomainServiceTest` 与 `AsyncPostingDomainServiceTest` 中增加实体版本号未被业务层篡改的断言，全模块 230 个单元测试 100% 通过。
+  → 完成内容（Step 23.4.15 实时过账分录状态持久化闭环修复 BUG261008-005）：
+    - 根因定位与分析：
+      - 现象：凭证实时过账成功后，主表变为已过账（POSTED），但分录表状态仍为未过账；发起红冲时触发 `validateReversable` 强校验拦截并报错 `code=2036, message=原凭证分录未全部过账`；
+      - 根因：早期瘦身重构中将 `AccountingVoucherRepository` 移出了 `PostingDomainService`，导致实时过账仅在内存中执行了 `entry.setStatus(POSTED)` 和 `balanceUpdateTime`，漏掉了持久化更新分录到数据库；
+    - 修复与闭环：
+      - `PostingDomainService` 重新注入 `AccountingVoucherRepository`，在实时入账循环中显式调用 `accountingVoucherRepository.updateEntryById(entry)` 将分录更新落库；
+      - 增强 `AccountingVoucherRepository.updateEntryById` 支持实体无主键 ID 时降级通过唯一业务单号 `entryId` 更新；
+      - `PostingDomainServiceTest` 单元测试增加对分录持久化的 `verify` 校验，全模块全量 230 个单测全部通过。
   → 待进行业务页面：日切与试算平衡 (`business/eod`)、缓冲记账监控 (`business/buffer-monitor`)
 
 ---

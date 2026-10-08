@@ -1,5 +1,6 @@
 package com.kltb.accounting.core.infrastructure.persistence.repository;
 
+import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.kltb.accounting.api.constant.ResultCode;
@@ -152,7 +153,15 @@ public class AccountingVoucherRepository {
         if (entry == null) {
             throw new AccountException(ResultCode.PARAM_ERROR, "待更新分录对象不能为空");
         }
-        int affected = entryMapper.updateById(entry);
+        int affected;
+        if (entry.getId() != null) {
+            affected = entryMapper.updateById(entry);
+        } else if (StrUtil.isNotBlank(entry.getEntryId())) {
+            affected = entryMapper.update(entry, new LambdaQueryWrapper<AccountingVoucherEntryPO>()
+                    .eq(AccountingVoucherEntryPO::getEntryId, entry.getEntryId()));
+        } else {
+            affected = 0;
+        }
         if (affected == 0) {
             throw new AccountException(ResultCode.OPTIMISTIC_LOCK_FAILED,
                     "凭证分录更新失败(乐观锁版本冲突或记录不存在): entryId=" + entry.getEntryId());

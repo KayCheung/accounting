@@ -3,6 +3,7 @@ package com.kltb.accounting.core.domain.service;
 import cn.hutool.core.util.StrUtil;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.AccountStatusEnum;
+import com.kltb.accounting.core.domain.enums.BalanceTypeEnum;
 import com.kltb.accounting.core.domain.enums.ChangeDirectionEnum;
 import com.kltb.accounting.core.domain.enums.VoucherEntryStatusEnum;
 import com.kltb.accounting.core.infrastructure.account.AccountBalanceCalculator;
@@ -15,6 +16,7 @@ import com.kltb.accounting.core.infrastructure.persistence.entity.SubAccountDeta
 import com.kltb.accounting.core.infrastructure.persistence.entity.SubAccountPO;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountDetailRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountRepository;
+import com.kltb.accounting.core.infrastructure.persistence.repository.AccountingVoucherRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.SubAccountDetailRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.SubAccountRepository;
 import com.kltb.accounting.core.shared.exception.AccountException;
@@ -33,7 +35,7 @@ import java.util.stream.Collectors;
 /**
  * 实时过账领域服务
  * <p>
- * 职责：加锁 → 余额计算 → 账户更新 → 明细快照 → 分录状态更新
+ * 职责：加锁 → 余额计算 → 账户更新 → 明细快照 → 分录状态更新与持久化
  * 注意：此类不包含事务，由 Application Service 统一控制事务边界。
  * <p>
  * 是否记账：是
@@ -49,6 +51,7 @@ public class PostingDomainService {
     private final SubAccountRepository subAccountRepository;
     private final AccountDetailRepository accountDetailRepository;
     private final SubAccountDetailRepository subAccountDetailRepository;
+    private final AccountingVoucherRepository accountingVoucherRepository;
 
     /**
      * 实时过账：锁定账户 → 计算余额 → 更新余额 → 记录明细 → 更新分录状态
@@ -174,7 +177,7 @@ public class PostingDomainService {
                     .setTraceNo(voucher.getTraceNo())
                     .setTraceSeq(voucher.getTraceSeq() != null ? voucher.getTraceSeq() : 0)
                     .setAccountNo(entry.getAccountNo())
-                    .setBalanceType(com.kltb.accounting.core.domain.enums.BalanceTypeEnum.AVAILABLE)
+                    .setBalanceType(BalanceTypeEnum.AVAILABLE)
                     .setTradingCode(voucher.getTradingCode())
                     .setTradeType(voucher.getTradeType())
                     .setTradeTime(voucher.getTradeTime())
@@ -192,9 +195,10 @@ public class PostingDomainService {
                 subAccountDetails.add(subDetail);
             }
 
-            // 更新分录状态为已过账
+            // 更新分录状态为已过账并持久化到数据库
             entry.setStatus(VoucherEntryStatusEnum.POSTED);
             entry.setBalanceUpdateTime(LocalDateTime.now());
+            accountingVoucherRepository.updateEntryById(entry);
         }
 
         // 批量写入明细
