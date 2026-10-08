@@ -1,5 +1,6 @@
 package com.kltb.accounting.core.domain.service;
 
+import com.kltb.accounting.api.constant.Constants;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.AccountStatusEnum;
 import com.kltb.accounting.core.domain.enums.BalanceTypeEnum;
@@ -62,7 +63,7 @@ public class FreezeDomainService {
     private final FreezeIdGenerator freezeIdGenerator;
 
     /**
-     * 资金冻结（可用余额 → 冻结余额）
+     * 资金冻结（可用余额 → 冻结余额，使用默认通用业务线）
      *
      * @param accountNo    账户编号
      * @param freezeAmount 冻结金额
@@ -71,6 +72,22 @@ public class FreezeDomainService {
      * @return 冻结记录 PO
      */
     public AccountFreezeDetailPO freezeFund(String accountNo, BigDecimal freezeAmount,
+                                            LocalDateTime expireTime, String reason) {
+        return freezeFund(accountNo, freezeAmount, null, expireTime, reason);
+    }
+
+    /**
+     * 资金冻结（可用余额 → 冻结余额，指定业务线编码）
+     *
+     * @param accountNo    账户编号
+     * @param freezeAmount 冻结金额
+     * @param businessCode 业务线编码（可选，为空时采用 Constants.DEFAULT_BUSINESS_CODE 兜底）
+     * @param expireTime   过期时间（null 表示永不过期）
+     * @param reason       冻结原因
+     * @return 冻结记录 PO
+     */
+    public AccountFreezeDetailPO freezeFund(String accountNo, BigDecimal freezeAmount,
+                                            String businessCode,
                                             LocalDateTime expireTime, String reason) {
         validateFreezeAmount(freezeAmount);
         validateExpireTime(expireTime);
@@ -89,6 +106,10 @@ public class FreezeDomainService {
             throw new AccountException(ResultCode.FREEZE_AMOUNT_INVALID,
                     "可用余额不足: available=" + availableSub.getBalance() + ", freeze=" + freezeAmount);
         }
+
+        String effectiveBusinessCode = StringUtils.isNotBlank(businessCode)
+                ? businessCode
+                : Constants.DEFAULT_BUSINESS_CODE;
 
         // 分布式锁 + 事务执行
         return distributedLockTemplate.execute(
@@ -137,7 +158,11 @@ public class FreezeDomainService {
                     AccountFreezeDetailPO freezeDetail = new AccountFreezeDetailPO();
                     freezeDetail.setVoucherNo(freezeId);
                     freezeDetail.setAccountNo(accountNo);
-                    freezeDetail.setBusinessCode("GENERAL");
+                    freezeDetail.setTxnNo("");
+                    freezeDetail.setBusinessCode(effectiveBusinessCode);
+                    freezeDetail.setTradingCode(Constants.TRADING_CODE_FREEZE);
+                    freezeDetail.setTraceNo(freezeId);
+                    freezeDetail.setTraceSeq(1);
                     freezeDetail.setFreezeAmount(freezeAmount);
                     freezeDetail.setStatus(FreezeStatusEnum.FROZEN);
                     freezeDetail.setExpireTime(expireTime != null ? expireTime : DEFAULT_EXPIRE_TIME);
@@ -145,7 +170,8 @@ public class FreezeDomainService {
                     freezeDetail.setSummary(StringUtils.isNotBlank(reason) ? reason : "资金冻结");
                     freezeDetailRepository.insert(freezeDetail);
 
-                    log.info("[FREEZE] 资金冻结完成 accountNo={} freezeId={} amount={}", accountNo, freezeId, freezeAmount);
+                    log.info("[FREEZE] 资金冻结完成 accountNo={} freezeId={} amount={} businessCode={}",
+                            accountNo, freezeId, freezeAmount, effectiveBusinessCode);
                     return freezeDetail;
                 })
         );
@@ -448,7 +474,7 @@ public class FreezeDomainService {
         detail.setTxnNo("");
         detail.setTraceNo(voucherNo);
         detail.setTraceSeq(1);
-        detail.setTradingCode("FREEZE");
+        detail.setTradingCode(Constants.TRADING_CODE_FREEZE);
         detail.setAccountNo(accountNo);
         detail.setBalanceType(balanceType);
         detail.setTradeType(TradeTypeEnum.NORMAL);

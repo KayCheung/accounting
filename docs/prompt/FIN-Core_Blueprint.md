@@ -602,7 +602,14 @@
         - `PostingDomainService` 在构造 `AccountDetailPO` 与 `SubAccountDetailPO` 时对凭证属性进行非空安全提取（`StrUtil.isNotBlank(...)`）；
         - `ReversalDomainService` 红冲凭证构建赋予合理业务默认码（`businessCode="MANUAL"`、`tradingCode="REVERSAL"`、`payChannel="INTERNAL"`）；
         - `FreezeDomainService` 补齐子账户明细插入时缺失的 `txnNo`、`traceNo`、`traceSeq`、`tradingCode` 赋值；
-      - **自动化测试保障**：在 `PersistenceAffectedRowsEnforcementTest` 中补充针对仓储层防御性补全兜底机制的断言测试，全模块 234 个测试用例 100% 成功通过。
+  → 完成内容（Step 23.4.20 资金冻结业务线与交易编码常量收敛及全量必填字段治理）：
+    - **问题定位与业务语义**：
+      - 表 `t_account_freeze_detail` 中 `business_code` 代表业务线编码（字典 CODE）。早期接口未开放业务线参数，代码中直接硬编码了魔法字符串 `"GENERAL"`，且缺失 `txn_no`、`trading_code`、`trace_no`、`trace_seq` 等非空必填字段的系统设置；
+    - **重构与治理落地**：
+      - **系统通用聚合常量收敛**：在契约层 `Constants.java` 中新增 `DEFAULT_BUSINESS_CODE = "GENERAL"`（默认通用业务线）、`TRADING_CODE_FREEZE = "FREEZE"`、`TRADING_CODE_UNFREEZE = "UNFREEZE"`、`TRADING_CODE_DEDUCT = "DEDUCT"`，彻底消除魔法字符串；
+      - **上游透传与默认兜底兼顾**：请求 DTO `FundFreezeRequest` 扩展可选 `businessCode` 字段，应用层与领域服务 `FreezeDomainService.freezeFund` 支持按业务线冻结并使用 `Constants.DEFAULT_BUSINESS_CODE` 安全兜底；
+      - **全量必填字段补全与仓储守门**：`FreezeDomainService` 补齐 `AccountFreezeDetailPO` 插入时的 `txnNo`、`tradingCode`、`traceNo`、`traceSeq` 等必填字段；在 `FreezeDetailRepository.insert` 中加入受影响行数强校验与防 null 兜底；
+      - **自动化测试保障**：在 `FreezeDomainServiceTest`、`FreezeApplicationServiceTest`、`PersistenceAffectedRowsEnforcementTest` 中补齐业务线断言与防御性单测，全工程 238 个测试用例 100% 通过。
   → 待进行业务页面：日切与试算平衡 (`business/eod`)、缓冲记账监控 (`business/buffer-monitor`)
 
 ---

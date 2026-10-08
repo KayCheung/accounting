@@ -2,6 +2,8 @@ package com.kltb.accounting.core.infrastructure.persistence.repository;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.kltb.accounting.api.constant.Constants;
+import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.FreezeStatusEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountFreezeDetailPO;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountFreezeDetailMapper;
@@ -25,7 +27,30 @@ public class FreezeDetailRepository {
      * 插入冻结记录
      */
     public void insert(AccountFreezeDetailPO po) {
-        accountFreezeDetailMapper.insert(po);
+        if (po == null) {
+            throw new AccountException(ResultCode.PARAM_ERROR, "待插入冻结明细对象不能为空");
+        }
+        // 防御性补全：数据库 NOT NULL 且无默认值的字段统一防 null 兜底
+        if (po.getTxnNo() == null) {
+            po.setTxnNo("");
+        }
+        if (po.getBusinessCode() == null) {
+            po.setBusinessCode(Constants.DEFAULT_BUSINESS_CODE);
+        }
+        if (po.getTradingCode() == null) {
+            po.setTradingCode(Constants.TRADING_CODE_FREEZE);
+        }
+        if (po.getTraceNo() == null) {
+            po.setTraceNo(cn.hutool.core.util.StrUtil.isNotBlank(po.getVoucherNo()) ? po.getVoucherNo() : "");
+        }
+        if (po.getTraceSeq() == null) {
+            po.setTraceSeq(1);
+        }
+        int affected = accountFreezeDetailMapper.insert(po);
+        if (affected == 0) {
+            throw new AccountException(ResultCode.SYSTEM_ERROR,
+                    "插入资金冻结明细失败: " + po.getVoucherNo());
+        }
     }
 
     /**

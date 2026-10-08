@@ -102,6 +102,56 @@ class FreezeDomainServiceTest {
     }
 
     @Test
+    @DisplayName("资金冻结: 成功（未传业务线，默认使用 Constants.DEFAULT_BUSINESS_CODE）")
+    void freezeFund_success_defaultBusinessCode() {
+        AccountPO account = buildAccount("A001");
+        SubAccountPO availableSub = new SubAccountPO().setBalance(new BigDecimal("500")).setVersion(1L);
+        SubAccountPO frozenSub = new SubAccountPO().setBalance(new BigDecimal("200")).setVersion(1L);
+
+        when(accountRepository.selectByAccountNo("A001")).thenReturn(account);
+        when(subAccountRepository.selectByAccountNoAndType("A001", BalanceTypeEnum.AVAILABLE.getCode())).thenReturn(availableSub);
+        when(subAccountRepository.selectByAccountNoAndType("A001", BalanceTypeEnum.FROZEN.getCode())).thenReturn(frozenSub);
+        when(freezeIdGenerator.generate()).thenReturn("FRZ20261008000001");
+        doAnswer(invocation -> ((Supplier<?>) invocation.getArgument(3)).get())
+                .when(distributedLockTemplate).execute(anyString(), anyLong(), anyLong(), any());
+        doAnswer(invocation -> ((org.springframework.transaction.support.TransactionCallback<?>) invocation.getArgument(0)).doInTransaction(null))
+                .when(transactionTemplate).execute(any());
+
+        AccountFreezeDetailPO result = freezeDomainService.freezeFund("A001", new BigDecimal("100"), null, "测试冻结");
+
+        assertThat(result).isNotNull();
+        assertThat(result.getBusinessCode()).isEqualTo(com.kltb.accounting.api.constant.Constants.DEFAULT_BUSINESS_CODE);
+        assertThat(result.getTradingCode()).isEqualTo(com.kltb.accounting.api.constant.Constants.TRADING_CODE_FREEZE);
+        assertThat(result.getFreezeAmount()).isEqualByComparingTo("100");
+        verify(freezeDetailRepository).insert(any(AccountFreezeDetailPO.class));
+    }
+
+    @Test
+    @DisplayName("资金冻结: 成功（传入自定义业务线）")
+    void freezeFund_success_customBusinessCode() {
+        AccountPO account = buildAccount("A001");
+        SubAccountPO availableSub = new SubAccountPO().setBalance(new BigDecimal("500")).setVersion(1L);
+        SubAccountPO frozenSub = new SubAccountPO().setBalance(new BigDecimal("200")).setVersion(1L);
+
+        when(accountRepository.selectByAccountNo("A001")).thenReturn(account);
+        when(subAccountRepository.selectByAccountNoAndType("A001", BalanceTypeEnum.AVAILABLE.getCode())).thenReturn(availableSub);
+        when(subAccountRepository.selectByAccountNoAndType("A001", BalanceTypeEnum.FROZEN.getCode())).thenReturn(frozenSub);
+        when(freezeIdGenerator.generate()).thenReturn("FRZ20261008000002");
+        doAnswer(invocation -> ((Supplier<?>) invocation.getArgument(3)).get())
+                .when(distributedLockTemplate).execute(anyString(), anyLong(), anyLong(), any());
+        doAnswer(invocation -> ((org.springframework.transaction.support.TransactionCallback<?>) invocation.getArgument(0)).doInTransaction(null))
+                .when(transactionTemplate).execute(any());
+
+        AccountFreezeDetailPO result = freezeDomainService.freezeFund("A001", new BigDecimal("100"), "jiedianqian_cl", null, "测试自定义业务线冻结");
+
+        assertThat(result).isNotNull();
+        assertThat(result.getBusinessCode()).isEqualTo("jiedianqian_cl");
+        assertThat(result.getTradingCode()).isEqualTo(com.kltb.accounting.api.constant.Constants.TRADING_CODE_FREEZE);
+        assertThat(result.getFreezeAmount()).isEqualByComparingTo("100");
+        verify(freezeDetailRepository).insert(any(AccountFreezeDetailPO.class));
+    }
+
+    @Test
     @DisplayName("资金解冻: 冻结记录不存在 -> 抛出 FREEZE_RECORD_NOT_FOUND")
     void unfreezeFund_recordNotFound_shouldThrow() {
         when(freezeDetailRepository.selectByVoucherNo("FRZ001")).thenReturn(null);

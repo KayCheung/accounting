@@ -25,6 +25,26 @@ public final class Constants {
     public static final String SYSTEM_OPERATOR = "system";
 
     /**
+     * 默认通用业务线编码（适用于常规资金冻结、通用非特定业务线场景）
+     */
+    public static final String DEFAULT_BUSINESS_CODE = "GENERAL";
+
+    /**
+     * 资金冻结交易编码
+     */
+    public static final String TRADING_CODE_FREEZE = "FREEZE";
+
+    /**
+     * 资金解冻交易编码
+     */
+    public static final String TRADING_CODE_UNFREEZE = "UNFREEZE";
+
+    /**
+     * 资金扣款交易编码
+     */
+    public static final String TRADING_CODE_DEDUCT = "DEDUCT";
+
+    /**
      * 数据库日期字段 DDL 默认无效起始基准日期 (1970-01-01)
      */
     public static final LocalDate EPOCH_DATE = LocalDate.of(1970, 1, 1);

@@ -43,6 +43,7 @@ public class FreezeApplicationService {
         AccountFreezeDetailPO record = freezeDomainService.freezeFund(
                 request.getAccountNo(),
                 request.getFreezeAmount(),
+                request.getBusinessCode(),
                 request.getExpireTime(),
                 request.getReason());
         return freezeAssembler.toDetailResponse(record);

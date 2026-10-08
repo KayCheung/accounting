@@ -88,6 +88,9 @@ class PersistenceAffectedRowsEnforcementTest {
     @InjectMocks
     private AccountingVoucherRepository accountingVoucherRepository;
 
+    @InjectMocks
+    private FreezeDetailRepository freezeDetailRepository;
+
     // ==================== AccountRepository ====================
 
     @Test
@@ -251,6 +254,35 @@ class PersistenceAffectedRowsEnforcementTest {
         when(voucherMapper.insert(voucher)).thenReturn(0);
 
         assertThatThrownBy(() -> accountingVoucherRepository.insert(voucher))
+                .isInstanceOf(AccountException.class)
+                .satisfies(ex -> assertThat(((AccountException) ex).getResultCode()).isEqualTo(ResultCode.SYSTEM_ERROR));
+    }
+
+    // ==================== FreezeDetailRepository ====================
+
+    @Test
+    @DisplayName("FreezeDetailRepository.insert: 必填字段为null时防御性补全兜底默认值")
+    void freezeDetailRepository_insert_defensiveNullFilling() {
+        AccountFreezeDetailPO detail = new AccountFreezeDetailPO().setVoucherNo("FRZ123");
+        when(accountFreezeDetailMapper.insert(any(AccountFreezeDetailPO.class))).thenReturn(1);
+
+        freezeDetailRepository.insert(detail);
+
+        assertThat(detail.getTxnNo()).isEqualTo("");
+        assertThat(detail.getBusinessCode()).isEqualTo(com.kltb.accounting.api.constant.Constants.DEFAULT_BUSINESS_CODE);
+        assertThat(detail.getTradingCode()).isEqualTo(com.kltb.accounting.api.constant.Constants.TRADING_CODE_FREEZE);
+        assertThat(detail.getTraceNo()).isEqualTo("FRZ123");
+        assertThat(detail.getTraceSeq()).isEqualTo(1);
+        verify(accountFreezeDetailMapper).insert(detail);
+    }
+
+    @Test
+    @DisplayName("FreezeDetailRepository.insert: 受影响行数等于0时抛出 SYSTEM_ERROR")
+    void freezeDetailRepository_insert_zeroAffected_throwsSystemError() {
+        AccountFreezeDetailPO detail = new AccountFreezeDetailPO().setVoucherNo("FRZ123");
+        when(accountFreezeDetailMapper.insert(detail)).thenReturn(0);
+
+        assertThatThrownBy(() -> freezeDetailRepository.insert(detail))
                 .isInstanceOf(AccountException.class)
                 .satisfies(ex -> assertThat(((AccountException) ex).getResultCode()).isEqualTo(ResultCode.SYSTEM_ERROR));
     }

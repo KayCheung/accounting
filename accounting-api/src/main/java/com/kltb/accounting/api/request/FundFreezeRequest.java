@@ -24,6 +24,9 @@ public class FundFreezeRequest {
     @DecimalMin(value = "0.000001", message = "冻结金额必须大于0")
     private BigDecimal freezeAmount;
 
+    @Size(max = 32, message = "业务线编码长度不能超过32")
+    private String businessCode;
+
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime expireTime;
 

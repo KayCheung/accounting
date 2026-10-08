@@ -62,7 +62,7 @@ class FreezeApplicationServiceTest {
         po.setSummary(req.getReason());
         po.setCreateTime(LocalDateTime.now());
 
-        when(freezeDomainService.freezeFund(eq("0012026030100001"), eq(new BigDecimal("1000.00")), any(), eq("风控临时冻结")))
+        when(freezeDomainService.freezeFund(eq("0012026030100001"), eq(new BigDecimal("1000.00")), isNull(), any(), eq("风控临时冻结")))
                 .thenReturn(po);
 
         FreezeDetailResponse res = service.freezeFund(req);
