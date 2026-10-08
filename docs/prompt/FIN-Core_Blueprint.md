@@ -583,6 +583,15 @@
       - 修复 `ReversalDomainServiceTest` 中 `TransactionCallback` 导包路径并补全上下文 Mock；
       - 在 `PostingDomainServiceTest` 中新增多子账户倒序排列（FROZEN 在前、AVAILABLE 在后）防护单测，严密验证冻结子账户零篡改、可用子账户精准扣增；
       - 更新 `AsyncPostingDomainServiceTest` 等测试用例，全工程全量 236 个单元测试 100% 成功通过。
+  → 完成内容（Step 23.4.18 红冲凭证独立 trace_no 与唯一索引防冲治理 BUG261008-007）：
+    - **根因分析**：
+      - 现象：执行凭证红冲时抛出 `DuplicateKeyException: Duplicate entry 'MVA20261008000002-1' for key 'uk_trace_no'`；
+      - 根因：原 `ReversalDomainService.buildReversalVoucher` 直接复用了原凭证的 `traceNo` 和 `traceSeq`。由于表 `t_accounting_voucher` 包含唯一键 `uk_trace_no (trace_no, trace_seq)`，红冲凭证插入时与原凭证冲突；
+    - **修复与落地**：
+      - 在核心编号生成器 `BusinessNoGenerator` 中补齐统一跟踪号生成能力：`generateTraceNo(LocalDate date)` 与 `generateTraceNo(String prefix, LocalDate date)`，基于 Redis 原子递增生成标准格式跟踪号；
+      - 重构 `ReversalDomainService.buildReversalVoucher`，红冲凭证生成全新的跟踪号 `businessNoGenerator.generateTraceNo(accountingDate)`，`traceSeq` 设为 1，消除唯一索引冲突；
+      - 过账引擎 `PostingDomainService` 将该全新跟踪号无缝透传至 `t_account_detail` 与 `t_sub_account_detail`，符合审计与追溯要求；
+      - 更新 `ReversalDomainServiceTest`，补充对红冲凭证独立 `traceNo` 与 `traceSeq` 的单测断言，全工程 236 个单元测试 100% 通过。
   → 待进行业务页面：日切与试算平衡 (`business/eod`)、缓冲记账监控 (`business/buffer-monitor`)
 
 ---

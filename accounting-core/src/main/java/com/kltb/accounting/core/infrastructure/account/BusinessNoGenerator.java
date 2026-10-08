@@ -121,4 +121,33 @@ public class BusinessNoGenerator {
             return "EODTR" + dateStr + String.format("%04d", ThreadLocalRandom.current().nextInt(1000, 9999));
         }
     }
+
+    /**
+     * 生成外部跟踪编号 (TRC + yyyyMMdd + 6位序号)
+     *
+     * @param date 业务会计日期（若为 null 自动使用当天日期）
+     * @return 跟踪编号
+     */
+    public String generateTraceNo(LocalDate date) {
+        return generateTraceNo("TRC", date);
+    }
+
+    /**
+     * 生成指定前缀的外部跟踪编号 (prefix + yyyyMMdd + 6位序号)
+     *
+     * @param prefix 跟踪号前缀（若为空默认 TRC）
+     * @param date   业务会计日期（若为 null 自动使用当天日期）
+     * @return 跟踪编号
+     */
+    public String generateTraceNo(String prefix, LocalDate date) {
+        String cleanPrefix = StrUtil.isNotBlank(prefix) ? prefix.trim().toUpperCase() : "TRC";
+        LocalDate safeDate = (date != null) ? date : LocalDate.now();
+        try {
+            return seqGen.generate(cleanPrefix, safeDate, 6, 25);
+        } catch (Exception e) {
+            log.warn("[单号生成] Redis 生成跟踪号异常，采用动态时间戳降级: prefix={}, error={}", cleanPrefix, e.getMessage());
+            String dateStr = safeDate.format(BASIC_DATE_FMT);
+            return cleanPrefix + dateStr + String.format("%06d", ThreadLocalRandom.current().nextInt(100000, 999999));
+        }
+    }
 }

@@ -271,8 +271,8 @@ public class ReversalDomainService {
         AccountingVoucherPO voucher = new AccountingVoucherPO();
         voucher.setVoucherNo(reversalVoucherNo);
         voucher.setTxnNo(StrUtil.isNotBlank(origVoucher.getTxnNo()) ? origVoucher.getTxnNo() : businessNoGenerator.generateTxnNo(accountingDate));
-        voucher.setTraceNo(origVoucher.getTraceNo());
-        voucher.setTraceSeq(origVoucher.getTraceSeq());
+        voucher.setTraceNo(businessNoGenerator.generateTraceNo(accountingDate));
+        voucher.setTraceSeq(1);
         voucher.setVoucherType(origVoucher.getVoucherType());
         voucher.setPostingType(origVoucher.getPostingType());
         voucher.setBusinessCode(origVoucher.getBusinessCode());

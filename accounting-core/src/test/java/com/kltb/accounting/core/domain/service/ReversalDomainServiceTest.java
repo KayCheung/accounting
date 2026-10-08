@@ -143,7 +143,8 @@ class ReversalDomainServiceTest {
         when(accountingVoucherRepository.selectByVoucherNoSimple("VOU001")).thenReturn(voucher);
         when(accountingVoucherRepository.selectEntriesByVoucherNo("VOU001")).thenReturn(List.of(entry));
         when(accountingVoucherRepository.selectReversalByOrig("VOU001")).thenReturn(List.of());
-        when(seqGen.generate(anyString(), any(), anyInt(), anyInt())).thenReturn("REV20261008000001");
+        when(seqGen.generate(eq("REV"), any(), anyInt(), anyInt())).thenReturn("REV20261008000001");
+        when(seqGen.generate(eq("TRC"), any(), anyInt(), anyInt())).thenReturn("TRC20261008000088");
 
         ReversalDomainService.ReversalResult result = reversalDomainService.executeReversal("VOU001", "OPERATOR_01", "冲销原因");
 
@@ -158,7 +159,9 @@ class ReversalDomainServiceTest {
 
         AccountingVoucherPO reversalVoucher = voucherCaptor.getValue();
         assertThat(reversalVoucher.getTxnNo()).isEqualTo("TXN202610080001");
-        assertThat(reversalVoucher.getTraceNo()).isEqualTo("TRC001");
+        assertThat(reversalVoucher.getTraceNo()).isNotEqualTo(voucher.getTraceNo());
+        assertThat(reversalVoucher.getTraceNo()).isEqualTo("TRC20261008000088");
+        assertThat(reversalVoucher.getTraceSeq()).isEqualTo(1);
         assertThat(reversalVoucher.getTradeType()).isEqualTo(TradeTypeEnum.RED);
 
         List<AccountingVoucherEntryPO> reversalEntries = entriesCaptor.getValue();
@@ -180,6 +183,7 @@ class ReversalDomainServiceTest {
         when(accountingVoucherRepository.selectReversalByOrig("VOU002")).thenReturn(List.of());
         when(seqGen.generate(eq("REV"), any(), anyInt(), anyInt())).thenReturn("REV20261008000002");
         when(seqGen.generate(eq("TXN"), any(), anyInt(), anyInt())).thenReturn("TXN20261008000099");
+        when(seqGen.generate(eq("TRC"), any(), anyInt(), anyInt())).thenReturn("TRC20261008000099");
 
         ReversalDomainService.ReversalResult result = reversalDomainService.executeReversal("VOU002", "OPERATOR_01", "冲销原因");
 
@@ -190,6 +194,9 @@ class ReversalDomainServiceTest {
 
         AccountingVoucherPO reversalVoucher = voucherCaptor.getValue();
         assertThat(reversalVoucher.getTxnNo()).isEqualTo("TXN20261008000099");
+        assertThat(reversalVoucher.getTraceNo()).isNotEqualTo(voucher.getTraceNo());
+        assertThat(reversalVoucher.getTraceNo()).isEqualTo("TRC20261008000099");
+        assertThat(reversalVoucher.getTraceSeq()).isEqualTo(1);
     }
 
     @Test
