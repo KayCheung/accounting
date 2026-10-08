@@ -275,9 +275,9 @@ public class ReversalDomainService {
         voucher.setTraceSeq(1);
         voucher.setVoucherType(origVoucher.getVoucherType());
         voucher.setPostingType(origVoucher.getPostingType());
-        voucher.setBusinessCode(origVoucher.getBusinessCode());
-        voucher.setTradingCode(origVoucher.getTradingCode());
-        voucher.setPayChannel(origVoucher.getPayChannel());
+        voucher.setBusinessCode(StrUtil.isNotBlank(origVoucher.getBusinessCode()) ? origVoucher.getBusinessCode() : "MANUAL");
+        voucher.setTradingCode(StrUtil.isNotBlank(origVoucher.getTradingCode()) ? origVoucher.getTradingCode() : "REVERSAL");
+        voucher.setPayChannel(StrUtil.isNotBlank(origVoucher.getPayChannel()) ? origVoucher.getPayChannel() : "INTERNAL");
         voucher.setTradeType(TradeTypeEnum.RED);
         voucher.setTradeTime(now);
         voucher.setAmount(amount);

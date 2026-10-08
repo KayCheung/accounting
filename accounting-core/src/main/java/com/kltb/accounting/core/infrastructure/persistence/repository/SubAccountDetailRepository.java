@@ -25,6 +25,19 @@ public class SubAccountDetailRepository {
         if (detail == null) {
             throw new AccountException(ResultCode.PARAM_ERROR, "待插入子账户明细对象不能为空");
         }
+        // 防御性补全：数据库 NOT NULL 且无默认值的字段统一防 null 兜底
+        if (detail.getTxnNo() == null) {
+            detail.setTxnNo("");
+        }
+        if (detail.getTraceNo() == null) {
+            detail.setTraceNo(cn.hutool.core.util.StrUtil.isNotBlank(detail.getVoucherNo()) ? detail.getVoucherNo() : "");
+        }
+        if (detail.getTraceSeq() == null) {
+            detail.setTraceSeq(1);
+        }
+        if (detail.getTradingCode() == null) {
+            detail.setTradingCode("");
+        }
         int affected = subAccountDetailMapper.insert(detail);
         if (affected == 0) {
             throw new AccountException(ResultCode.SYSTEM_ERROR,

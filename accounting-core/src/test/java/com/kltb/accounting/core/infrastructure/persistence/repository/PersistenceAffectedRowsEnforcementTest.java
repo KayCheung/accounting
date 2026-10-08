@@ -173,7 +173,39 @@ class PersistenceAffectedRowsEnforcementTest {
                 .satisfies(ex -> assertThat(((AccountException) ex).getResultCode()).isEqualTo(ResultCode.SYSTEM_ERROR));
     }
 
+    @Test
+    @DisplayName("AccountDetailRepository.insert: 必填字段为null时防御性补全兜底默认值")
+    void accountDetailRepository_insert_defensiveNullFilling() {
+        AccountDetailPO detail = new AccountDetailPO().setVoucherNo("VOU123");
+        when(accountDetailMapper.insert(any(AccountDetailPO.class))).thenReturn(1);
+
+        accountDetailRepository.insert(detail);
+
+        assertThat(detail.getTxnNo()).isEqualTo("");
+        assertThat(detail.getTraceNo()).isEqualTo("VOU123");
+        assertThat(detail.getTraceSeq()).isEqualTo(1);
+        assertThat(detail.getTradingCode()).isEqualTo("");
+        assertThat(detail.getBusinessCode()).isEqualTo("");
+        assertThat(detail.getPayChannel()).isEqualTo("");
+        verify(accountDetailMapper).insert(detail);
+    }
+
     // ==================== SubAccountDetailRepository ====================
+
+    @Test
+    @DisplayName("SubAccountDetailRepository.insert: 必填字段为null时防御性补全兜底默认值")
+    void subAccountDetailRepository_insert_defensiveNullFilling() {
+        SubAccountDetailPO detail = new SubAccountDetailPO().setVoucherNo("VOU456");
+        when(subAccountDetailMapper.insert(any(SubAccountDetailPO.class))).thenReturn(1);
+
+        subAccountDetailRepository.insert(detail);
+
+        assertThat(detail.getTxnNo()).isEqualTo("");
+        assertThat(detail.getTraceNo()).isEqualTo("VOU456");
+        assertThat(detail.getTraceSeq()).isEqualTo(1);
+        assertThat(detail.getTradingCode()).isEqualTo("");
+        verify(subAccountDetailMapper).insert(detail);
+    }
 
     @Test
     @DisplayName("SubAccountDetailRepository.insert: 受影响行数等于0时抛出 SYSTEM_ERROR")

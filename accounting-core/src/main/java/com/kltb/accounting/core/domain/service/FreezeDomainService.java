@@ -445,6 +445,10 @@ public class FreezeDomainService {
         SubAccountDetailPO detail = new SubAccountDetailPO();
         detail.setVoucherNo(voucherNo);
         detail.setEntryId(voucherNo + "-" + balanceType.getCode() + "-" + operation);
+        detail.setTxnNo("");
+        detail.setTraceNo(voucherNo);
+        detail.setTraceSeq(1);
+        detail.setTradingCode("FREEZE");
         detail.setAccountNo(accountNo);
         detail.setBalanceType(balanceType);
         detail.setTradeType(TradeTypeEnum.NORMAL);

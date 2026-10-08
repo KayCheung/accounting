@@ -592,6 +592,17 @@
       - 重构 `ReversalDomainService.buildReversalVoucher`，红冲凭证生成全新的跟踪号 `businessNoGenerator.generateTraceNo(accountingDate)`，`traceSeq` 设为 1，消除唯一索引冲突；
       - 过账引擎 `PostingDomainService` 将该全新跟踪号无缝透传至 `t_account_detail` 与 `t_sub_account_detail`，符合审计与追溯要求；
       - 更新 `ReversalDomainServiceTest`，补充对红冲凭证独立 `traceNo` 与 `traceSeq` 的单测断言，全工程 236 个单元测试 100% 通过。
+  → 完成内容（Step 23.4.19 子账户明细与账户明细必填字段防御性补全与防 null 治理 BUG261008-008）：
+    - **根因分析**：
+      - 现象：凭证红冲过账时报 `DataIntegrityViolationException: Field 'txn_no' doesn't have a default value`；
+      - 根因：底层 MySQL 表 `t_sub_account_detail` 与 `t_account_detail` 的 `txn_no`、`trace_no`、`trace_seq`、`trading_code` 为 `NOT NULL` 且无默认值。在手工凭证或红冲等场景中，若上游未传业务订单号 `txn_no`（为 null），MyBatis-Plus 动态 SQL 生成策略会跳过 null 字段，导致 `INSERT INTO` 语句中完全不包含 `txn_no` 列，触发 MySQL 严格模式完整性约束异常；
+    - **修复与闭环**：
+      - **仓储守门防线（Repository Defensive Guard）**：在 `SubAccountDetailRepository.insert` 和 `AccountDetailRepository.insert` 中对数据库 `NOT NULL` 且无默认值的列实施绝对防 null 兜底（`txnNo` 兜底 `""`、`traceNo` 兜底凭证号/`""`、`traceSeq` 兜底 1、`tradingCode` 兜底 `""`、`businessCode` 兜底 `""`、`payChannel` 兜底 `""`）；
+      - **过账与冻结引擎赋值健壮性强化**：
+        - `PostingDomainService` 在构造 `AccountDetailPO` 与 `SubAccountDetailPO` 时对凭证属性进行非空安全提取（`StrUtil.isNotBlank(...)`）；
+        - `ReversalDomainService` 红冲凭证构建赋予合理业务默认码（`businessCode="MANUAL"`、`tradingCode="REVERSAL"`、`payChannel="INTERNAL"`）；
+        - `FreezeDomainService` 补齐子账户明细插入时缺失的 `txnNo`、`traceNo`、`traceSeq`、`tradingCode` 赋值；
+      - **自动化测试保障**：在 `PersistenceAffectedRowsEnforcementTest` 中补充针对仓储层防御性补全兜底机制的断言测试，全模块 234 个测试用例 100% 成功通过。
   → 待进行业务页面：日切与试算平衡 (`business/eod`)、缓冲记账监控 (`business/buffer-monitor`)
 
 ---
