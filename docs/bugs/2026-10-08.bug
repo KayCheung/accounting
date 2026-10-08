@@ -5,3 +5,12 @@ BUG261008-001：科目编辑时无法更新余额方向，但是余额方向可�
 BUG261008-002：PostingDomainService.executeRealTimePosting 实时入账的账务明细 detail txnNo、TraceNo、TraceSeq、TradeTime、TradingCode、BusinessCode、PayChannel、TradeType 等字段都设置为空导致无法保存，并且数据库数据也不完整。
 
 BUG261008-003：AsyncPostingDomainService.consumeAsyncPostingMessage 数据读取与参数校验滞后，在更新账户后才读取凭证和校验参数，未遵循 Fast-Fail 和“读验先于写”原则。已重构为四阶段严格前置校验（只读预检 Fast-Fail → 悲观加锁 → 纯内存试算校验 → 原子落库）。
+
+BUG261008-004：过账成功但主账户与子账户余额未发生变化（明细表有记录，但主/子账户余额未变）。
+根因：
+1. 实体 AccountPO 与 SubAccountPO 的 version 字段标注了 @Version，已配置 MyBatis-Plus 乐观锁拦截器 OptimisticLockerInnerInterceptor 自动进行 CAS 条件匹配（WHERE version = ?）与自增（SET version = version + 1）。
+2. PostingDomainService、AsyncPostingDomainService 与 RollbackDomainService 业务层手动执行了 setVersion(version + 1)，导致插件生成的 CAS 条件为 WHERE version = (原version + 1)，无法匹配数据库原记录，产生 0 行更新；
+3. 仓储层 AccountRepository.updateById 与 SubAccountRepository.updateById 仅返回布尔值，调用方未检查受影响行数，导致更新 0 行被静默吞错并正常提交了事务。
+修复：
+1. 移除 PostingDomainService、AsyncPostingDomainService、RollbackDomainService 中手动自增 version 的代码，由 MyBatis-Plus 乐观锁插件全权自动管理 CAS 条件与自增；
+2. 遵循“真正的成功”原则，强化仓储层（AccountRepository、SubAccountRepository、AccountDetailRepository、SubAccountDetailRepository、AccountingVoucherRepository）写操作的受影响行数校验（affected > 0），更新 0 行显式抛出 OPTIMISTIC_LOCK_FAILED，插入 0 行显式抛出 SYSTEM_ERROR，从底层彻底杜绝静默放行与脏事务提交。

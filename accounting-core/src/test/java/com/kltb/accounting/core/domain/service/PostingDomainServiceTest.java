@@ -127,7 +127,9 @@ class PostingDomainServiceTest {
 
         postingDomainService.executeRealTimePosting(voucher, List.of(entry));
         assertThat(account.getBalance()).isEqualTo(new BigDecimal("6000"));
+        assertThat(account.getVersion()).isEqualTo(0L); // 验证业务层未手动自增 version，交由乐观锁插件处理
         assertThat(subAccount.getBalance()).isEqualTo(new BigDecimal("6000"));
+        assertThat(subAccount.getVersion()).isEqualTo(0L); // 验证业务层未手动自增 version，交由乐观锁插件处理
         verify(accountRepository).updateById(account);
         verify(subAccountRepository).updateById(subAccount);
 

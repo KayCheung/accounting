@@ -176,15 +176,13 @@ public class AsyncPostingDomainService {
             );
         }
 
-        // 9. 更新主账户余额 + version
+        // 9. 更新主账户余额（乐观锁版本号由 MyBatis-Plus 插件自动管理）
         lockedAccount.setBalance(newBalance);
-        lockedAccount.setVersion(lockedAccount.getVersion() != null ? lockedAccount.getVersion() + 1 : 1);
         accountRepository.updateById(lockedAccount);
 
-        // 10. 更新子账户余额 + version
+        // 10. 更新子账户余额（乐观锁版本号由 MyBatis-Plus 插件自动管理）
         if (subAccount != null) {
             subAccount.setBalance(subNewBalance);
-            subAccount.setVersion(subAccount.getVersion() != null ? subAccount.getVersion() + 1 : 1);
             subAccountRepository.updateById(subAccount);
         }
 

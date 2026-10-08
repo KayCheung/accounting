@@ -2,6 +2,7 @@ package com.kltb.accounting.core.infrastructure.persistence.repository;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherAttachmentPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherAuxiliaryPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherEntryPO;
@@ -10,6 +11,7 @@ import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountingVouc
 import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountingVoucherAuxiliaryMapper;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountingVoucherEntryMapper;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountingVoucherMapper;
+import com.kltb.accounting.core.shared.exception.AccountException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
@@ -67,14 +69,29 @@ public class AccountingVoucherRepository {
      * 插入凭证
      */
     public void insert(AccountingVoucherPO voucher) {
-        voucherMapper.insert(voucher);
+        if (voucher == null) {
+            throw new AccountException(ResultCode.PARAM_ERROR, "待插入凭证对象不能为空");
+        }
+        int affected = voucherMapper.insert(voucher);
+        if (affected == 0) {
+            throw new AccountException(ResultCode.SYSTEM_ERROR,
+                    "凭证插入失败: voucherNo=" + voucher.getVoucherNo());
+        }
     }
 
     /**
      * 更新凭证（带乐观锁）
      */
     public boolean updateById(AccountingVoucherPO voucher) {
-        return voucherMapper.updateById(voucher) > 0;
+        if (voucher == null) {
+            throw new AccountException(ResultCode.PARAM_ERROR, "待更新凭证对象不能为空");
+        }
+        int affected = voucherMapper.updateById(voucher);
+        if (affected == 0) {
+            throw new AccountException(ResultCode.OPTIMISTIC_LOCK_FAILED,
+                    "凭证更新失败(乐观锁版本冲突或记录不存在): voucherNo=" + voucher.getVoucherNo());
+        }
+        return true;
     }
 
     /**
@@ -118,14 +135,29 @@ public class AccountingVoucherRepository {
      * 插入分录
      */
     public void insertEntry(AccountingVoucherEntryPO entry) {
-        entryMapper.insert(entry);
+        if (entry == null) {
+            throw new AccountException(ResultCode.PARAM_ERROR, "待插入分录对象不能为空");
+        }
+        int affected = entryMapper.insert(entry);
+        if (affected == 0) {
+            throw new AccountException(ResultCode.SYSTEM_ERROR,
+                    "凭证分录插入失败: entryId=" + entry.getEntryId());
+        }
     }
 
     /**
      * 更新分录（带乐观锁）
      */
     public boolean updateEntryById(AccountingVoucherEntryPO entry) {
-        return entryMapper.updateById(entry) > 0;
+        if (entry == null) {
+            throw new AccountException(ResultCode.PARAM_ERROR, "待更新分录对象不能为空");
+        }
+        int affected = entryMapper.updateById(entry);
+        if (affected == 0) {
+            throw new AccountException(ResultCode.OPTIMISTIC_LOCK_FAILED,
+                    "凭证分录更新失败(乐观锁版本冲突或记录不存在): entryId=" + entry.getEntryId());
+        }
+        return true;
     }
 
     /**

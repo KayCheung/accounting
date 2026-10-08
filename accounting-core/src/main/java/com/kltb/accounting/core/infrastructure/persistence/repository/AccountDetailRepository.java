@@ -1,10 +1,12 @@
 package com.kltb.accounting.core.infrastructure.persistence.repository;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountDetailPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountFreezeDetailPO;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountDetailMapper;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountFreezeDetailMapper;
+import com.kltb.accounting.core.shared.exception.AccountException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
@@ -37,29 +39,54 @@ public class AccountDetailRepository {
      * 插入账户明细
      */
     public void insert(AccountDetailPO detail) {
-        accountDetailMapper.insert(detail);
+        if (detail == null) {
+            throw new AccountException(ResultCode.PARAM_ERROR, "待插入账户明细对象不能为空");
+        }
+        int affected = accountDetailMapper.insert(detail);
+        if (affected == 0) {
+            throw new AccountException(ResultCode.SYSTEM_ERROR,
+                    "写入账户明细失败: entryId=" + detail.getEntryId());
+        }
     }
 
     /**
      * 插入冻结明细
      */
     public void insertFreeze(AccountFreezeDetailPO freezeDetail) {
-        accountFreezeDetailMapper.insert(freezeDetail);
+        if (freezeDetail == null) {
+            throw new AccountException(ResultCode.PARAM_ERROR, "待插入冻结明细对象不能为空");
+        }
+        int affected = accountFreezeDetailMapper.insert(freezeDetail);
+        if (affected == 0) {
+            throw new AccountException(ResultCode.SYSTEM_ERROR,
+                    "写入冻结明细失败: voucherNo=" + freezeDetail.getVoucherNo());
+        }
     }
 
     /**
      * 更新冻结明细（带乐观锁）
      */
     public boolean updateFreezeById(AccountFreezeDetailPO freezeDetail) {
-        return accountFreezeDetailMapper.updateById(freezeDetail) > 0;
+        if (freezeDetail == null) {
+            throw new AccountException(ResultCode.PARAM_ERROR, "待更新冻结明细对象不能为空");
+        }
+        int affected = accountFreezeDetailMapper.updateById(freezeDetail);
+        if (affected == 0) {
+            throw new AccountException(ResultCode.OPTIMISTIC_LOCK_FAILED,
+                    "冻结明细更新失败(乐观锁版本冲突或记录不存在): voucherNo=" + freezeDetail.getVoucherNo());
+        }
+        return true;
     }
 
     /**
      * 批量写入账户明细
      */
     public void batchInsert(List<AccountDetailPO> details) {
+        if (details == null || details.isEmpty()) {
+            return;
+        }
         for (AccountDetailPO detail : details) {
-            accountDetailMapper.insert(detail);
+            insert(detail);
         }
     }
 

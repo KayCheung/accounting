@@ -552,6 +552,15 @@
       - 补全 `AccountScopeEnum.fromCode` 方法；
       - 修复 `AccountStatusChangeDomainServiceTest` 与 `LocalMessageRetryJobTest` 中 mock 缺失与分片上下文传递缺陷；
       - 全模块 Maven Reactor 构建、219 个后端单元测试与前端 `npm run build` 100% 通过。
+  → 完成内容（Step 23.4.14 乐观锁版本号自动托管与仓储层受影响行数强校验治理 BUG261008-004）：
+    - 根因定位与分析：
+      - 现象：过账成功，`t_account_detail` 与 `t_sub_account_detail` 正常生成记录，但 `t_account` 与 `t_sub_account` 的余额未发生任何改变；
+      - 根因 1（业务层手动修改 version）：实体 `AccountPO` 与 `SubAccountPO` 的 `version` 字段标注了 `@Version`，且全局配置了 MyBatis-Plus 乐观锁拦截器 `OptimisticLockerInnerInterceptor`。插件会自动提取实体当前版本号作为 CAS 条件（`WHERE version = ?`）并在更新时自增（`SET version = version + 1`）。业务代码（`PostingDomainService`、`AsyncPostingDomainService`、`RollbackDomainService`）手动执行了 `version = version + 1`，传给插件后 CAS 条件变为 `WHERE version = (原version + 1)`，永远无法匹配数据库记录，导致更新行数恒为 0；
+      - 根因 2（仓储层静默吞错）：`AccountRepository.updateById` 与 `SubAccountRepository.updateById` 仅返回布尔值，调用方未检查返回值且无任何异常抛出，导致更新 0 行被直接放行，事务正常提交，引发严重的账实不符漏洞。
+    - 修复与治理落地：
+      - **彻底剥离业务层 version 干扰**：从 `PostingDomainService`、`AsyncPostingDomainService`、`RollbackDomainService` 中彻底删除手动 `setVersion(...)` 代码，保留实体查出的原生版本号，全权交由 MyBatis-Plus 乐观锁拦截器安全处理 CAS 匹配与版本号自增；
+      - **仓储层“真正的成功”强校验**：严格贯彻金融核心铁律，在 `AccountRepository`、`SubAccountRepository`、`AccountDetailRepository`、`SubAccountDetailRepository`、`AccountingVoucherRepository` 的 `insert`、`updateById`、`updateEntryById` 等写操作中实施受影响行数强校验（`affected > 0`）。更新 0 行显式抛出 `OPTIMISTIC_LOCK_FAILED`，插入 0 行显式抛出 `SYSTEM_ERROR`，严禁任何形式的静默放行；
+      - **自动化测试保障**：新增仓储受影响行数专项单元测试 `PersistenceAffectedRowsEnforcementTest`（11 个用例），并在 `PostingDomainServiceTest` 与 `AsyncPostingDomainServiceTest` 中增加实体版本号未被业务层篡改的断言，全模块 230 个单元测试 100% 通过。
   → 待进行业务页面：日切与试算平衡 (`business/eod`)、缓冲记账监控 (`business/buffer-monitor`)
 
 ---

@@ -254,10 +254,12 @@ class AsyncPostingDomainServiceTest {
 
         // 验证主账户更新
         assertThat(account.getBalance()).isEqualByComparingTo("1500");
+        assertThat(account.getVersion()).isEqualTo(1L); // 验证业务层未手动自增 version
         verify(accountRepository).updateById(account);
 
         // 验证子账户更新
         assertThat(subAccount.getBalance()).isEqualByComparingTo("1500");
+        assertThat(subAccount.getVersion()).isEqualTo(1L); // 验证业务层未手动自增 version
         verify(subAccountRepository).updateById(subAccount);
 
         // 验证明细插入

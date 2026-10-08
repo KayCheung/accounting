@@ -117,9 +117,8 @@ public class PostingDomainService {
                 entry.getChangeDirection()
             );
 
-            // 更新主账户（乐观锁）
+            // 更新主账户（乐观锁版本号由 MyBatis-Plus 插件自动管理，严禁业务层手动自增破坏 CAS 校验）
             account.setBalance(newBalance);
-            account.setVersion(account.getVersion() != null ? account.getVersion() + 1 : 1);
             accountRepository.updateById(account);
 
             // 更新子账户
@@ -136,7 +135,6 @@ public class PostingDomainService {
                     entry.getChangeDirection()
                 );
                 subAccount.setBalance(subNewBalance);
-                subAccount.setVersion(subAccount.getVersion() != null ? subAccount.getVersion() + 1 : 1);
                 subAccountRepository.updateById(subAccount);
             }
 

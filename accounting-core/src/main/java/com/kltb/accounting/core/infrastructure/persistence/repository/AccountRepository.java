@@ -110,14 +110,28 @@ public class AccountRepository {
      * 插入账户
      */
     public void insert(AccountPO account) {
-        accountMapper.insert(account);
+        if (account == null) {
+            throw new AccountException(ResultCode.PARAM_ERROR, "待插入账户对象不能为空");
+        }
+        int affected = accountMapper.insert(account);
+        if (affected == 0) {
+            throw new AccountException(ResultCode.SYSTEM_ERROR, "主账户插入失败: accountNo=" + account.getAccountNo());
+        }
     }
 
     /**
      * 更新账户（带乐观锁）
      */
     public boolean updateById(AccountPO account) {
-        return accountMapper.updateById(account) > 0;
+        if (account == null) {
+            throw new AccountException(ResultCode.PARAM_ERROR, "待更新账户对象不能为空");
+        }
+        int affected = accountMapper.updateById(account);
+        if (affected == 0) {
+            throw new AccountException(ResultCode.OPTIMISTIC_LOCK_FAILED,
+                    "主账户更新失败(乐观锁版本冲突或记录不存在): accountNo=" + account.getAccountNo());
+        }
+        return true;
     }
 
     /**

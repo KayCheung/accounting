@@ -90,14 +90,31 @@ public class SubAccountRepository {
      * 插入子账户
      */
     public void insert(SubAccountPO subAccount) {
-        subAccountMapper.insert(subAccount);
+        if (subAccount == null) {
+            throw new AccountException(ResultCode.PARAM_ERROR, "待插入子账户对象不能为空");
+        }
+        int affected = subAccountMapper.insert(subAccount);
+        if (affected == 0) {
+            throw new AccountException(ResultCode.SYSTEM_ERROR,
+                    "子账户插入失败: accountNo=" + subAccount.getAccountNo()
+                            + ", balanceType=" + subAccount.getBalanceType());
+        }
     }
 
     /**
      * 更新子账户（带乐观锁）
      */
     public boolean updateById(SubAccountPO subAccount) {
-        return subAccountMapper.updateById(subAccount) > 0;
+        if (subAccount == null) {
+            throw new AccountException(ResultCode.PARAM_ERROR, "待更新子账户对象不能为空");
+        }
+        int affected = subAccountMapper.updateById(subAccount);
+        if (affected == 0) {
+            throw new AccountException(ResultCode.OPTIMISTIC_LOCK_FAILED,
+                    "子账户更新失败(乐观锁版本冲突或记录不存在): accountNo=" + subAccount.getAccountNo()
+                            + ", balanceType=" + subAccount.getBalanceType());
+        }
+        return true;
     }
 
     /**
