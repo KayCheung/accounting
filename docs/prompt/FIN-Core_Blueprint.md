@@ -569,6 +569,20 @@
       - `PostingDomainService` 重新注入 `AccountingVoucherRepository`，在实时入账循环中显式调用 `accountingVoucherRepository.updateEntryById(entry)` 将分录更新落库；
       - 增强 `AccountingVoucherRepository.updateEntryById` 支持实体无主键 ID 时降级通过唯一业务单号 `entryId` 更新；
       - `PostingDomainServiceTest` 单元测试增加对分录持久化的 `verify` 校验，全模块全量 230 个单测全部通过。
+  → 完成内容（Step 23.4.16 凭证分录增减方向类型枚举化重构与强类型收敛）：
+    - **领域对象强类型化**：将 `AccountingVoucherEntryPO.changeDirection` 字段由原生 `Integer` 重构为 `ChangeDirectionEnum` 枚举类型，统一与 `AccountDetailPO`、`AccountingVoucherAuxiliaryPO` 等明细实体的类型定义；
+    - **余额与风控计算器支持**：`AccountBalanceCalculator` 与 `AccountValidator` 补充对 `ChangeDirectionEnum` 的重载支持，消除过账与回滚过程中的三元表达式魔法数字转换（`1->INCREASE, 2->DECREASE`）；
+    - **红冲与回滚方向收敛**：规范 `ReversalDomainService` 与 `RollbackDomainService` 中的分录方向翻转逻辑，红冲分录明确将 `changeDirection` 对调为相反方向，实现余额精准冲销；
+    - **测试健全与回归**：更新 `AccountBalanceCalculatorTest`、`PostingDomainServiceTest`、`PostingMonitorDomainServiceTest` 及 `ManualVoucherApplicationServiceTest`，全工程 233 个单元测试全部通过。
+  → 完成内容（Step 23.4.17 过账服务子账户盲取治理与精准可用余额收敛 BUG261008-006）：
+    - **根因与风险消除**：排查并彻底治理 `PostingDomainService`、`AsyncPostingDomainService`、`RollbackDomainService`、`BufferPostingEngineDomainService` 中使用 `subs.get(0)` 盲取子账户的重大隐患，防止在主账户拥有可用（AVAILABLE）和冻结（FROZEN）多子账户时，因数据库检索记录排位变化误触冻结余额；
+    - **精准过滤与明细对齐**：
+      - 统一收敛为按 `BalanceTypeEnum.AVAILABLE` 精准流过滤匹配（`subs.stream().filter(s -> BalanceTypeEnum.AVAILABLE.equals(s.getBalanceType())).findFirst().orElse(null)`）；
+      - 同步将 `SubAccountDetailPO` 的 `balanceType` 对齐子账户实体的原生余额类型，杜绝类型不一致风险；
+    - **自动化测试保障与回归**：
+      - 修复 `ReversalDomainServiceTest` 中 `TransactionCallback` 导包路径并补全上下文 Mock；
+      - 在 `PostingDomainServiceTest` 中新增多子账户倒序排列（FROZEN 在前、AVAILABLE 在后）防护单测，严密验证冻结子账户零篡改、可用子账户精准扣增；
+      - 更新 `AsyncPostingDomainServiceTest` 等测试用例，全工程全量 236 个单元测试 100% 成功通过。
   → 待进行业务页面：日切与试算平衡 (`business/eod`)、缓冲记账监控 (`business/buffer-monitor`)
 
 ---

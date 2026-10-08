@@ -3,6 +3,7 @@ import com.kltb.accounting.core.infrastructure.account.AccountBalanceCalculator;
 
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.AccountStatusEnum;
+import com.kltb.accounting.core.domain.enums.ChangeDirectionEnum;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -65,5 +66,34 @@ class AccountBalanceCalculatorTest {
         BigDecimal result = AccountBalanceCalculator.calculateNewBalance(
                 new BigDecimal("100.123456"), new BigDecimal("0.000001"), 1);
         assertThat(result).isEqualTo(new BigDecimal("100.123457"));
+    }
+
+    @Test
+    @DisplayName("枚举入参: INCREASE 增加余额")
+    void calculate_withEnum_increase_shouldAdd() {
+        BigDecimal result = AccountBalanceCalculator.calculateNewBalance(
+                new BigDecimal("1000"), new BigDecimal("500"), ChangeDirectionEnum.INCREASE);
+        assertThat(result).isEqualTo(new BigDecimal("1500"));
+    }
+
+    @Test
+    @DisplayName("枚举入参: DECREASE 减少余额")
+    void calculate_withEnum_decrease_shouldSubtract() {
+        BigDecimal result = AccountBalanceCalculator.calculateNewBalance(
+                new BigDecimal("1000"), new BigDecimal("300"), ChangeDirectionEnum.DECREASE);
+        assertThat(result).isEqualTo(new BigDecimal("700"));
+    }
+
+    @Test
+    @DisplayName("枚举入参: null 抛出 PARAM_ERROR")
+    void calculate_withEnum_null_shouldThrow() {
+        assertThatThrownBy(() -> AccountBalanceCalculator.calculateNewBalance(
+                new BigDecimal("1000"), new BigDecimal("300"), (ChangeDirectionEnum) null))
+                .isInstanceOf(com.kltb.accounting.core.shared.exception.AccountException.class)
+                .satisfies(ex -> {
+                    com.kltb.accounting.core.shared.exception.AccountException e =
+                            (com.kltb.accounting.core.shared.exception.AccountException) ex;
+                    assertThat(e.getResultCode()).isEqualTo(ResultCode.PARAM_ERROR);
+                });
     }
 }

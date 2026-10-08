@@ -1,6 +1,7 @@
 package com.kltb.accounting.core.domain.service;
 
 import com.kltb.accounting.core.application.service.PostingApplicationService;
+import com.kltb.accounting.core.domain.enums.ChangeDirectionEnum;
 import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
 import com.kltb.accounting.core.domain.enums.VoucherEntryStatusEnum;
 import com.kltb.accounting.core.domain.enums.VoucherStatusEnum;
@@ -166,7 +167,7 @@ class PostingMonitorDomainServiceTest {
         entry.setSummary("test");
         entry.setUnilateral(unilateral);
         entry.setBuffered(buffered);
-        entry.setChangeDirection(changeDir);
+        entry.setChangeDirection(changeDir == 1 ? ChangeDirectionEnum.INCREASE : (changeDir == 2 ? ChangeDirectionEnum.DECREASE : null));
         return entry;
     }
 }

@@ -124,9 +124,11 @@ public class PostingDomainService {
             account.setBalance(newBalance);
             accountRepository.updateById(account);
 
-            // 更新子账户
+            // 更新子账户（常规实时过账精准操作可用余额子账户）
             List<SubAccountPO> subs = subAccountMap.get(entry.getAccountNo());
-            SubAccountPO subAccount = (subs != null && !subs.isEmpty()) ? subs.get(0) : null;
+            SubAccountPO subAccount = (subs != null)
+                ? subs.stream().filter(s -> BalanceTypeEnum.AVAILABLE.equals(s.getBalanceType())).findFirst().orElse(null)
+                : null;
             BigDecimal subOldBalance = BigDecimal.ZERO;
             BigDecimal subNewBalance = BigDecimal.ZERO;
 
@@ -156,9 +158,7 @@ public class PostingDomainService {
                 .setTradeType(voucher.getTradeType())
                 .setTradeTime(voucher.getTradeTime())
                 .setDebitCredit(entry.getDebitCredit())
-                .setChangeDirection(entry.getChangeDirection() == 1
-                    ? ChangeDirectionEnum.INCREASE
-                    : ChangeDirectionEnum.DECREASE)
+                .setChangeDirection(entry.getChangeDirection())
                 .setCurrency(entry.getCurrency())
                 .setPreBalance(oldBalance)
                 .setAmount(entry.getAmount())
@@ -177,14 +177,12 @@ public class PostingDomainService {
                     .setTraceNo(voucher.getTraceNo())
                     .setTraceSeq(voucher.getTraceSeq() != null ? voucher.getTraceSeq() : 0)
                     .setAccountNo(entry.getAccountNo())
-                    .setBalanceType(BalanceTypeEnum.AVAILABLE)
+                    .setBalanceType(subAccount.getBalanceType() != null ? subAccount.getBalanceType() : BalanceTypeEnum.AVAILABLE)
                     .setTradingCode(voucher.getTradingCode())
                     .setTradeType(voucher.getTradeType())
                     .setTradeTime(voucher.getTradeTime())
                     .setDebitCredit(entry.getDebitCredit())
-                    .setChangeDirection(entry.getChangeDirection() == 1
-                        ? ChangeDirectionEnum.INCREASE
-                        : ChangeDirectionEnum.DECREASE)
+                    .setChangeDirection(entry.getChangeDirection())
                     .setCurrency(entry.getCurrency())
                     .setPreBalance(subOldBalance)
                     .setAmount(entry.getAmount())

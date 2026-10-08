@@ -12,8 +12,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -55,6 +57,13 @@ class ReversalDomainServiceTest {
                 postingDomainService,
                 accountingDateCache
         );
+        when(accountingDateCache.getCurrentDate()).thenReturn(LocalDate.of(2026, 10, 8));
+        when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(null);
+        });
+        when(distributedLockTemplate.execute(anyString(), anyLong(), anyLong(), any()))
+                .thenAnswer(invocation -> ((Supplier<?>) invocation.getArgument(3)).get());
     }
 
     @Test
@@ -121,6 +130,66 @@ class ReversalDomainServiceTest {
                     AccountException e = (AccountException) ex;
                     assertThat(e.getResultCode()).isEqualTo(ResultCode.REVERSAL_ALREADY_EXISTS);
                 });
+    }
+
+    @Test
+    @DisplayName("红冲成功: 原凭证包含 txnNo -> 红冲凭证继承并传递至过账引擎")
+    void executeReversal_success_withOrigTxnNo() {
+        AccountingVoucherPO voucher = buildVoucher("VOU001", VoucherStatusEnum.POSTED);
+        voucher.setTxnNo("TXN202610080001");
+        AccountingVoucherEntryPO entry = buildEntry("E1", "VOU001", VoucherEntryStatusEnum.POSTED);
+        entry.setChangeDirection(ChangeDirectionEnum.INCREASE);
+
+        when(accountingVoucherRepository.selectByVoucherNoSimple("VOU001")).thenReturn(voucher);
+        when(accountingVoucherRepository.selectEntriesByVoucherNo("VOU001")).thenReturn(List.of(entry));
+        when(accountingVoucherRepository.selectReversalByOrig("VOU001")).thenReturn(List.of());
+        when(seqGen.generate(anyString(), any(), anyInt(), anyInt())).thenReturn("REV20261008000001");
+
+        ReversalDomainService.ReversalResult result = reversalDomainService.executeReversal("VOU001", "OPERATOR_01", "冲销原因");
+
+        assertThat(result).isNotNull();
+        assertThat(result.getReversalVoucherNo()).isNotBlank();
+
+        ArgumentCaptor<AccountingVoucherPO> voucherCaptor = ArgumentCaptor.forClass(AccountingVoucherPO.class);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<AccountingVoucherEntryPO>> entriesCaptor = ArgumentCaptor.forClass(List.class);
+
+        verify(postingDomainService).executeRealTimePosting(voucherCaptor.capture(), entriesCaptor.capture());
+
+        AccountingVoucherPO reversalVoucher = voucherCaptor.getValue();
+        assertThat(reversalVoucher.getTxnNo()).isEqualTo("TXN202610080001");
+        assertThat(reversalVoucher.getTraceNo()).isEqualTo("TRC001");
+        assertThat(reversalVoucher.getTradeType()).isEqualTo(TradeTypeEnum.RED);
+
+        List<AccountingVoucherEntryPO> reversalEntries = entriesCaptor.getValue();
+        assertThat(reversalEntries).hasSize(1);
+        assertThat(reversalEntries.get(0).getDebitCredit()).isEqualTo(DebitCreditEnum.CREDIT);
+        assertThat(reversalEntries.get(0).getChangeDirection()).isEqualTo(ChangeDirectionEnum.DECREASE);
+    }
+
+    @Test
+    @DisplayName("红冲成功: 原凭证 txnNo 为空 -> 自动生成新 txnNo 并保证过账凭证非空")
+    void executeReversal_success_withBlankTxnNo_shouldGenerateNewTxnNo() {
+        AccountingVoucherPO voucher = buildVoucher("VOU002", VoucherStatusEnum.POSTED);
+        voucher.setTxnNo(""); // 原凭证无 txnNo
+        AccountingVoucherEntryPO entry = buildEntry("E2", "VOU002", VoucherEntryStatusEnum.POSTED);
+        entry.setChangeDirection(ChangeDirectionEnum.DECREASE);
+
+        when(accountingVoucherRepository.selectByVoucherNoSimple("VOU002")).thenReturn(voucher);
+        when(accountingVoucherRepository.selectEntriesByVoucherNo("VOU002")).thenReturn(List.of(entry));
+        when(accountingVoucherRepository.selectReversalByOrig("VOU002")).thenReturn(List.of());
+        when(seqGen.generate(eq("REV"), any(), anyInt(), anyInt())).thenReturn("REV20261008000002");
+        when(seqGen.generate(eq("TXN"), any(), anyInt(), anyInt())).thenReturn("TXN20261008000099");
+
+        ReversalDomainService.ReversalResult result = reversalDomainService.executeReversal("VOU002", "OPERATOR_01", "冲销原因");
+
+        assertThat(result).isNotNull();
+
+        ArgumentCaptor<AccountingVoucherPO> voucherCaptor = ArgumentCaptor.forClass(AccountingVoucherPO.class);
+        verify(postingDomainService).executeRealTimePosting(voucherCaptor.capture(), any());
+
+        AccountingVoucherPO reversalVoucher = voucherCaptor.getValue();
+        assertThat(reversalVoucher.getTxnNo()).isEqualTo("TXN20261008000099");
     }
 
     @Test

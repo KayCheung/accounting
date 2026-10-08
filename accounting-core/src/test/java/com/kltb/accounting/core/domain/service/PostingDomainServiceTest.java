@@ -2,6 +2,8 @@ package com.kltb.accounting.core.domain.service;
 
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.AccountStatusEnum;
+import com.kltb.accounting.core.domain.enums.BalanceTypeEnum;
+import com.kltb.accounting.core.domain.enums.ChangeDirectionEnum;
 import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
 import com.kltb.accounting.core.domain.enums.VoucherEntryStatusEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
@@ -218,7 +220,7 @@ class PostingDomainServiceTest {
         entry.setSubjectCode("1001");
         entry.setDebitCredit(direction == 1 ? DebitCreditEnum.DEBIT : DebitCreditEnum.CREDIT);
         entry.setAmount(amount);
-        entry.setChangeDirection(direction);
+        entry.setChangeDirection(direction == 1 ? ChangeDirectionEnum.INCREASE : ChangeDirectionEnum.DECREASE);
         entry.setCurrency("CNY");
         entry.setSummary("test");
         entry.setStatus(VoucherEntryStatusEnum.PENDING);
@@ -236,9 +238,45 @@ class PostingDomainServiceTest {
         return account;
     }
 
+    @Test
+    @DisplayName("实时过账: 账户包含AVAILABLE与FROZEN多子账户且FROZEN排在首位 -> 必须精准更新AVAILABLE子账户，绝不污染FROZEN")
+    void executeRealTimePosting_withMultiSubAccounts_shouldOnlyUpdateAvailableSubAccount() {
+        AccountingVoucherPO voucher = buildVoucher("VOU2");
+        AccountingVoucherEntryPO entry = buildEntry("E2", "VOU2", "A001", 1, new BigDecimal("1000"));
+        AccountPO account = buildAccount("A001", new BigDecimal("5000"), AccountStatusEnum.NORMAL);
+
+        SubAccountPO frozenSub = new SubAccountPO();
+        frozenSub.setAccountNo("A001");
+        frozenSub.setBalanceType(BalanceTypeEnum.FROZEN);
+        frozenSub.setBalance(new BigDecimal("2000"));
+        frozenSub.setVersion(0L);
+
+        SubAccountPO availSub = new SubAccountPO();
+        availSub.setAccountNo("A001");
+        availSub.setBalanceType(BalanceTypeEnum.AVAILABLE);
+        availSub.setBalance(new BigDecimal("3000"));
+        availSub.setVersion(0L);
+
+        // 模拟数据库返回 FROZEN 在前，AVAILABLE 在后
+        when(accountRepository.selectForUpdateBatch(List.of("A001"))).thenReturn(List.of(account));
+        when(subAccountRepository.selectForUpdate("A001")).thenReturn(List.of(frozenSub, availSub));
+
+        postingDomainService.executeRealTimePosting(voucher, List.of(entry));
+
+        // 验证主账户更新
+        assertThat(account.getBalance()).isEqualTo(new BigDecimal("6000"));
+        // 验证冻结子账户未被篡改
+        assertThat(frozenSub.getBalance()).isEqualTo(new BigDecimal("2000"));
+        verify(subAccountRepository, never()).updateById(frozenSub);
+        // 验证可用子账户精准更新
+        assertThat(availSub.getBalance()).isEqualTo(new BigDecimal("4000"));
+        verify(subAccountRepository).updateById(availSub);
+    }
+
     private SubAccountPO buildSubAccount(String accountNo) {
         SubAccountPO sub = new SubAccountPO();
         sub.setAccountNo(accountNo);
+        sub.setBalanceType(BalanceTypeEnum.AVAILABLE);
         sub.setBalance(new BigDecimal("5000"));
         sub.setVersion(0L);
         return sub;

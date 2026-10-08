@@ -69,7 +69,7 @@ public class AsyncPostingDomainService {
             entry.getAccountNo(),
             entry.getSubjectCode(),
             entry.getDebitCredit() != null ? entry.getDebitCredit().getCode() : null,
-            entry.getChangeDirection(),
+            entry.getChangeDirection() != null ? entry.getChangeDirection().getCode() : null,
             entry.getAmount(),
             entry.getAccountingDate(),
             entry.getCurrency(),
@@ -152,9 +152,11 @@ public class AsyncPostingDomainService {
         AccountPO lockedAccount = lockedAccounts.get(0);
         AccountValidator.validatePostable(lockedAccount, payload.getChangeDirection());
 
-        // 6. 查询子账户并加锁
+        // 6. 查询子账户并加锁（精准过滤可用余额子账户）
         List<SubAccountPO> subs = subAccountRepository.selectForUpdate(payload.getAccountNo());
-        SubAccountPO subAccount = subs != null && !subs.isEmpty() ? subs.get(0) : null;
+        SubAccountPO subAccount = subs != null
+            ? subs.stream().filter(s -> BalanceTypeEnum.AVAILABLE.equals(s.getBalanceType())).findFirst().orElse(null)
+            : null;
 
         // 7. 保存变更前余额
         BigDecimal oldBalance = lockedAccount.getBalance();
@@ -222,7 +224,7 @@ public class AsyncPostingDomainService {
                 .setTraceNo(voucher.getTraceNo())
                 .setTraceSeq(voucher.getTraceSeq() != null ? voucher.getTraceSeq() : 0)
                 .setAccountNo(payload.getAccountNo())
-                .setBalanceType(BalanceTypeEnum.AVAILABLE)
+                .setBalanceType(subAccount.getBalanceType() != null ? subAccount.getBalanceType() : BalanceTypeEnum.AVAILABLE)
                 .setTradingCode(voucher.getTradingCode())
                 .setTradeType(voucher.getTradeType())
                 .setTradeTime(voucher.getTradeTime())

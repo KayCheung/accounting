@@ -470,12 +470,14 @@ public class BufferPostingEngineDomainService {
     }
 
     /**
-     * 查询子账户（悲观锁/普通查询）
+     * 查询子账户（悲观锁/普通查询，精准获取可用余额子账户）
      */
     private SubAccountPO getSubAccount(String accountNo, boolean usePessimistic) {
         if (usePessimistic) {
             List<SubAccountPO> subs = subAccountRepository.selectForUpdate(accountNo);
-            return subs != null && !subs.isEmpty() ? subs.get(0) : null;
+            return (subs != null)
+                ? subs.stream().filter(s -> BalanceTypeEnum.AVAILABLE.equals(s.getBalanceType())).findFirst().orElse(null)
+                : null;
         }
         return subAccountRepository.selectByAccountNoAndType(
                 accountNo, BalanceTypeEnum.AVAILABLE.getCode());

@@ -154,12 +154,16 @@ public class RollbackDomainService {
                     continue;
                 }
 
-                // 查询子账户
+                // 查询子账户（精准获取可用余额子账户）
                 List<SubAccountPO> subs = subAccountRepository.selectForUpdate(entry.getAccountNo());
-                SubAccountPO subAccount = subs != null && !subs.isEmpty() ? subs.get(0) : null;
+                SubAccountPO subAccount = (subs != null)
+                    ? subs.stream().filter(s -> BalanceTypeEnum.AVAILABLE.equals(s.getBalanceType())).findFirst().orElse(null)
+                    : null;
 
                 // 反向计算余额（changeDirection 取反）
-                int reverseChangeDir = entry.getChangeDirection() == 1 ? 2 : 1;
+                ChangeDirectionEnum reverseChangeDir = (entry.getChangeDirection() == ChangeDirectionEnum.INCREASE)
+                        ? ChangeDirectionEnum.DECREASE
+                        : ChangeDirectionEnum.INCREASE;
 
                 // 保存反向操作前的余额（即当前余额，作为 preBalance）
                 BigDecimal reversePreBalance = account.getBalance();
@@ -198,9 +202,7 @@ public class RollbackDomainService {
                     .setTradeType(origVoucher.getTradeType())
                     .setTradeTime(origVoucher.getTradeTime())
                     .setDebitCredit(entry.getDebitCredit())
-                    .setChangeDirection(reverseChangeDir == 1
-                        ? ChangeDirectionEnum.INCREASE
-                        : ChangeDirectionEnum.DECREASE)
+                    .setChangeDirection(reverseChangeDir)
                     .setCurrency(entry.getCurrency())
                     .setPreBalance(reversePreBalance)
                     .setAmount(entry.getAmount())
@@ -218,14 +220,12 @@ public class RollbackDomainService {
                         .setTraceNo(origVoucher.getTraceNo())
                         .setTraceSeq(origVoucher.getTraceSeq())
                         .setAccountNo(entry.getAccountNo())
-                        .setBalanceType(com.kltb.accounting.core.domain.enums.BalanceTypeEnum.AVAILABLE)
+                        .setBalanceType(subAccount.getBalanceType() != null ? subAccount.getBalanceType() : BalanceTypeEnum.AVAILABLE)
                         .setTradingCode(origVoucher.getTradingCode())
                         .setTradeType(origVoucher.getTradeType())
                         .setTradeTime(origVoucher.getTradeTime())
                         .setDebitCredit(entry.getDebitCredit())
-                        .setChangeDirection(reverseChangeDir == 1
-                            ? ChangeDirectionEnum.INCREASE
-                            : ChangeDirectionEnum.DECREASE)
+                        .setChangeDirection(reverseChangeDir)
                         .setCurrency(entry.getCurrency())
                         .setPreBalance(subReversePreBalance)
                         .setAmount(entry.getAmount())

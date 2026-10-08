@@ -4,6 +4,7 @@ package com.kltb.accounting.core.infrastructure.persistence.entity;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.annotation.Version;
+import com.kltb.accounting.core.domain.enums.ChangeDirectionEnum;
 import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
 import com.kltb.accounting.core.domain.enums.VoucherEntryStatusEnum;
 import lombok.Data;
@@ -129,7 +130,7 @@ public class AccountingVoucherEntryPO extends BaseEntity {
      * 增减方向：1-增,2-减（过账时直接使用，由Step10规则推导写入）。
      */
     @TableField("change_direction")
-    private Integer changeDirection;
+    private ChangeDirectionEnum changeDirection;
 
     /**
      * 余额更新时间。

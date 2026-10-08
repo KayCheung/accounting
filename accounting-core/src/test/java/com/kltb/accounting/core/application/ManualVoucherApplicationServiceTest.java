@@ -312,7 +312,7 @@ class ManualVoucherApplicationServiceTest {
         ));
         // 验证分录落库且已正确推导并设置 changeDirection 增减方向
         verify(accountingVoucherRepository, times(2)).insertEntry(argThat(entry ->
-                entry.getChangeDirection() != null && (entry.getChangeDirection() == 1 || entry.getChangeDirection() == 2)
+                entry.getChangeDirection() != null && (entry.getChangeDirection() == ChangeDirectionEnum.INCREASE || entry.getChangeDirection() == ChangeDirectionEnum.DECREASE)
         ));
         // 验证申请表状态回填
         assertEquals(ManualVoucherApplyStatusEnum.BOOKED, po.getApplyStatus());

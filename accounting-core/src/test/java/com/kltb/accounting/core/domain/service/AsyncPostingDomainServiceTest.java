@@ -241,6 +241,7 @@ class AsyncPostingDomainServiceTest {
         AccountPO account = buildAccount("A001", AccountStatusEnum.NORMAL, new BigDecimal("1000"));
         SubAccountPO subAccount = new SubAccountPO();
         subAccount.setAccountNo("A001");
+        subAccount.setBalanceType(BalanceTypeEnum.AVAILABLE);
         subAccount.setBalance(new BigDecimal("1000"));
         subAccount.setVersion(1L);
 

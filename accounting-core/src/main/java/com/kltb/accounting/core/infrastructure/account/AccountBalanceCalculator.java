@@ -1,6 +1,7 @@
 package com.kltb.accounting.core.infrastructure.account;
 
 import com.kltb.accounting.api.constant.ResultCode;
+import com.kltb.accounting.core.domain.enums.ChangeDirectionEnum;
 import com.kltb.accounting.core.shared.exception.AccountException;
 import java.math.BigDecimal;
 
@@ -11,6 +12,25 @@ import java.math.BigDecimal;
 public final class AccountBalanceCalculator {
 
     private AccountBalanceCalculator() {}
+
+    /**
+     * 计算新余额（枚举入参）
+     *
+     * @param currentBalance  当前余额（始终 >= 0）
+     * @param amount          变更金额（始终 > 0）
+     * @param changeDirection 增减方向枚举
+     * @return 新余额
+     * @throws AccountException 当余额不足或增减方向为空时抛出
+     */
+    public static BigDecimal calculateNewBalance(
+        BigDecimal currentBalance,
+        BigDecimal amount,
+        ChangeDirectionEnum changeDirection) {
+        if (changeDirection == null) {
+            throw new AccountException(ResultCode.PARAM_ERROR, "增减方向不能为空");
+        }
+        return calculateNewBalance(currentBalance, amount, changeDirection.getCode());
+    }
 
     /**
      * 计算新余额

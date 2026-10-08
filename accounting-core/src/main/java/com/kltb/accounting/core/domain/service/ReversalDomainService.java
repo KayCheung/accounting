@@ -334,8 +334,13 @@ public class ReversalDomainService {
         entry.setUnilateral(origEntry.getUnilateral());
         entry.setBuffered(origEntry.getBuffered());
 
-        // change_direction 不修改（过账引擎会根据 debit_credit + balance_direction 重新计算）
-        entry.setChangeDirection(origEntry.getChangeDirection());
+        // 红冲对调 change_direction（增→减，减→增），保证反向入账正确冲销原凭证余额
+        if (origEntry.getChangeDirection() != null) {
+            entry.setChangeDirection(
+                    origEntry.getChangeDirection() == ChangeDirectionEnum.INCREASE
+                            ? ChangeDirectionEnum.DECREASE
+                            : ChangeDirectionEnum.INCREASE);
+        }
 
         entry.setBalanceUpdateTime(null);
         entry.setTenantId(TenantContext.get());

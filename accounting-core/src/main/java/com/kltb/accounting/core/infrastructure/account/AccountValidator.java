@@ -2,6 +2,7 @@ package com.kltb.accounting.core.infrastructure.account;
 
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.AccountStatusEnum;
+import com.kltb.accounting.core.domain.enums.ChangeDirectionEnum;
 import com.kltb.accounting.core.domain.enums.RiskStatusEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountPO;
 import com.kltb.accounting.core.shared.exception.AccountException;
@@ -38,7 +39,17 @@ public final class AccountValidator {
      * @param account 账户实体
      */
     public static void validatePostable(AccountPO account) {
-        validatePostable(account, null);
+        validatePostable(account, (ChangeDirectionEnum) null);
+    }
+
+    /**
+     * 校验账户是否可执行过账/记账（主状态 + 增减方向风控状态综合校验）
+     *
+     * @param account         账户实体
+     * @param changeDirection 增减方向枚举（为null时不校验风控方向）
+     */
+    public static void validatePostable(AccountPO account, ChangeDirectionEnum changeDirection) {
+        validatePostable(account, changeDirection != null ? changeDirection.getCode() : null);
     }
 
     /**
