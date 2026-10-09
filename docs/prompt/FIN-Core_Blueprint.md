@@ -750,6 +750,8 @@
       - **单元测试保障与全链路验证**：
         - 更新 `PeriodEndTransferDomainServiceTest`，断言过账引擎与日余额重算调用；
         - 全模块 275 个后端单元与集成测试 100% 通过，前端 `npm run build` 100% 成功。
+      - **Flyway 数据库迁移升级脚本（db/migration）**：
+        - 新增 `V17__add_transfer_rule_cycle_fields.sql`：为表 `t_period_end_transfer_rule` 补充 `auto_transfer`（是否自动结转）与 `period_cycle`（结转周期）列及复合索引 `idx_auto_cycle`，支持幂等执行。
 - [x] **Step 23** · 业务功能页面开发全量交付完毕（100% 完成）
 
 
