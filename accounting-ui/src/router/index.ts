@@ -104,8 +104,32 @@ const routes: RouteRecordRaw[] = [
         name: 'BufferMonitorBusiness',
         component: () => import('@/views/business/buffer-monitor/index.vue'),
         meta: { title: '缓冲记账监控' }
+      },
+      // 报表中心模块路由
+      {
+        path: 'report/balance-sheet',
+        name: 'BalanceSheetReport',
+        component: () => import('@/views/report/balance-sheet/index.vue'),
+        meta: { title: '资产负债表' }
+      },
+      {
+        path: 'report/income-statement',
+        name: 'IncomeStatementReport',
+        component: () => import('@/views/report/income-statement/index.vue'),
+        meta: { title: '利润表' }
+      },
+      {
+        path: 'report/general-ledger',
+        name: 'GeneralLedgerReport',
+        component: () => import('@/views/report/general-ledger/index.vue'),
+        meta: { title: '科目总账' }
+      },
+      {
+        path: 'report/subsidiary-ledger',
+        name: 'SubsidiaryLedgerReport',
+        component: () => import('@/views/report/subsidiary-ledger/index.vue'),
+        meta: { title: '科目明细账' }
       }
-
     ]
   },
   {

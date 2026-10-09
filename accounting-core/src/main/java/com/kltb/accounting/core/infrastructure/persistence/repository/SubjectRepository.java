@@ -267,4 +267,14 @@ public class SubjectRepository {
                 (k1, k2) -> k1
         ));
     }
+
+    /**
+     * 查询所有未删除科目
+     */
+    public List<AccountSubjectPO> selectAllSubjects() {
+        List<AccountSubjectPO> list = subjectMapper.selectList(new LambdaQueryWrapper<AccountSubjectPO>()
+                .eq(AccountSubjectPO::getIsDelete, 0)
+                .orderByAsc(AccountSubjectPO::getSubjectCode));
+        return list != null ? list : Collections.emptyList();
+    }
 }

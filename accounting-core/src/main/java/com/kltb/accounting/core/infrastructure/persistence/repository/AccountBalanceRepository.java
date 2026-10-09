@@ -46,4 +46,31 @@ public class AccountBalanceRepository {
                 .eq(AccountBalancePO::getIsDelete, 0)
                 .last("LIMIT 1"));
     }
+
+    /**
+     * 按会计日期区间查询日余额记录
+     */
+    public List<AccountBalancePO> selectByDateRange(LocalDate startDate, LocalDate endDate) {
+        List<AccountBalancePO> result = accountBalanceMapper.selectList(
+                new LambdaQueryWrapper<AccountBalancePO>()
+                        .ge(AccountBalancePO::getAccountingDate, startDate)
+                        .le(AccountBalancePO::getAccountingDate, endDate)
+                        .eq(AccountBalancePO::getIsDelete, 0)
+                        .orderByAsc(AccountBalancePO::getAccountingDate));
+        return result != null ? result : Collections.emptyList();
+    }
+
+    /**
+     * 按科目和会计日期区间查询日余额记录
+     */
+    public List<AccountBalancePO> selectBySubjectAndDateRange(String subjectCode, LocalDate startDate, LocalDate endDate) {
+        List<AccountBalancePO> result = accountBalanceMapper.selectList(
+                new LambdaQueryWrapper<AccountBalancePO>()
+                        .eq(AccountBalancePO::getSubjectCode, subjectCode)
+                        .ge(AccountBalancePO::getAccountingDate, startDate)
+                        .le(AccountBalancePO::getAccountingDate, endDate)
+                        .eq(AccountBalancePO::getIsDelete, 0)
+                        .orderByAsc(AccountBalancePO::getAccountingDate));
+        return result != null ? result : Collections.emptyList();
+    }
 }

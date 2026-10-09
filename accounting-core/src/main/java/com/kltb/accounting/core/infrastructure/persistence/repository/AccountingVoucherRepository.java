@@ -353,4 +353,23 @@ public class AccountingVoucherRepository {
                 .eq(AccountingVoucherAuxiliaryPO::getVoucherNo, voucherNo)
                 .eq(AccountingVoucherAuxiliaryPO::getIsDelete, 0));
     }
+
+    /**
+     * 按科目编码、可选账户号与会计日期范围查询已过账分录列表（明细账用）
+     */
+    public List<AccountingVoucherEntryPO> selectEntriesBySubjectAndDateRange(String subjectCode, String accountNo,
+                                                                             LocalDate startDate, LocalDate endDate) {
+        LambdaQueryWrapper<AccountingVoucherEntryPO> wrapper = new LambdaQueryWrapper<AccountingVoucherEntryPO>()
+                .eq(AccountingVoucherEntryPO::getSubjectCode, subjectCode)
+                .eq(accountNo != null && !accountNo.isBlank(), AccountingVoucherEntryPO::getAccountNo, accountNo)
+                .ge(startDate != null, AccountingVoucherEntryPO::getAccountingDate, startDate)
+                .le(endDate != null, AccountingVoucherEntryPO::getAccountingDate, endDate)
+                .eq(AccountingVoucherEntryPO::getStatus, 2) // 2-已过账
+                .eq(AccountingVoucherEntryPO::getIsDelete, 0)
+                .orderByAsc(AccountingVoucherEntryPO::getAccountingDate)
+                .orderByAsc(AccountingVoucherEntryPO::getVoucherNo)
+                .orderByAsc(AccountingVoucherEntryPO::getRowNum);
+        List<AccountingVoucherEntryPO> result = entryMapper.selectList(wrapper);
+        return result != null ? result : Collections.emptyList();
+    }
 }

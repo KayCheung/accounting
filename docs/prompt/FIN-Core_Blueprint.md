@@ -758,6 +758,19 @@
       - 修复 `transfer-rule/index.vue`（结转规则管理）、`transfer/index.vue`（结转工作台规则列表与台账审计列表）从 `res.records` 误取导致渲染为空数组的问题，统一为 `res.list || res.records || []`；
     - **后端多维关键字搜索解耦（Repository）**：
       - 修复 `PeriodEndTransferRuleRepository.selectPage` 当 `ruleCode` 与 `ruleName` 传入相同搜索关键字时原 `AND` 关系互斥导致的无数据问题，优化为 `OR` 模糊匹配。
+  → 完成内容（Step 23.5 报表中心模块全量交付）：
+    - **四大标准财务报表落地（accounting-core & accounting-api）**：
+      - **资产负债表（Balance Sheet）**：经典左右账户式对称排版，流动/非流动资产与负债权益归集，内置借贷平衡试算与差额监控；
+      - **利润表（Income Statement）**：多步式利润计算（营业收入、营业成本、营业利润、利润总额、净利润），核心财务 KPI 摘要卡片（营收、利润、毛利率、年累计与同比涨跌）；
+      - **科目总账（General Ledger）**：支持会计期间、科目范围/级次多维检索，汇总期初余额、本期借贷发生额与期末余额，底部借贷试算平衡汇总；
+      - **科目明细账（Subsidiary Ledger）**：三栏式流水账簿（期初行、逐笔分录、本期合计行），遵循绝对值法则动态余额轧差，支持点击凭证号穿透下钻查看凭证详情；
+    - **定期生成与定时任务调度（accounting-job）**：
+      - 新增 `FinancialReportJobHandler`（`@XxlJob("financialReportJob")`），支持日终/月末定时周期生成财务报表并预热快照，提升管理端秒级查询性能；
+    - **前端报表中心视图（accounting-ui）**：
+      - 侧边栏新增“报表中心”一级菜单，落地 4 个标准报表页面及 `src/api/report.ts`；
+      - 全套支持 Excel 导出与打印视图排版；
+    - **质量与回归保障**：
+      - 全量 275 个后端单测与集成测试 100% 通过，前端生产构建 100% 成功。
 - [x] **Step 23** · 业务功能页面开发全量交付完毕（100% 完成）
 
 

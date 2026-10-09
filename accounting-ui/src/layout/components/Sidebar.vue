@@ -55,6 +55,18 @@
           <el-menu-item index="/business/transfer">期末结转管理</el-menu-item>
           <el-menu-item index="/business/buffer-monitor">缓冲记账监控</el-menu-item>
         </el-sub-menu>
+
+        <!-- 报表中心 (财务核心四大报表) -->
+        <el-sub-menu index="/report">
+          <template #title>
+            <el-icon><DataAnalysis /></el-icon>
+            <span>报表中心</span>
+          </template>
+          <el-menu-item index="/report/balance-sheet">资产负债表</el-menu-item>
+          <el-menu-item index="/report/income-statement">利润表</el-menu-item>
+          <el-menu-item index="/report/general-ledger">科目总账</el-menu-item>
+          <el-menu-item index="/report/subsidiary-ledger">科目明细账</el-menu-item>
+        </el-sub-menu>
       </el-menu>
     </el-scrollbar>
   </aside>
@@ -68,7 +80,8 @@ import {
   Odometer,
   Grid,
   Setting,
-  Tickets
+  Tickets,
+  DataAnalysis
 } from '@element-plus/icons-vue'
 import { useAppStore } from '@/stores/app'
 
