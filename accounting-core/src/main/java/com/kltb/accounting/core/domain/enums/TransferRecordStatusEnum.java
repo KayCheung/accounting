@@ -24,4 +24,14 @@ public enum TransferRecordStatusEnum {
     private final Integer code;
 
     private final String desc;
+
+    public static TransferRecordStatusEnum fromCode(Integer code) {
+        if (code == null) return null;
+        for (TransferRecordStatusEnum item : values()) {
+            if (item.getCode().equals(code)) {
+                return item;
+            }
+        }
+        return null;
+    }
 }

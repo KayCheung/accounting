@@ -72,6 +72,14 @@ public enum ResultCode {
     REVERSAL_POSTING_FAILED("2039", "红冲过账失败"),
     REVERSAL_ENTRY_DIRECTION_INVALID("2040", "红冲原分录借贷方向非法"),
 
+    // ==================== 期末结转错误 2041~2049 ====================
+    TRANSFER_RULE_NOT_FOUND("2041", "期末结转规则不存在"),
+    TRANSFER_RULE_CODE_EXISTS("2042", "期末结转规则编码已存在"),
+    TRANSFER_TARGET_SUBJECT_INVALID("2043", "期末结转目标科目不存在或非末级科目"),
+    TRANSFER_SOURCE_SUBJECT_INVALID("2044", "期末结转源科目通配符格式非法"),
+    TRANSFER_RECORD_NOT_FOUND("2045", "期末结转记录不存在"),
+    TRANSFER_NO_MATCHED_BALANCES("2046", "无符合结转条件的余额账户"),
+
     // ==================== 账户专项错误 3xxx ====================
     ACCOUNT_NOT_FOUND("3001", "账户不存在"),
     ACCOUNT_FROZEN("3002", "账户已冻结"),

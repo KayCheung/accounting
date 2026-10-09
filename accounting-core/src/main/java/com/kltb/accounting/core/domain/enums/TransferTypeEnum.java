@@ -24,4 +24,14 @@ public enum TransferTypeEnum {
     private final Integer code;
 
     private final String desc;
+
+    public static TransferTypeEnum fromCode(Integer code) {
+        if (code == null) return null;
+        for (TransferTypeEnum item : values()) {
+            if (item.getCode().equals(code)) {
+                return item;
+            }
+        }
+        return null;
+    }
 }

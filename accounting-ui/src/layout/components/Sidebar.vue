@@ -37,6 +37,7 @@
           <el-menu-item index="/config/template">开户模板</el-menu-item>
           <el-menu-item index="/config/rule">记账规则</el-menu-item>
           <el-menu-item index="/config/buffer-rule">缓冲入账规则</el-menu-item>
+          <el-menu-item index="/config/transfer-rule">期末结转规则</el-menu-item>
         </el-sub-menu>
 
         <!-- 业务管理 (Step 23) -->
@@ -51,6 +52,7 @@
           <el-menu-item index="/business/voucher">记账凭证管理</el-menu-item>
           <el-menu-item index="/business/manual-voucher">手工凭证录入与审核</el-menu-item>
           <el-menu-item index="/business/eod">日切与试算平衡</el-menu-item>
+          <el-menu-item index="/business/transfer">期末结转管理</el-menu-item>
           <el-menu-item index="/business/buffer-monitor">缓冲记账监控</el-menu-item>
         </el-sub-menu>
       </el-menu>

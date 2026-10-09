@@ -3,8 +3,10 @@ package com.kltb.accounting.core.infrastructure.persistence.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.kltb.accounting.core.domain.enums.AvailableStatusEnum;
+import com.kltb.accounting.core.domain.enums.PeriodCycleEnum;
 import com.kltb.accounting.core.domain.enums.TransferDirectionEnum;
 import com.kltb.accounting.core.domain.enums.TransferTypeEnum;
+
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
@@ -49,6 +51,12 @@ public class PeriodEndTransferRulePO extends BaseEntity {
     /** 状态：启用/停用 */
     private AvailableStatusEnum status;
 
+    /** 是否支持自动结转：true-支持自动结转, false-仅手动结转 */
+    private Boolean autoTransfer;
+
+    /** 结转周期：1-每日(DAILY), 2-月末(MONTHLY), 3-季末(QUARTERLY), 4-年末(YEARLY), 5-仅手动(MANUAL) */
+    private PeriodCycleEnum periodCycle;
+
     /** 创建人ID */
     private String createId;
 
@@ -61,3 +69,4 @@ public class PeriodEndTransferRulePO extends BaseEntity {
     /** 更新人姓名 */
     private String updateName;
 }
+

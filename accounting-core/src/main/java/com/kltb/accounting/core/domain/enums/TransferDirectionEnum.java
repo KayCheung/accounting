@@ -23,4 +23,14 @@ public enum TransferDirectionEnum {
     private final Integer code;
 
     private final String desc;
+
+    public static TransferDirectionEnum fromCode(Integer code) {
+        if (code == null) return null;
+        for (TransferDirectionEnum item : values()) {
+            if (item.getCode().equals(code)) {
+                return item;
+            }
+        }
+        return null;
+    }
 }

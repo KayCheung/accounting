@@ -641,7 +641,99 @@
       - API 契约层 `FreezeDetailResponse` 与 `FreezeListResponse` 增加扩展金额字段；
       - 前端 `accounting-ui`（`freeze/index.vue`）表格增加“初始冻结金额”、“已解冻金额”、“已扣款金额”列，详情抽屉与解冻/扣款弹窗同步透出初始金额与剩余可用额度；
       - 全模块 Maven 单元测试 249 个用例 100% 通过，前端 `npm run build` 100% 成功。
-  → 待进行业务页面：日切与试算平衡 (`business/eod`)、缓冲记账监控 (`business/buffer-monitor`)
+  → 完成内容（Step 23.4.23 日切与试算平衡业务页面开发与全链路接口打通）：
+    - **API 契约对接封装**：
+      - 新增 `accounting-ui/src/api/eod.ts`，严格对接后端 `EodController` 的全部 5 大接口（状态查询 `getEodStatus`、手动切日 `switchDate`、前置诊断 `getPreCheckResult`、试算平衡 `getTrialBalance`、手动日切全流程调度 `executeEod`）；
+    - **业务视图与交互看板落地**：
+      - 新增 `accounting-ui/src/views/business/eod/index.vue`，实现工作台与控制台聚合设计：
+        1. 会计日期状态看板：展示全局 T 日会计日期、状态标签机（1~9 映射）、耗时统计与动态生命周期流程步骤条（`el-steps`：瞬间切日→存量清理→余额快照→试算平衡→期末结转→账务归档→完成），失败阶段（`failedStage`）自适应高亮与错误警报提示；
+        2. 前置诊断卡片：展示缓冲明细、在途事务、未过账凭证、在途流水等关键指标项积压计数与通行状态判定；
+        3. 试算平衡借贷看板：借方发生额合计、贷方发生额合计、借贷差额 KPI 对比，不平衡科目告警提示；
+        4. 科目发生额明细表格：支持科目代码复制、借贷发生额与净差额千分位右对齐（`AmountDisplay`）、仅看异常/不平衡科目过滤；
+        5. 对话框与报告抽屉：手动瞬间切日弹窗、手动日切确认弹窗、日切执行结果结构化报告抽屉（含阶段状态、余额生成笔数、快照笔数、期末结转凭证清单）；
+    - **路由与打包闭环**：
+      - 更新 `router/index.ts`，将 `business/eod` 占位路由正式接入 `views/business/eod/index.vue`；
+      - 前端 `npm run build`（`vue-tsc && vite build`）100% 成功通过，零编译警告与类型错误。
+  → 完成内容（Step 23.4.24 缓冲记账监控业务页面开发与全链路接口打通）：
+    - **API 契约对接封装**：
+      - 新增 `accounting-ui/src/api/buffer-monitor.ts`，严格对接后端 `BufferPostingController`（待入账统计 `getBufferPendingStats`、大盘监控 `getBufferMonitor`、手动触发入账 `executeBufferPosting`）；
+    - **业务视图与交互看板落地**：
+      - 新增 `accounting-ui/src/views/business/buffer-monitor/index.vue`，实现大盘监控与风控预警聚合设计：
+        1. 待入账模式存量看板：按 3 种缓冲模式（模式 1 异步逐条、模式 2 日间批量、模式 3 日终批量）展示待入账笔数与发生金额（千分位右对齐），透出最早待入账时间与涉及账户总数；
+        2. 状态分布与入账流转大盘：展示待入账、处理中、成功、失败 4 类状态的笔数、金额及占比分布；
+        3. Running Balance 动账余额校验告警（核心风控）：校验缓冲入账后账户动账余额与实际余额一致性，正常态显示绿色安全通过，异常态红色高亮警示账户、实际余额、推导余额与差额；
+        4. 入账失败 Top 账户排行：展示失败笔数最高的账户清单，支持一键发起该账户的针对性重试入账；
+        5. 对话框与报告抽屉：手动触发缓冲记账弹窗（支持指定模式、指定单账户、批次大小配置）、执行结果报告抽屉（含总数、成功数、失败数、耗时及失败明细清单）；
+    - **路由与打包闭环**：
+      - 更新 `router/index.ts`，将最后一个占位路由 `business/buffer-monitor` 正式接入 `views/business/buffer-monitor/index.vue`；
+      - 前端 `npm run build`（`vue-tsc && vite build`）100% 成功通过，至此前端所有业务页面已全部开发完毕！
+  → 完成内容（Step 23.4.25 日余额与快照批量入库 tenant_id 缺失与拦截器改写旁路缺陷修复 BUG261009-002）：
+    - **根因分析**：
+      - 现象：日切时计算并持久化日余额报错 `java.sql.SQLIntegrityConstraintViolationException: Column 'tenant_id' cannot be null`；
+      - 根因 1（MyBatis-Plus 拦截器 SQL 改写旁路机制）：`TenantLineInnerInterceptor` 基于 JSqlParser 改写 INSERT 语句时，仅在 INSERT 列名列表中**不含** `tenant_id` 时才会自动追加该列和默认值。若 XML 中**已显式声明** `tenant_id` 列（如 `AccountBalanceMapper.xml` 中的 `batchUpsertBalance`），拦截器判定开发者已手动指定，从而**完全跳过该列和值的改写**，放行原始占位符 `#{item.tenantId}`；
+      - 根因 2（业务层 PO 实体构造漏赋租户）：`EodDomainService.calculateDailyBalances` 与 `generateDailySnapshot` 在 `new AccountBalancePO()` 和 `new AccountBalanceSnapshotPO()` 时，仅填充业务金额与科目字段，未调用 `setTenantId(TenantContext.get())`；
+      - 根因 3（MyBatis-Plus MetaObjectHandler 无法自动填充 XML 批量 SQL）：框架公共字段自动填充仅对 BaseMapper 原生方法有效，对自定义 XML `<foreach>` 动态批量语句不触发，导致 JDBC 绑定 null 传入 MySQL 严格约束列报错；
+    - **三层纵深防御修复落地**：
+      - **第一道防线（仓储层守门员）**：在 `AccountBalanceRepository.batchUpsert` 和 `AccountBalanceSnapshotRepository.batchInsert` 中增加防御性遍历，对 `tenantId == null` 的实体自动填入 `TenantContext.get()`（未设置时兜底 `SYSTEM_TENANT = -1`）；
+      - **第二道防线（领域服务显式赋值）**：在 `EodDomainService.calculateDailyBalances` 和 `generateDailySnapshot` 中显式设置 `balance.setTenantId(TenantContext.get())` 与 `snapshot.setTenantId(...)`；
+      - **第三道防线（XML 动态 SQL 兜底）**：在 `AccountBalanceMapper.xml` 与 `AccountBalanceSnapshotMapper.xml` 中将参数绑定升级为 `COALESCE(#{item.tenantId}, -1)`；
+  → 完成内容（Step 23.4.26 日切失败重试状态幂等重置与唯一键 uk_eod_date 冲突修复 BUG261009-003）：
+    - **根因分析**：
+      - 现象：日切因异常失败后，运维或管理人员在前端重新触发日切进行重试时，系统抛出 `java.sql.SQLIntegrityConstraintViolationException: Duplicate entry '2026-10-08-0' for key 'uk_eod_date'`；
+      - 根因 1（数据库唯一性审计约束）：`t_eod_status` 表定义了唯一索引 `uk_eod_date (accounting_date, is_delete)`，保障每一会计日全局仅有一条有效生命周期记录；
+      - 根因 2（失败状态持久化保留）：首次触发日切时创建了初始状态记录，随后因业务/数据/SQL 异常中断后，catch 块将记录状态置为 `9(失败)` 并记录了失败阶段与原因，该记录依然保留在表中；
+      - 根因 3（仓储层缺乏幂等与状态重置能力）：重试时再次调用 `EodStatusRepository.createStatus`，原代码盲目执行 `insert`，未对已有记录进行判断和状态重置，直接撞上 `uk_eod_date` 唯一键冲突；
+    - **修复方案与财务状态机治理落地**：
+      - **仓储层幂等重置改造**：`EodStatusRepository` 新增 `resetStatus(LocalDate accountingDate)`，在重试时原子重置 `eod_status = 1`，并清空 `failed_stage`、`fail_reason`、`archive_date_time` 与执行耗时；
+      - **生命周期安全防重判定**：
+        1. 场景 A（未存在记录）：首次发起日切，正常执行 `insert`；
+        2. 场景 B（已存在记录且 `eod_status == 8` 完成）：严格遵守金融关账规范，抛出 `AccountException(ResultCode.EOD_ALREADY_EXECUTED)`，阻断已完成会计日的重复执行；
+        3. 场景 C（已存在记录且处于非完成/失败状态）：判定为日切重试，调用 `resetStatus` 幂等重置状态，平滑支持重跑；
+        4. 场景 D（高并发插入兜底）：捕获 `DuplicateKeyException`，再次查询并重置，防止并发击穿；
+    - **领域服务与测试健全**：
+      - `EodStatusDomainService` 记录明确的重试审计日志；
+      - 新增 `EodStatusRepositoryTest`（4 个用例）与 `EodStatusDomainServiceTest`（7 个用例），覆盖首次创建、失败重试重置、已完成防重拦截、并发兜底以及失败超长原因截断等全场景；
+  → 完成内容（Step 23.4.27 期末结转规则配置与执行管理全功能闭环交付）：
+    - **业务定位与会计律法核心规范**：
+      - 明确期末结转在金融账务核心生命周期中的定位：损益类科目（收入/费用）期末余额轧差清零并归集至所有者权益科目（本年利润），是日终核算与月度结账的关键节点；
+      - 修复纠正借贷结转方向：对于借方余额（费用类），贷记源科目、借记目标科目；对于贷方余额（收入类），借记源科目、贷记目标科目；确保科目余额严格归零且借贷发生额绝对平衡；
+    - **API 契约层与 DTO 扩充（accounting-api）**：
+      - 请求 DTO：`TransferRuleQueryRequest`, `TransferRuleCreateRequest`, `TransferRuleUpdateRequest`, `TransferRuleStatusRequest`, `TransferExecuteRequest`, `TransferRecordQueryRequest`；
+      - 响应 DTO：`TransferRuleResponse`, `TransferPreviewResponse`, `TransferPreviewRuleItemResponse`, `TransferPreviewEntryItemResponse`, `TransferExecuteBatchResponse`, `TransferExecuteItemResponse`, `TransferRecordResponse`；
+      - 错误码扩展：`ResultCode` 扩充 2041~2046 结转专项错误码（规则不存在、编码已存在、目标科目非末级、借贷不平衡、生成凭证失败、已结转且未开启重试）；
+    - **后端核心层治理与增强（accounting-core）**：
+      - 领域服务 `PeriodEndTransferDomainService`：新增只读试算预览 `previewTransfer`（Dry Run 模式实时扫描科目余额表，借贷轧差计算，不落库、不修改余额）；重构 `executeTransfer` 支持按单规则/多规则执行、`forceRetry` 重试幂等清理与正式凭证出具；
+      - 应用服务 `PeriodEndTransferApplicationService`：落地规则编码唯一性校验、目标科目末级有效性校验（`leaf == true`）、规则 CRUD、批量预览及执行组装；
+      - 仓储层 `PeriodEndTransferRuleRepository` & `PeriodEndTransferRecordRepository`：补充 MyBatis-Plus 分页、状态切换、物理/逻辑控制与历史记录条件查询；
+      - RESTful 控制器：新增 `PeriodEndTransferRuleController` (`/accounting/transfer/rule`) 与 `PeriodEndTransferController` (`/accounting/transfer`)；
+      - 专属单元测试：新增 `PeriodEndTransferDomainServiceTest` (3 个用例) 与 `PeriodEndTransferApplicationServiceTest` (4 个用例)，后端全工程 269 个测试 100% 通过；
+    - **前端视图与向导式工作台交付（accounting-ui）**：
+      - 封装 API 客户端 `accounting-ui/src/api/transfer.ts`，涵盖规则 CRUD、试算预览、执行与审计查询；
+      - 规则配置视图 `accounting-ui/src/views/config/transfer-rule/index.vue`：支持规则编码、类型、执行顺序、通配符/末级科目选择、状态启停、摘要模板变量与快速删除；
+      - 结转工作台视图 `accounting-ui/src/views/business/transfer/index.vue`：
+        1. 顶部全局系统会计日与联机状态监控；
+        2. 向导三部曲：Step 1 参数与规则勾选 -> Step 2 在线试算预览（Dry Run 宏观看板、借贷平衡指示灯、分规则分录展开明细、借贷发生额合计对比）-> Step 3 执行结果卡片与凭证号归档；
+        3. 结转历史审计台账：支持流水号、会计日、凭证号多维检索，支持点击凭证号直接弹窗全景查看凭证档案；
+      - 路由与菜单接入：更新 `router/index.ts` 与 `Sidebar.vue`；
+      - 前端打包验证：`npm run build`（`vue-tsc && vite build`）100% 成功，零编译警告与类型错误。
+  → 完成内容（Step 23.4.28 期末结转规则自动结转配置与周期化执行支持）：
+    - **领域周期模型与触发算法（accounting-core）**：
+      - 新增 `PeriodCycleEnum`（1-每日 DAILY, 2-月末 MONTHLY, 3-季末 QUARTERLY, 4-年末 YEARLY, 5-仅手动 MANUAL）；
+      - 内置日历触发器算法 `isTriggerable(LocalDate accountingDate)`：严格校验每日、月末（`TemporalAdjusters.lastDayOfMonth`）、季末（3/6/9/12 月末）、年末（12 月 31 日）与纯手工规则；
+      - `PeriodEndTransferRulePO` 扩展 `autoTransfer`（是否支持自动结转）与 `periodCycle` 字段；
+    - **规则查询与自动结转过滤**：
+      - `PeriodEndTransferRuleRepository` 扩展 `selectAutoTriggerableRules`，仅筛选出启用、`autoTransfer=true` 且符合当前会计日期周期条件的规则；
+      - `PeriodEndTransferDomainService` 落地 `executeAutoTransfer`（自动结转模式）与 `executeTransfer`（手动特批模式）双轨执行机制，日切 EOD 阶段 6 仅触发自动规则，彻底防止非周期规则误跑；
+    - **独立自动化定时任务（accounting-job）**：
+      - 新增 `PeriodEndTransferJobHandler`（`@XxlJob("periodEndTransferJob")`），支持解耦于日切的独立定时调度（如每月末 23:30 自动跑），具备失败报警与上下文审计能力；
+    - **API 契约与 DTO 增强（accounting-api）**：
+      - `TransferRuleCreateRequest`, `TransferRuleUpdateRequest`, `TransferRuleQueryRequest`, `TransferRuleResponse`, `TransferPreviewRuleItemResponse` 全量对齐 `autoTransfer` 与 `periodCycle`；
+    - **前端配置与向导视图联动（accounting-ui）**：
+      - `src/views/config/transfer-rule/index.vue`：支持自动结转（开关/筛选/列）与结转周期（单选组/筛选/彩色标签）的完整配置与快速启停；
+      - `src/views/business/transfer/index.vue`：步骤 1 增加结转周期多维过滤，表格与预览卡片清晰透出周期与自动结转标识；
+      - 前端 `npm run build` 与后端全模块 275 个单元测试 100% 成功通过。
+- [x] **Step 23** · 业务功能页面开发全量交付完毕（100% 完成）
+
 
 ---
 

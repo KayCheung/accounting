@@ -1,6 +1,9 @@
 package com.kltb.accounting.core.domain.service;
 
 import com.kltb.accounting.api.constant.ResultCode;
+import com.kltb.accounting.api.response.TransferPreviewEntryItemResponse;
+import com.kltb.accounting.api.response.TransferPreviewResponse;
+import com.kltb.accounting.api.response.TransferPreviewRuleItemResponse;
 import com.kltb.accounting.core.domain.enums.*;
 import com.kltb.accounting.core.infrastructure.account.BusinessNoGenerator;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
@@ -16,18 +19,19 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
+import java.util.regex.Pattern;
 
 /**
- * 期末结转领域服务（Step 17 Task 8）
+ * 期末结转领域服务
  * <p>
  * 职责：
- * 1. 按 execute_order 顺序执行启用的结转规则
- * 2. 幂等控制（同日同规则不重复执行）
- * 3. 为匹配余额的账户生成结转凭证
- * 4. 将源账户余额清零
- * 5. 记录结转结果
+ * 1. 结转试算与分录预览（只读不落库）
+ * 2. 按 execute_order 顺序执行启用的结转规则
+ * 3. 幂等控制与强制重试支持
+ * 4. 为匹配余额的账户生成结转凭证
+ * 5. 将源账户余额清零（借贷调整方式）
+ * 6. 记录结转结果
  * </p>
  */
 @Slf4j
@@ -39,19 +43,69 @@ public class PeriodEndTransferDomainService {
     private final PeriodEndTransferRecordRepository recordRepository;
     private final AccountBalanceRepository accountBalanceRepository;
     private final AccountingVoucherRepository voucherRepository;
+    private final SubjectRepository subjectRepository;
     private final TransactionTemplate transactionTemplate;
     private final BusinessNoGenerator businessNoGenerator;
 
     /**
-     * 执行所有启用的期末结转规则
+     * 日切标准阶段调用：执行所有符合自动触发条件的期末结转规则
+     * <p>
+     * 自动结转条件：已启用 + 支持自动结转(autoTransfer=true) + 周期满足(每日/月末/季末/年末)
      *
      * @param accountingDate 会计日期
      * @return 各规则执行结果列表
      */
     public List<TransferRuleResult> executeTransferRules(LocalDate accountingDate) {
-        List<PeriodEndTransferRulePO> rules = ruleRepository.selectEnabledRules(null);
+        return executeAutoTransfer(accountingDate, null);
+    }
+
+    /**
+     * 自动结转执行（日切流水线或定时任务专用）
+     *
+     * @param accountingDate 会计日期
+     * @return 执行结果列表
+     */
+    public List<TransferRuleResult> executeAutoTransfer(LocalDate accountingDate) {
+        return executeAutoTransfer(accountingDate, null);
+    }
+
+    /**
+     * 自动结转执行（日切流水线或定时任务专用）
+     *
+     * @param accountingDate 会计日期
+     * @param transferType   结转类型过滤（选填）
+     * @return 执行结果列表
+     */
+    public List<TransferRuleResult> executeAutoTransfer(LocalDate accountingDate, Integer transferType) {
+        TransferTypeEnum typeEnum = transferType != null ? TransferTypeEnum.fromCode(transferType) : null;
+
+        List<PeriodEndTransferRulePO> rules = ruleRepository.selectAutoTriggerableRules(accountingDate, typeEnum);
+        log.info("[EOD-TRANSFER-AUTO] 扫描自动结转规则: date={}, 自动可触发规则数={}", accountingDate, rules.size());
+        return doExecuteRuleList(rules, accountingDate, false);
+    }
+
+    /**
+     * 手动执行期末结转（支持指定规则、指定类型与强制重试）
+     *
+     * @param accountingDate 会计日期
+     * @param ruleCode       指定规则编码（选填，null 表示执行所有符合条件的启用规则）
+     * @param transferType   结转类型过滤（选填）
+     * @param forceRetry     是否强制重新执行（若已执行成功，true 允许重新执行）
+     * @return 执行结果列表
+     */
+    public List<TransferRuleResult> executeTransfer(LocalDate accountingDate, String ruleCode,
+                                                    Integer transferType, boolean forceRetry) {
+        List<PeriodEndTransferRulePO> rules = resolveRulesToExecute(ruleCode, transferType);
+        return doExecuteRuleList(rules, accountingDate, forceRetry);
+    }
+
+    /**
+     * 批量执行规则清单
+     */
+    private List<TransferRuleResult> doExecuteRuleList(List<PeriodEndTransferRulePO> rules,
+                                                       LocalDate accountingDate, boolean forceRetry) {
         if (rules.isEmpty()) {
-            log.info("[EOD-TRANSFER] 无启用的结转规则: date={}", accountingDate);
+            log.info("[EOD-TRANSFER] 无符合条件的启用结转规则: date={}", accountingDate);
             return List.of();
         }
 
@@ -61,20 +115,27 @@ public class PeriodEndTransferDomainService {
 
         for (PeriodEndTransferRulePO rule : rules) {
             try {
-                // 幂等控制：同日同规则已执行成功则跳过
-                if (recordRepository.existsSuccessfulTransfer(accountingDate, rule.getRuleCode())) {
+                // 幂等控制：同日同规则已执行成功且未要求强制重试时，跳过
+                if (!forceRetry && recordRepository.existsSuccessfulTransfer(accountingDate, rule.getRuleCode())) {
                     log.info("[EOD-TRANSFER] 规则已执行，跳过: ruleCode={}, date={}",
                             rule.getRuleCode(), accountingDate);
                     continue;
                 }
 
-                TransferRuleResult result = executeSingleRule(rule, accountingDate);
-                results.add(result);
-                if (result.getStatus() == TransferRecordStatusEnum.SUCCESS) {
-                    successCount++;
-                } else {
-                    failedCount++;
+                if (forceRetry) {
+                    recordRepository.deleteByDateAndRule(accountingDate, rule.getRuleCode());
                 }
+
+                TransferRuleResult result = executeSingleRule(rule, accountingDate);
+                if (result != null) {
+                    results.add(result);
+                    if (result.getStatus() == TransferRecordStatusEnum.SUCCESS) {
+                        successCount++;
+                    } else {
+                        failedCount++;
+                    }
+                }
+
             } catch (Exception e) {
                 log.error("[EOD-TRANSFER-FAILED] rule={}, reason={}",
                         rule.getRuleCode(), e.getMessage(), e);
@@ -95,6 +156,159 @@ public class PeriodEndTransferDomainService {
     }
 
     /**
+     * 结转试算与分录预览（只读不落库）
+     *
+     * @param accountingDate 会计日期
+     * @param ruleCode       指定规则编码（选填）
+     * @param transferType   结转类型过滤（选填）
+     * @return 试算预览详情
+     */
+    public TransferPreviewResponse previewTransfer(LocalDate accountingDate, String ruleCode, Integer transferType) {
+        List<PeriodEndTransferRulePO> rules = resolveRulesToExecute(ruleCode, transferType);
+        List<AccountBalancePO> allBalances = accountBalanceRepository.selectByDate(accountingDate);
+
+        TransferPreviewResponse response = new TransferPreviewResponse();
+        response.setAccountingDate(accountingDate);
+        response.setTotalRules(rules.size());
+
+        List<TransferPreviewRuleItemResponse> rulePreviews = new ArrayList<>();
+        BigDecimal grandTotalAmount = BigDecimal.ZERO;
+        int activeRules = 0;
+        boolean allBalanced = true;
+
+        for (PeriodEndTransferRulePO rule : rules) {
+            Pattern pattern = wildcardToPattern(rule.getSourceSubjectCode());
+            List<AccountBalancePO> matchedBalances = allBalances.stream()
+                    .filter(b -> b.getSubjectCode() != null && pattern.matcher(b.getSubjectCode()).matches())
+                    .filter(b -> b.getEndBalance() != null && b.getEndBalance().compareTo(BigDecimal.ZERO) != 0)
+                    .toList();
+
+            TransferPreviewRuleItemResponse ruleItem = new TransferPreviewRuleItemResponse();
+            ruleItem.setRuleCode(rule.getRuleCode());
+            ruleItem.setRuleName(rule.getRuleName());
+            ruleItem.setTransferType(rule.getTransferType() != null ? rule.getTransferType().getCode() : null);
+            ruleItem.setTransferTypeDesc(rule.getTransferType() != null ? rule.getTransferType().getDesc() : "");
+            ruleItem.setSourceSubjectCode(rule.getSourceSubjectCode());
+            ruleItem.setTargetSubjectCode(rule.getTargetSubjectCode());
+            ruleItem.setAutoTransfer(rule.getAutoTransfer());
+            ruleItem.setPeriodCycle(rule.getPeriodCycle() != null ? rule.getPeriodCycle().getCode() : null);
+            ruleItem.setPeriodCycleDesc(rule.getPeriodCycle() != null ? rule.getPeriodCycle().getDesc() : "");
+
+            AccountSubjectPO targetSubject = subjectRepository.selectByCode(rule.getTargetSubjectCode());
+            ruleItem.setTargetSubjectName(targetSubject != null ? targetSubject.getSubjectName() : "");
+
+            ruleItem.setMatchedAccountCount(matchedBalances.size());
+
+
+            BigDecimal ruleTotalAmount = BigDecimal.ZERO;
+            BigDecimal totalDebit = BigDecimal.ZERO;
+            BigDecimal totalCredit = BigDecimal.ZERO;
+            List<TransferPreviewEntryItemResponse> entries = new ArrayList<>();
+
+            boolean isDebitToCredit = rule.getTransferDirection() == TransferDirectionEnum.DEBIT_TO_CREDIT;
+            int rowNum = 0;
+
+            for (AccountBalancePO balance : matchedBalances) {
+                BigDecimal absAmount = balance.getEndBalance().abs();
+                ruleTotalAmount = ruleTotalAmount.add(absAmount);
+
+                AccountSubjectPO srcSubject = subjectRepository.selectByCode(balance.getSubjectCode());
+                String srcSubjectName = srcSubject != null ? srcSubject.getSubjectName() : "";
+
+                // 源科目分录行：借方余额转出记贷方，贷方余额转出记借方
+                rowNum++;
+                TransferPreviewEntryItemResponse srcEntry = new TransferPreviewEntryItemResponse();
+                srcEntry.setRowNum(rowNum);
+                srcEntry.setSubjectCode(balance.getSubjectCode());
+                srcEntry.setSubjectName(srcSubjectName);
+                srcEntry.setAccountNo(balance.getAccountNo());
+                srcEntry.setCurrency(balance.getCurrency());
+                srcEntry.setSummary(rule.getRuleName());
+
+                if (isDebitToCredit) {
+                    srcEntry.setDebitCredit(DebitCreditEnum.CREDIT.getCode());
+                    srcEntry.setDebitCreditDesc("贷");
+                    srcEntry.setDebitAmount(null);
+                    srcEntry.setCreditAmount(absAmount);
+                    totalCredit = totalCredit.add(absAmount);
+                } else {
+                    srcEntry.setDebitCredit(DebitCreditEnum.DEBIT.getCode());
+                    srcEntry.setDebitCreditDesc("借");
+                    srcEntry.setDebitAmount(absAmount);
+                    srcEntry.setCreditAmount(null);
+                    totalDebit = totalDebit.add(absAmount);
+                }
+                entries.add(srcEntry);
+
+                // 目标科目分录行
+                rowNum++;
+                TransferPreviewEntryItemResponse targetEntry = new TransferPreviewEntryItemResponse();
+                targetEntry.setRowNum(rowNum);
+                targetEntry.setSubjectCode(rule.getTargetSubjectCode());
+                targetEntry.setSubjectName(ruleItem.getTargetSubjectName());
+                targetEntry.setAccountNo("-");
+                targetEntry.setCurrency(balance.getCurrency());
+                targetEntry.setSummary(rule.getRuleName());
+
+                if (isDebitToCredit) {
+                    targetEntry.setDebitCredit(DebitCreditEnum.DEBIT.getCode());
+                    targetEntry.setDebitCreditDesc("借");
+                    targetEntry.setDebitAmount(absAmount);
+                    targetEntry.setCreditAmount(null);
+                    totalDebit = totalDebit.add(absAmount);
+                } else {
+                    targetEntry.setDebitCredit(DebitCreditEnum.CREDIT.getCode());
+                    targetEntry.setDebitCreditDesc("贷");
+                    targetEntry.setDebitAmount(null);
+                    targetEntry.setCreditAmount(absAmount);
+                    totalCredit = totalCredit.add(absAmount);
+                }
+                entries.add(targetEntry);
+            }
+
+            ruleItem.setTotalAmount(ruleTotalAmount);
+            ruleItem.setTotalDebitAmount(totalDebit);
+            ruleItem.setTotalCreditAmount(totalCredit);
+            ruleItem.setBalanced(totalDebit.compareTo(totalCredit) == 0);
+            ruleItem.setEntries(entries);
+
+            if (!ruleItem.isBalanced()) {
+                allBalanced = false;
+            }
+
+            if (ruleTotalAmount.compareTo(BigDecimal.ZERO) > 0) {
+                activeRules++;
+                grandTotalAmount = grandTotalAmount.add(ruleTotalAmount);
+            }
+
+            rulePreviews.add(ruleItem);
+        }
+
+        response.setActiveRules(activeRules);
+        response.setGrandTotalAmount(grandTotalAmount);
+        response.setAllBalanced(allBalanced);
+        response.setRulePreviews(rulePreviews);
+
+        return response;
+    }
+
+    /**
+     * 解析待执行的规则列表
+     */
+    private List<PeriodEndTransferRulePO> resolveRulesToExecute(String ruleCode, Integer transferType) {
+        if (ruleCode != null && !ruleCode.isBlank()) {
+            PeriodEndTransferRulePO rule = ruleRepository.findByRuleCode(ruleCode);
+            if (rule != null && rule.getStatus() == AvailableStatusEnum.ENABLED) {
+                return List.of(rule);
+            }
+            return List.of();
+        }
+
+        TransferTypeEnum typeEnum = transferType != null ? TransferTypeEnum.fromCode(transferType) : null;
+        return ruleRepository.selectEnabledRules(typeEnum);
+    }
+
+    /**
      * 执行单条结转规则
      */
     private TransferRuleResult executeSingleRule(PeriodEndTransferRulePO rule, LocalDate accountingDate) {
@@ -103,7 +317,7 @@ public class PeriodEndTransferDomainService {
         return transactionTemplate.execute(status -> {
             try {
                 // 1. 解析通配符模式
-                java.util.regex.Pattern pattern = wildcardToPattern(rule.getSourceSubjectCode());
+                Pattern pattern = wildcardToPattern(rule.getSourceSubjectCode());
 
                 // 2. 查找匹配余额账户
                 List<AccountBalancePO> balances = accountBalanceRepository.selectByDate(accountingDate);
@@ -128,7 +342,7 @@ public class PeriodEndTransferDomainService {
                     totalAmount = totalAmount.add(balance.getEndBalance().abs());
                 }
 
-                // 4. 生成结转凭证
+                // 4. 生成结转凭证（严密分录借贷与平衡校验）
                 String voucherNo = generateTransferVoucher(
                         rule, accountingDate, transferNo, matchedBalances);
 
@@ -137,12 +351,10 @@ public class PeriodEndTransferDomainService {
                     BigDecimal absAmount = balance.getEndBalance().abs();
                     BalanceDirectionEnum direction = balance.getBalanceDirection();
                     if (direction == BalanceDirectionEnum.DEBIT) {
-                        // 借方余额账户：结转金额计入贷方发生额
-                        // end_balance = begin + debit - credit，增加 credit 使 end_balance = 0
+                        // 借方余额账户：结转金额计入贷方发生额，使借贷轧差 end_balance = 0
                         balance.setCreditAmount(balance.getCreditAmount().add(absAmount));
                     } else {
-                        // 贷方余额账户：结转金额计入借方发生额
-                        // end_balance = begin + credit - debit，增加 debit 使 end_balance = 0
+                        // 贷方余额账户：结转金额计入借方发生额，使借贷轧差 end_balance = 0
                         balance.setDebitAmount(balance.getDebitAmount().add(absAmount));
                     }
                     balance.setEndBalance(BigDecimal.ZERO);
@@ -210,7 +422,6 @@ public class PeriodEndTransferDomainService {
 
         boolean isDebitToCredit = rule.getTransferDirection() == TransferDirectionEnum.DEBIT_TO_CREDIT;
 
-        // 借贷发生额累计（用于末尾平衡校验）
         BigDecimal totalDebit = BigDecimal.ZERO;
         BigDecimal totalCredit = BigDecimal.ZERO;
 
@@ -218,7 +429,7 @@ public class PeriodEndTransferDomainService {
         for (AccountBalancePO balance : balances) {
             BigDecimal absAmount = balance.getEndBalance().abs();
 
-            // 源科目分录
+            // 源科目分录：借方余额转出记贷方，贷方余额转出记借方
             rowNum++;
             AccountingVoucherEntryPO entry = new AccountingVoucherEntryPO();
             entry.setVoucherNo(voucherNo);
@@ -231,14 +442,13 @@ public class PeriodEndTransferDomainService {
             entry.setSummary(rule.getRuleName());
             entry.setStatus(VoucherEntryStatusEnum.POSTED);
             entry.setAccountingDate(accountingDate);
-            entry.setDebitCredit(isDebitToCredit ? DebitCreditEnum.DEBIT : DebitCreditEnum.CREDIT);
+            entry.setDebitCredit(isDebitToCredit ? DebitCreditEnum.CREDIT : DebitCreditEnum.DEBIT);
             voucherRepository.insertEntry(entry);
 
-            // 累计借贷发生额
             if (isDebitToCredit) {
-                totalDebit = totalDebit.add(absAmount);
-            } else {
                 totalCredit = totalCredit.add(absAmount);
+            } else {
+                totalDebit = totalDebit.add(absAmount);
             }
 
             // 目标科目分录
@@ -254,14 +464,13 @@ public class PeriodEndTransferDomainService {
             targetEntry.setSummary(rule.getRuleName());
             targetEntry.setStatus(VoucherEntryStatusEnum.POSTED);
             targetEntry.setAccountingDate(accountingDate);
-            targetEntry.setDebitCredit(isDebitToCredit ? DebitCreditEnum.CREDIT : DebitCreditEnum.DEBIT);
+            targetEntry.setDebitCredit(isDebitToCredit ? DebitCreditEnum.DEBIT : DebitCreditEnum.CREDIT);
             voucherRepository.insertEntry(targetEntry);
 
-            // 累计借贷发生额
             if (isDebitToCredit) {
-                totalCredit = totalCredit.add(absAmount);
-            } else {
                 totalDebit = totalDebit.add(absAmount);
+            } else {
+                totalCredit = totalCredit.add(absAmount);
             }
         }
 
@@ -276,17 +485,13 @@ public class PeriodEndTransferDomainService {
 
     /**
      * 将通配符模式转为 Java 正则表达式
-     * <p>
-     * 例: "6*" -> "^6.*", "6001" -> "^6001$", "6*1*" -> "^6.*1.*"
-     * 比简单前缀匹配更灵活，支持多级通配符
-     * </p>
      */
-    private java.util.regex.Pattern wildcardToPattern(String wildcard) {
+    private Pattern wildcardToPattern(String wildcard) {
         if (wildcard == null || wildcard.isEmpty()) {
-            return java.util.regex.Pattern.compile(".*");
+            return Pattern.compile(".*");
         }
         String regex = wildcard.replace("*", ".*");
-        return java.util.regex.Pattern.compile("^" + regex + "$");
+        return Pattern.compile("^" + regex + "$");
     }
 
     /**

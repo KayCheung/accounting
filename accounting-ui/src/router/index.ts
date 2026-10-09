@@ -50,6 +50,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/config/buffer-rule/index.vue'),
         meta: { title: '缓冲规则配置' }
       },
+      {
+        path: 'config/transfer-rule',
+        name: 'TransferRuleConfig',
+        component: () => import('@/views/config/transfer-rule/index.vue'),
+        meta: { title: '期末结转规则' }
+      },
       // 业务功能模块路由 (Step 23)
       {
         path: 'business/account',
@@ -84,15 +90,22 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'business/eod',
         name: 'EodBusiness',
-        component: () => import('@/views/placeholder.vue'),
+        component: () => import('@/views/business/eod/index.vue'),
         meta: { title: '日切与试算平衡' }
+      },
+      {
+        path: 'business/transfer',
+        name: 'TransferBusiness',
+        component: () => import('@/views/business/transfer/index.vue'),
+        meta: { title: '期末结转管理' }
       },
       {
         path: 'business/buffer-monitor',
         name: 'BufferMonitorBusiness',
-        component: () => import('@/views/placeholder.vue'),
+        component: () => import('@/views/business/buffer-monitor/index.vue'),
         meta: { title: '缓冲记账监控' }
       }
+
     ]
   },
   {
