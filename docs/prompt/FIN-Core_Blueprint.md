@@ -731,8 +731,27 @@
     - **前端配置与向导视图联动（accounting-ui）**：
       - `src/views/config/transfer-rule/index.vue`：支持自动结转（开关/筛选/列）与结转周期（单选组/筛选/彩色标签）的完整配置与快速启停；
       - `src/views/business/transfer/index.vue`：步骤 1 增加结转周期多维过滤，表格与预览卡片清晰透出周期与自动结转标识；
-      - 前端 `npm run build` 与后端全模块 275 个单元测试 100% 成功通过。
+  → 完成内容（Step 23.4.29 期末结转真实分户过账与日余额自然轧平闭环改造 BUG261009-004）：
+    - **根因剖析与架构缺陷**：
+      - 现象：结转执行仅在内存和凭证表生成了记录，并将凭证直接写死为 `POSTED`，强行将源科目 `t_account_balance.end_balance` 置为 0；
+      - 缺陷 1（总账与分户账脱节）：未调用过账引擎 `PostingDomainService`，导致分户主账户 `t_account` 与子账户 `t_sub_account` 余额未发生任何变动，且 `t_account_detail` 缺失结转流水，日终总分核对（`GL vs Sub-ledger`）必定报错；
+      - 缺陷 2（日余额覆盖与目标科目丢失）：原逻辑仅强改源科目 `t_account_balance`，未向目标科目（如 410301 本年利润）写入借贷发生额与期末余额，破坏了总账借贷试算平衡；且下次日切重跑会覆盖手工置零的日余额；
+    - **金融级标准闭环落地**：
+      - **分户账户智能解析与自愈开户**：
+        - `PeriodEndTransferDomainService` 引入 `AccountRepository` 与 `AccountOpeningDomainService`；
+        - 转出方源账户：支持按 `account_no` 查询实体账户，或通过科目匹配/自愈开户；
+        - 转入方目标账户：优先解析目标科目下的系统内部账户（`owner_id = 'INNER'`），若不存在则自动开立内部账户（如 `INNER410301001`）；
+      - **凭证规范聚合与真实过账驱动**：
+        - 结转凭证完整填充交易号 `txnNo` 与单号；源分录与目标分录填充真实 `accountNo`、增减方向 `changeDirection`、借贷方向 `debitCredit`，初始均为 `PENDING`；
+        - 调用 `PostingDomainService.executeRealTimePosting` 执行真实分户过账：按 `account_no` 升序锁定账户，计算主账户与可用子账户新余额，落库 `t_account`、`t_sub_account`，写入 `t_account_detail` 与 `t_sub_account_detail` 流水，分录与凭证状态联动转为 `POSTED`；
+      - **日余额自然轧平与快照联动**：
+        - 过账完成后，驱动 `EodDomainService.calculateDailyBalances` 基于全天已过账分录统一汇总借贷发生额与期末余额：源科目借贷自然轧平为 0，目标科目发生额与期末余额自然真实增加，借贷 100% 试算平衡；
+        - `EodApplicationService` 在期末结转实际执行后，同步刷新日终余额快照 `t_account_balance_snapshot`；
+      - **单元测试保障与全链路验证**：
+        - 更新 `PeriodEndTransferDomainServiceTest`，断言过账引擎与日余额重算调用；
+        - 全模块 275 个后端单元与集成测试 100% 通过，前端 `npm run build` 100% 成功。
 - [x] **Step 23** · 业务功能页面开发全量交付完毕（100% 完成）
+
 
 
 ---

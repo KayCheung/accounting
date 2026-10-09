@@ -1,5 +1,8 @@
 package com.kltb.accounting.core.domain.service;
 
+import cn.hutool.core.util.StrUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.kltb.accounting.api.constant.Constants;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.api.response.TransferPreviewEntryItemResponse;
 import com.kltb.accounting.api.response.TransferPreviewResponse;
@@ -8,6 +11,7 @@ import com.kltb.accounting.core.domain.enums.*;
 import com.kltb.accounting.core.infrastructure.account.BusinessNoGenerator;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
 import com.kltb.accounting.core.infrastructure.persistence.repository.*;
+import com.kltb.accounting.core.shared.context.TenantContext;
 import com.kltb.accounting.core.shared.exception.AccountException;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -30,8 +34,9 @@ import java.util.regex.Pattern;
  * 2. 按 execute_order 顺序执行启用的结转规则
  * 3. 幂等控制与强制重试支持
  * 4. 为匹配余额的账户生成结转凭证
- * 5. 将源账户余额清零（借贷调整方式）
- * 6. 记录结转结果
+ * 5. 驱动过账引擎 PostingDomainService 执行真实分户过账（扣减源账户、增加目标账户、写入明细账流水）
+ * 6. 联动 EodDomainService 自然轧平并刷新日余额与快照
+ * 7. 记录结转结果
  * </p>
  */
 @Slf4j
@@ -46,6 +51,12 @@ public class PeriodEndTransferDomainService {
     private final SubjectRepository subjectRepository;
     private final TransactionTemplate transactionTemplate;
     private final BusinessNoGenerator businessNoGenerator;
+
+    private final AccountRepository accountRepository;
+    private final AccountOpeningDomainService accountOpeningDomainService;
+    private final PostingDomainService postingDomainService;
+    private final EodDomainService eodDomainService;
+
 
     /**
      * 日切标准阶段调用：执行所有符合自动触发条件的期末结转规则
@@ -165,7 +176,6 @@ public class PeriodEndTransferDomainService {
      */
     public TransferPreviewResponse previewTransfer(LocalDate accountingDate, String ruleCode, Integer transferType) {
         List<PeriodEndTransferRulePO> rules = resolveRulesToExecute(ruleCode, transferType);
-        List<AccountBalancePO> allBalances = accountBalanceRepository.selectByDate(accountingDate);
 
         TransferPreviewResponse response = new TransferPreviewResponse();
         response.setAccountingDate(accountingDate);
@@ -177,11 +187,7 @@ public class PeriodEndTransferDomainService {
         boolean allBalanced = true;
 
         for (PeriodEndTransferRulePO rule : rules) {
-            Pattern pattern = wildcardToPattern(rule.getSourceSubjectCode());
-            List<AccountBalancePO> matchedBalances = allBalances.stream()
-                    .filter(b -> b.getSubjectCode() != null && pattern.matcher(b.getSubjectCode()).matches())
-                    .filter(b -> b.getEndBalance() != null && b.getEndBalance().compareTo(BigDecimal.ZERO) != 0)
-                    .toList();
+            List<AccountBalancePO> matchedBalances = findPendingBalances(rule, accountingDate);
 
             TransferPreviewRuleItemResponse ruleItem = new TransferPreviewRuleItemResponse();
             ruleItem.setRuleCode(rule.getRuleCode());
@@ -196,9 +202,15 @@ public class PeriodEndTransferDomainService {
 
             AccountSubjectPO targetSubject = subjectRepository.selectByCode(rule.getTargetSubjectCode());
             ruleItem.setTargetSubjectName(targetSubject != null ? targetSubject.getSubjectName() : "");
-
             ruleItem.setMatchedAccountCount(matchedBalances.size());
 
+            // 预解析目标账户编号展示
+            AccountPO targetAccount = null;
+            try {
+                targetAccount = resolveTargetAccount(rule.getTargetSubjectCode());
+            } catch (Exception ignored) {
+            }
+            String targetAccountNo = targetAccount != null ? targetAccount.getAccountNo() : "系统自动开立";
 
             BigDecimal ruleTotalAmount = BigDecimal.ZERO;
             BigDecimal totalDebit = BigDecimal.ZERO;
@@ -221,7 +233,7 @@ public class PeriodEndTransferDomainService {
                 srcEntry.setRowNum(rowNum);
                 srcEntry.setSubjectCode(balance.getSubjectCode());
                 srcEntry.setSubjectName(srcSubjectName);
-                srcEntry.setAccountNo(balance.getAccountNo());
+                srcEntry.setAccountNo(StrUtil.isNotBlank(balance.getAccountNo()) ? balance.getAccountNo() : "待绑定账户");
                 srcEntry.setCurrency(balance.getCurrency());
                 srcEntry.setSummary(rule.getRuleName());
 
@@ -239,29 +251,31 @@ public class PeriodEndTransferDomainService {
                     totalDebit = totalDebit.add(absAmount);
                 }
                 entries.add(srcEntry);
+            }
 
-                // 目标科目分录行
+            // 目标科目汇总分录行（复合分录呈现）
+            if (ruleTotalAmount.compareTo(BigDecimal.ZERO) > 0) {
                 rowNum++;
                 TransferPreviewEntryItemResponse targetEntry = new TransferPreviewEntryItemResponse();
                 targetEntry.setRowNum(rowNum);
                 targetEntry.setSubjectCode(rule.getTargetSubjectCode());
                 targetEntry.setSubjectName(ruleItem.getTargetSubjectName());
-                targetEntry.setAccountNo("-");
-                targetEntry.setCurrency(balance.getCurrency());
+                targetEntry.setAccountNo(targetAccountNo);
+                targetEntry.setCurrency(matchedBalances.get(0).getCurrency());
                 targetEntry.setSummary(rule.getRuleName());
 
                 if (isDebitToCredit) {
                     targetEntry.setDebitCredit(DebitCreditEnum.DEBIT.getCode());
                     targetEntry.setDebitCreditDesc("借");
-                    targetEntry.setDebitAmount(absAmount);
+                    targetEntry.setDebitAmount(ruleTotalAmount);
                     targetEntry.setCreditAmount(null);
-                    totalDebit = totalDebit.add(absAmount);
+                    totalDebit = totalDebit.add(ruleTotalAmount);
                 } else {
                     targetEntry.setDebitCredit(DebitCreditEnum.CREDIT.getCode());
                     targetEntry.setDebitCreditDesc("贷");
                     targetEntry.setDebitAmount(null);
-                    targetEntry.setCreditAmount(absAmount);
-                    totalCredit = totalCredit.add(absAmount);
+                    targetEntry.setCreditAmount(ruleTotalAmount);
+                    totalCredit = totalCredit.add(ruleTotalAmount);
                 }
                 entries.add(targetEntry);
             }
@@ -309,6 +323,86 @@ public class PeriodEndTransferDomainService {
     }
 
     /**
+     * 查找待结转的余额项（优先从日余额表读取；若未生成日余额则从活跃账户表读取实时余额）
+     */
+    private List<AccountBalancePO> findPendingBalances(PeriodEndTransferRulePO rule, LocalDate accountingDate) {
+        Pattern pattern = wildcardToPattern(rule.getSourceSubjectCode());
+        List<AccountBalancePO> balances = accountBalanceRepository.selectByDate(accountingDate);
+        if (balances != null && !balances.isEmpty()) {
+            List<AccountBalancePO> matched = balances.stream()
+                    .filter(b -> b.getSubjectCode() != null && pattern.matcher(b.getSubjectCode()).matches())
+                    .filter(b -> b.getEndBalance() != null && b.getEndBalance().compareTo(BigDecimal.ZERO) != 0)
+                    .toList();
+            if (!matched.isEmpty()) {
+                return matched;
+            }
+        }
+
+        // 兼容日切前或未生成日余额时的场景：直接从 t_account 查询匹配科目且有余额的活跃账户
+        List<AccountPO> allAccounts = accountRepository.selectAllActiveAccounts();
+        List<AccountBalancePO> dynamicBalances = new ArrayList<>();
+        for (AccountPO acc : allAccounts) {
+            if (acc.getSubjectCode() != null && pattern.matcher(acc.getSubjectCode()).matches()) {
+                if (acc.getBalance() != null && acc.getBalance().compareTo(BigDecimal.ZERO) != 0) {
+                    AccountBalancePO bal = new AccountBalancePO();
+                    bal.setAccountingDate(accountingDate);
+                    bal.setSubjectCode(acc.getSubjectCode());
+                    bal.setAccountNo(acc.getAccountNo());
+                    bal.setCurrency(acc.getCurrency() != null ? acc.getCurrency() : Constants.DEFAULT_CURRENCY);
+                    bal.setBalanceDirection(acc.getBalanceDirection());
+                    bal.setDebitAmount(BigDecimal.ZERO);
+                    bal.setCreditAmount(BigDecimal.ZERO);
+                    bal.setEndBalance(acc.getBalance());
+                    bal.setTenantId(acc.getTenantId() != null ? acc.getTenantId() : TenantContext.get());
+                    dynamicBalances.add(bal);
+                }
+            }
+        }
+        return dynamicBalances;
+    }
+
+    /**
+     * 解析目标科目对应的实体分户账户（优先获取内部账户，若不存在则自愈开户）
+     */
+    private AccountPO resolveTargetAccount(String targetSubjectCode) {
+        List<AccountPO> accounts = accountRepository.selectBySubjectCode(targetSubjectCode);
+        if (accounts != null && !accounts.isEmpty()) {
+            for (AccountPO acc : accounts) {
+                if ("INNER".equals(acc.getOwnerId()) && acc.getStatus() == AccountStatusEnum.NORMAL) {
+                    return acc;
+                }
+            }
+            for (AccountPO acc : accounts) {
+                if (acc.getStatus() == AccountStatusEnum.NORMAL) {
+                    return acc;
+                }
+            }
+        }
+        return accountOpeningDomainService.openInternalAccount(targetSubjectCode);
+    }
+
+    /**
+     * 解析源余额对应的实体分户账户（优先按账号查询，若缺失则按科目匹配或自愈开户）
+     */
+    private AccountPO resolveSourceAccount(AccountBalancePO balance) {
+        if (StrUtil.isNotBlank(balance.getAccountNo())) {
+            AccountPO acc = accountRepository.selectByAccountNo(balance.getAccountNo());
+            if (acc != null) {
+                return acc;
+            }
+        }
+        List<AccountPO> accounts = accountRepository.selectBySubjectCode(balance.getSubjectCode());
+        if (accounts != null && !accounts.isEmpty()) {
+            for (AccountPO acc : accounts) {
+                if (acc.getStatus() == AccountStatusEnum.NORMAL) {
+                    return acc;
+                }
+            }
+        }
+        return accountOpeningDomainService.openInternalAccount(balance.getSubjectCode());
+    }
+
+    /**
      * 执行单条结转规则
      */
     private TransferRuleResult executeSingleRule(PeriodEndTransferRulePO rule, LocalDate accountingDate) {
@@ -316,18 +410,8 @@ public class PeriodEndTransferDomainService {
 
         return transactionTemplate.execute(status -> {
             try {
-                // 1. 解析通配符模式
-                Pattern pattern = wildcardToPattern(rule.getSourceSubjectCode());
-
-                // 2. 查找匹配余额账户
-                List<AccountBalancePO> balances = accountBalanceRepository.selectByDate(accountingDate);
-                List<AccountBalancePO> matchedBalances = balances.stream()
-                        .filter(b -> b.getSubjectCode() != null
-                                && pattern.matcher(b.getSubjectCode()).matches())
-                        .filter(b -> b.getEndBalance() != null
-                                && b.getEndBalance().compareTo(BigDecimal.ZERO) != 0)
-                        .toList();
-
+                // 1. 查找待结转余额项
+                List<AccountBalancePO> matchedBalances = findPendingBalances(rule, accountingDate);
                 if (matchedBalances.isEmpty()) {
                     log.info("[EOD-TRANSFER] 无符合条件的余额账户: ruleCode={}, pattern={}",
                             rule.getRuleCode(), rule.getSourceSubjectCode());
@@ -336,32 +420,147 @@ public class PeriodEndTransferDomainService {
                             BigDecimal.ZERO, TransferRecordStatusEnum.SUCCESS, null);
                 }
 
+                // 2. 解析目标分户账户与科目
+                AccountPO targetAccount = resolveTargetAccount(rule.getTargetSubjectCode());
+                AccountSubjectPO targetSubject = subjectRepository.selectByCode(rule.getTargetSubjectCode());
+
                 // 3. 计算结转总金额
                 BigDecimal totalAmount = BigDecimal.ZERO;
                 for (AccountBalancePO balance : matchedBalances) {
                     totalAmount = totalAmount.add(balance.getEndBalance().abs());
                 }
 
-                // 4. 生成结转凭证（严密分录借贷与平衡校验）
-                String voucherNo = generateTransferVoucher(
-                        rule, accountingDate, transferNo, matchedBalances);
+                // 4. 生成统一凭证头
+                String voucherNo = businessNoGenerator.generateVoucherNo("PET", accountingDate);
+                String txnNo = businessNoGenerator.generateTxnNo(accountingDate);
 
-                // 5. 余额清零：通过借贷发生额调整（符合财务律法）
+                AccountingVoucherPO voucher = new AccountingVoucherPO();
+                voucher.setVoucherNo(voucherNo);
+                voucher.setTxnNo(txnNo);
+                voucher.setTraceNo(transferNo);
+                voucher.setTraceSeq(1);
+                voucher.setVoucherType("结账凭证");
+                voucher.setPostingType(PostingTypeEnum.AUTOMATIC);
+                voucher.setBusinessCode("EOD");
+                voucher.setTradingCode(null);
+                voucher.setPayChannel(null);
+                voucher.setTradeType(TradeTypeEnum.BLUE);
+                voucher.setTradeTime(LocalDateTime.now());
+                voucher.setAmount(totalAmount);
+                voucher.setStatus(VoucherStatusEnum.PENDING);
+                voucher.setAccountingDate(accountingDate);
+                voucher.setSummary(renderSummary(rule.getSummaryTemplate(), accountingDate));
+                voucher.setBookkeeperName("SYSTEM");
+                voucher.setTenantId(TenantContext.get());
+                voucherRepository.insert(voucher);
+
+                // 5. 构造转出与转入分录列表
+                List<AccountingVoucherEntryPO> entries = new ArrayList<>();
+                boolean isDebitToCredit = rule.getTransferDirection() == TransferDirectionEnum.DEBIT_TO_CREDIT;
+                DebitCreditEnum targetSubjectDir = (targetSubject != null && targetSubject.getDebitCredit() != null)
+                        ? targetSubject.getDebitCredit() : DebitCreditEnum.CREDIT;
+
+                BigDecimal totalDebit = BigDecimal.ZERO;
+                BigDecimal totalCredit = BigDecimal.ZERO;
+                int rowNum = 0;
+
                 for (AccountBalancePO balance : matchedBalances) {
                     BigDecimal absAmount = balance.getEndBalance().abs();
-                    BalanceDirectionEnum direction = balance.getBalanceDirection();
-                    if (direction == BalanceDirectionEnum.DEBIT) {
-                        // 借方余额账户：结转金额计入贷方发生额，使借贷轧差 end_balance = 0
-                        balance.setCreditAmount(balance.getCreditAmount().add(absAmount));
-                    } else {
-                        // 贷方余额账户：结转金额计入借方发生额，使借贷轧差 end_balance = 0
-                        balance.setDebitAmount(balance.getDebitAmount().add(absAmount));
-                    }
-                    balance.setEndBalance(BigDecimal.ZERO);
-                }
-                accountBalanceRepository.batchUpsert(matchedBalances);
+                    AccountPO srcAccount = resolveSourceAccount(balance);
 
-                // 6. 记录结转结果
+                    // 源科目分录：借方余额转出记贷方，贷方余额转出记借方
+                    DebitCreditEnum srcDc = isDebitToCredit ? DebitCreditEnum.CREDIT : DebitCreditEnum.DEBIT;
+                    ChangeDirectionEnum srcChangeDir = ChangeDirectionEnum.DECREASE; // 结转清零必为减少
+
+                    rowNum++;
+                    AccountingVoucherEntryPO srcEntry = new AccountingVoucherEntryPO();
+                    srcEntry.setVoucherNo(voucherNo);
+                    srcEntry.setEntryId(businessNoGenerator.generateEntryId());
+                    srcEntry.setRowNum(rowNum);
+                    srcEntry.setSubjectCode(balance.getSubjectCode());
+                    srcEntry.setAccountNo(srcAccount.getAccountNo());
+                    srcEntry.setDebitCredit(srcDc);
+                    srcEntry.setChangeDirection(srcChangeDir);
+                    srcEntry.setAmount(absAmount);
+                    srcEntry.setCurrency(balance.getCurrency());
+                    srcEntry.setSummary(rule.getRuleName());
+                    srcEntry.setStatus(VoucherEntryStatusEnum.PENDING);
+                    srcEntry.setAccountingDate(accountingDate);
+                    srcEntry.setUnilateral(1);
+                    srcEntry.setBuffered(0);
+                    srcEntry.setExchangeRate(BigDecimal.ONE);
+                    srcEntry.setUnitPrice(BigDecimal.ZERO);
+                    srcEntry.setQuantity(0);
+                    srcEntry.setPricingUnit("");
+                    srcEntry.setTenantId(TenantContext.get());
+                    voucherRepository.insertEntry(srcEntry);
+                    entries.add(srcEntry);
+
+                    if (srcDc == DebitCreditEnum.DEBIT) {
+                        totalDebit = totalDebit.add(absAmount);
+                    } else {
+                        totalCredit = totalCredit.add(absAmount);
+                    }
+                }
+
+                // 目标科目汇总分录（复合分录：多借一贷或一借多贷）
+                DebitCreditEnum targetDc = isDebitToCredit ? DebitCreditEnum.DEBIT : DebitCreditEnum.CREDIT;
+                ChangeDirectionEnum targetChangeDir = (targetDc == targetSubjectDir)
+                        ? ChangeDirectionEnum.INCREASE : ChangeDirectionEnum.DECREASE;
+
+                rowNum++;
+                AccountingVoucherEntryPO targetEntry = new AccountingVoucherEntryPO();
+                targetEntry.setVoucherNo(voucherNo);
+                targetEntry.setEntryId(businessNoGenerator.generateEntryId());
+                targetEntry.setRowNum(rowNum);
+                targetEntry.setSubjectCode(rule.getTargetSubjectCode());
+                targetEntry.setAccountNo(targetAccount.getAccountNo());
+                targetEntry.setDebitCredit(targetDc);
+                targetEntry.setChangeDirection(targetChangeDir);
+                targetEntry.setAmount(totalAmount);
+                targetEntry.setCurrency(matchedBalances.get(0).getCurrency());
+                targetEntry.setSummary(rule.getRuleName());
+                targetEntry.setStatus(VoucherEntryStatusEnum.PENDING);
+                targetEntry.setAccountingDate(accountingDate);
+                targetEntry.setUnilateral(1);
+                targetEntry.setBuffered(0);
+                targetEntry.setExchangeRate(BigDecimal.ONE);
+                targetEntry.setUnitPrice(BigDecimal.ZERO);
+                targetEntry.setQuantity(0);
+                targetEntry.setPricingUnit("");
+                targetEntry.setTenantId(TenantContext.get());
+                voucherRepository.insertEntry(targetEntry);
+                entries.add(targetEntry);
+
+                if (targetDc == DebitCreditEnum.DEBIT) {
+                    totalDebit = totalDebit.add(totalAmount);
+                } else {
+                    totalCredit = totalCredit.add(totalAmount);
+                }
+
+                // 凭证借贷严格平衡校验
+                if (totalDebit.compareTo(totalCredit) != 0) {
+                    throw new AccountException(ResultCode.TRIAL_BALANCE_FAILED,
+                            "结转凭证借贷不平衡: debit=" + totalDebit + ", credit=" + totalCredit);
+                }
+
+                // 6. 执行真实分户过账：按 account_no 升序锁定账户，驱动 t_account 更新与 t_account_detail 写入
+                List<AccountingVoucherEntryPO> sortedEntries = entries.stream()
+                        .sorted(Comparator.comparing(AccountingVoucherEntryPO::getAccountNo))
+                        .toList();
+                postingDomainService.executeRealTimePosting(voucher, sortedEntries);
+
+                // 更新凭证为已过账
+                voucher.setStatus(VoucherStatusEnum.POSTED);
+                voucherRepository.updateById(voucher);
+
+                // 7. 驱动日余额自然计算与 upsert（基于全部分录汇总，借贷轧差源科目自然为 0，目标科目自然增加）
+                List<AccountBalancePO> updatedBalances = eodDomainService.calculateDailyBalances(accountingDate);
+                if (updatedBalances != null && !updatedBalances.isEmpty()) {
+                    accountBalanceRepository.batchUpsert(updatedBalances);
+                }
+
+                // 8. 记录结转结果
                 PeriodEndTransferRecordPO record = new PeriodEndTransferRecordPO();
                 record.setTransferNo(transferNo);
                 record.setAccountingDate(accountingDate);
@@ -374,8 +573,8 @@ public class PeriodEndTransferDomainService {
                 record.setFinishTime(LocalDateTime.now());
                 recordRepository.insert(record);
 
-                log.info("[EOD-TRANSFER] 结转成功: ruleCode={}, transferNo={}, voucherNo={}, amount={}",
-                        rule.getRuleCode(), transferNo, voucherNo, totalAmount);
+                log.info("[EOD-TRANSFER] 结转真实过账成功: ruleCode={}, transferNo={}, voucherNo={}, amount={}, targetAccount={}",
+                        rule.getRuleCode(), transferNo, voucherNo, totalAmount, targetAccount.getAccountNo());
 
                 return new TransferRuleResult(
                         rule.getRuleCode(), rule.getRuleName(), transferNo, voucherNo,
@@ -387,101 +586,6 @@ public class PeriodEndTransferDomainService {
         });
     }
 
-    /**
-     * 生成结转凭证（含借贷分录）
-     */
-    private String generateTransferVoucher(
-            PeriodEndTransferRulePO rule, LocalDate accountingDate,
-            String transferNo, List<AccountBalancePO> balances) {
-
-        String voucherNo = businessNoGenerator.generateVoucherNo("PET", accountingDate);
-
-        BigDecimal totalAmount = balances.stream()
-                .map(AccountBalancePO::getEndBalance)
-                .map(BigDecimal::abs)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        AccountingVoucherPO voucher = new AccountingVoucherPO();
-        voucher.setVoucherNo(voucherNo);
-        voucher.setTxnNo(null);
-        voucher.setTraceNo(transferNo);
-        voucher.setTraceSeq(1);
-        voucher.setVoucherType("结账凭证");
-        voucher.setPostingType(PostingTypeEnum.AUTOMATIC);
-        voucher.setBusinessCode("EOD");
-        voucher.setTradingCode(null);
-        voucher.setPayChannel(null);
-        voucher.setTradeType(TradeTypeEnum.BLUE);
-        voucher.setTradeTime(LocalDateTime.now());
-        voucher.setAmount(totalAmount);
-        voucher.setStatus(VoucherStatusEnum.POSTED);
-        voucher.setAccountingDate(accountingDate);
-        voucher.setSummary(renderSummary(rule.getSummaryTemplate(), accountingDate));
-        voucher.setBookkeeperName("SYSTEM");
-        voucherRepository.insert(voucher);
-
-        boolean isDebitToCredit = rule.getTransferDirection() == TransferDirectionEnum.DEBIT_TO_CREDIT;
-
-        BigDecimal totalDebit = BigDecimal.ZERO;
-        BigDecimal totalCredit = BigDecimal.ZERO;
-
-        int rowNum = 0;
-        for (AccountBalancePO balance : balances) {
-            BigDecimal absAmount = balance.getEndBalance().abs();
-
-            // 源科目分录：借方余额转出记贷方，贷方余额转出记借方
-            rowNum++;
-            AccountingVoucherEntryPO entry = new AccountingVoucherEntryPO();
-            entry.setVoucherNo(voucherNo);
-            entry.setEntryId(businessNoGenerator.generateEntryId());
-            entry.setRowNum(rowNum);
-            entry.setSubjectCode(balance.getSubjectCode());
-            entry.setAccountNo(balance.getAccountNo());
-            entry.setAmount(absAmount);
-            entry.setCurrency(balance.getCurrency());
-            entry.setSummary(rule.getRuleName());
-            entry.setStatus(VoucherEntryStatusEnum.POSTED);
-            entry.setAccountingDate(accountingDate);
-            entry.setDebitCredit(isDebitToCredit ? DebitCreditEnum.CREDIT : DebitCreditEnum.DEBIT);
-            voucherRepository.insertEntry(entry);
-
-            if (isDebitToCredit) {
-                totalCredit = totalCredit.add(absAmount);
-            } else {
-                totalDebit = totalDebit.add(absAmount);
-            }
-
-            // 目标科目分录
-            rowNum++;
-            AccountingVoucherEntryPO targetEntry = new AccountingVoucherEntryPO();
-            targetEntry.setVoucherNo(voucherNo);
-            targetEntry.setEntryId(businessNoGenerator.generateEntryId());
-            targetEntry.setRowNum(rowNum);
-            targetEntry.setSubjectCode(rule.getTargetSubjectCode());
-            targetEntry.setAccountNo(null);
-            targetEntry.setAmount(absAmount);
-            targetEntry.setCurrency(balance.getCurrency());
-            targetEntry.setSummary(rule.getRuleName());
-            targetEntry.setStatus(VoucherEntryStatusEnum.POSTED);
-            targetEntry.setAccountingDate(accountingDate);
-            targetEntry.setDebitCredit(isDebitToCredit ? DebitCreditEnum.DEBIT : DebitCreditEnum.CREDIT);
-            voucherRepository.insertEntry(targetEntry);
-
-            if (isDebitToCredit) {
-                totalDebit = totalDebit.add(absAmount);
-            } else {
-                totalCredit = totalCredit.add(absAmount);
-            }
-        }
-
-        // 借贷平衡校验：ΣDebit == ΣCredit
-        if (totalDebit.compareTo(totalCredit) != 0) {
-            throw new AccountException(ResultCode.TRIAL_BALANCE_FAILED,
-                    "结转凭证借贷不平衡: debit=" + totalDebit + ", credit=" + totalCredit);
-        }
-
-        return voucherNo;
-    }
 
     /**
      * 将通配符模式转为 Java 正则表达式

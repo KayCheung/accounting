@@ -89,6 +89,19 @@ public class AccountRepository {
     }
 
     /**
+     * 查询所有未注销的有效账户列表
+     *
+     * @return 有效账户列表
+     */
+    public List<AccountPO> selectAllActiveAccounts() {
+        List<AccountPO> result = accountMapper.selectList(new LambdaQueryWrapper<AccountPO>()
+                .eq(AccountPO::getIsDelete, 0)
+                .ne(AccountPO::getStatus, AccountStatusEnum.CANCELLED));
+        return result != null ? result : Collections.emptyList();
+    }
+
+
+    /**
      * 按账户编号列表加悲观锁批量查询
      * 调用方必须保证 accountNos 已按升序排序
      */

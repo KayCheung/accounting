@@ -4,6 +4,7 @@ import com.kltb.accounting.api.response.TransferPreviewResponse;
 import com.kltb.accounting.core.domain.enums.*;
 import com.kltb.accounting.core.infrastructure.account.BusinessNoGenerator;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountBalancePO;
+import com.kltb.accounting.core.infrastructure.persistence.entity.AccountPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountSubjectPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.PeriodEndTransferRulePO;
 import com.kltb.accounting.core.infrastructure.persistence.repository.*;
@@ -51,8 +52,21 @@ class PeriodEndTransferDomainServiceTest {
     @Mock
     private BusinessNoGenerator businessNoGenerator;
 
+    @Mock
+    private AccountRepository accountRepository;
+
+    @Mock
+    private AccountOpeningDomainService accountOpeningDomainService;
+
+    @Mock
+    private PostingDomainService postingDomainService;
+
+    @Mock
+    private EodDomainService eodDomainService;
+
     @InjectMocks
     private PeriodEndTransferDomainService transferDomainService;
+
 
     @Test
     @DisplayName("期末结转试算预览：只读计算，匹配账户生成借贷平衡预览分录")
@@ -155,6 +169,25 @@ class PeriodEndTransferDomainServiceTest {
 
         when(accountBalanceRepository.selectByDate(date)).thenReturn(List.of(balance));
 
+        AccountPO targetAcc = new AccountPO();
+        targetAcc.setAccountNo("INNER410301001");
+        targetAcc.setOwnerId("INNER");
+        targetAcc.setStatus(AccountStatusEnum.NORMAL);
+        when(accountRepository.selectBySubjectCode("410301")).thenReturn(List.of(targetAcc));
+
+        AccountPO srcAcc = new AccountPO();
+        srcAcc.setAccountNo("ACT6001");
+        srcAcc.setStatus(AccountStatusEnum.NORMAL);
+        when(accountRepository.selectByAccountNo("ACT6001")).thenReturn(srcAcc);
+
+        AccountSubjectPO targetSubject = new AccountSubjectPO();
+        targetSubject.setSubjectCode("410301");
+        targetSubject.setSubjectName("本年利润");
+        targetSubject.setDebitCredit(DebitCreditEnum.CREDIT);
+        when(subjectRepository.selectByCode("410301")).thenReturn(targetSubject);
+
+        when(eodDomainService.calculateDailyBalances(date)).thenReturn(List.of(balance));
+
         // 模拟 transactionTemplate.execute 直接执行回调
         when(transactionTemplate.execute(any())).thenAnswer(inv -> {
             TransactionCallback<?> callback = inv.getArgument(0);
@@ -170,12 +203,11 @@ class PeriodEndTransferDomainServiceTest {
         assertThat(r.getVoucherNo()).isEqualTo("PET20261008001");
         assertThat(r.getTotalAmount()).isEqualByComparingTo("2000.00");
 
-        // 验证源账户余额被借贷发生额清零
-        assertThat(balance.getEndBalance()).isEqualByComparingTo(BigDecimal.ZERO);
-        assertThat(balance.getDebitAmount()).isEqualByComparingTo("2000.00");
-
+        // 验证真实分户过账与分录落库
         verify(voucherRepository).insert(any());
         verify(voucherRepository, times(2)).insertEntry(any());
+        verify(postingDomainService).executeRealTimePosting(any(), anyList());
+        verify(eodDomainService).calculateDailyBalances(date);
         verify(accountBalanceRepository).batchUpsert(anyList());
         verify(recordRepository).insert(any());
     }

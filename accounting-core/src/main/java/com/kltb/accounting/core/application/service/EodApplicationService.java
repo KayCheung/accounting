@@ -17,10 +17,12 @@ import com.kltb.accounting.core.domain.service.TrialBalanceDomainService.Balance
 import com.kltb.accounting.core.domain.service.TrialBalanceDomainService.GlReconciliationResult;
 import com.kltb.accounting.core.domain.service.TrialBalanceDomainService.TrialBalanceResult;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountBalancePO;
+import com.kltb.accounting.core.domain.enums.TransferRecordStatusEnum;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -101,6 +103,15 @@ public class EodApplicationService {
             if (request.isExecuteTransfer() && trialBalancePassed) {
                 eodStatusDomainService.updateStage(6, accountingDate);
                 transferResults = periodEndTransferDomainService.executeTransferRules(accountingDate);
+                boolean hasActualTransfer = transferResults.stream()
+                        .anyMatch(r -> r.getStatus() == TransferRecordStatusEnum.SUCCESS
+                                && r.getTotalAmount() != null
+                                && r.getTotalAmount().compareTo(BigDecimal.ZERO) > 0);
+                if (hasActualTransfer) {
+                    snapshotCount = eodDomainService.generateDailySnapshot(accountingDate);
+                    log.info("[EOD-APP] 期末结转过账完成，已同步刷新日终快照: date={}, snapshotCount={}",
+                            accountingDate, snapshotCount);
+                }
             }
 
             // Step 8: 归档（NEW）

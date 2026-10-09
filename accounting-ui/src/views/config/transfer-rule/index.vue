@@ -316,13 +316,13 @@
         </el-form-item>
 
         <el-form-item label="自动结转支持" prop="autoTransfer">
-          <div style="display: flex; align-items: center; gap: 10px;">
+          <div class="switch-field-wrapper">
             <el-switch
               v-model="formData.autoTransfer"
               active-text="开启自动"
               inactive-text="仅限手动"
             />
-            <span class="form-tip">开启后系统在到达该周期时自动执行；关闭后仅支持财务手工触发</span>
+            <div class="form-tip">开启后系统在到达该周期时自动执行；关闭后仅支持财务手工触发</div>
           </div>
         </el-form-item>
 
@@ -335,8 +335,10 @@
 
 
         <el-form-item label="执行优先级" prop="executeOrder">
-          <el-input-number v-model="formData.executeOrder" :min="1" :max="9999" />
-          <div class="form-tip">数值越小越先执行（建议收入结转=10，费用结转=20）</div>
+          <div class="priority-field-inline">
+            <el-input-number v-model="formData.executeOrder" :min="1" :max="9999" />
+            <span class="form-tip inline-tip">数值越小越先执行（建议收入结转=10，费用结转=20）</span>
+          </div>
         </el-form-item>
 
         <el-form-item label="摘要模板" prop="summaryTemplate">
@@ -734,6 +736,24 @@ onMounted(() => {
     font-size: 12px;
     color: #8c8c8c;
     margin-top: 4px;
+    line-height: 1.5;
+  }
+
+  .switch-field-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .priority-field-inline {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    .inline-tip {
+      margin-top: 0;
+      white-space: nowrap;
+    }
   }
 
   .shortcut-pills {
