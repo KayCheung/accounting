@@ -21,6 +21,7 @@ import com.kltb.accounting.core.infrastructure.persistence.repository.FreezeDeta
 import com.kltb.accounting.core.infrastructure.persistence.repository.SubAccountDetailRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.SubAccountRepository;
 import com.kltb.accounting.core.infrastructure.redis.DistributedLockTemplate;
+import com.kltb.accounting.core.infrastructure.redis.RedisKeyConstants;
 import com.kltb.accounting.core.shared.exception.AccountException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -113,7 +114,7 @@ public class FreezeDomainService {
 
         // 分布式锁 + 事务执行
         return distributedLockTemplate.execute(
-                "account:fund:" + accountNo,
+                RedisKeyConstants.Lock.Account.accountMutex(accountNo),
                 3, -1,
                 () -> transactionTemplate.execute(status -> {
                     // 双重检查
@@ -208,7 +209,7 @@ public class FreezeDomainService {
         String accountNo = resolveAccountNoFromFreezeRecord(freezeRecord);
 
         distributedLockTemplate.execute(
-                "account:fund:" + accountNo,
+                RedisKeyConstants.Lock.Account.accountMutex(accountNo),
                 3, -1,
                 () -> transactionTemplate.execute(s -> {
                     // 双重检查
@@ -296,7 +297,7 @@ public class FreezeDomainService {
         }
 
         distributedLockTemplate.execute(
-                "account:fund:" + accountNo,
+                RedisKeyConstants.Lock.Account.accountMutex(accountNo),
                 3, -1,
                 () -> transactionTemplate.execute(s -> {
                     // 双重检查冻结记录状态

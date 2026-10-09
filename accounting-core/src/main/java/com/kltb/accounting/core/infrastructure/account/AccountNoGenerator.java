@@ -1,6 +1,7 @@
 package com.kltb.accounting.core.infrastructure.account;
 
 import cn.hutool.core.util.StrUtil;
+import com.kltb.accounting.core.infrastructure.redis.RedisKeyConstants;
 import org.redisson.api.RScript;
 import org.redisson.api.RedissonClient;
 import org.redisson.client.codec.LongCodec;
@@ -33,9 +34,6 @@ public class AccountNoGenerator {
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.BASIC_ISO_DATE;
     private static final ZoneId ZONE_SHANGHAI = ZoneId.of("Asia/Shanghai");
 
-    private static final String EXT_SEQ_KEY_PREFIX = "account:seq:ext:";
-    private static final String INNER_SEQ_KEY_PREFIX = "account:seq:inner:";
-
     /** 匹配形如 {variable} 或 {variable3} 或 {variable:3} 的占位符 */
     private static final Pattern TAG_PATTERN = Pattern.compile("\\{([a-zA-Z0-9_:]+)\\}");
     /** 解析占位符名称与可选的长度限制，如 seq3 -> name=seq, len=3；yyyyMMdd -> name=yyyyMMdd, len=null */
@@ -65,7 +63,7 @@ public class AccountNoGenerator {
      */
     public String generateExternalAccountNo() {
         String dateStr = LocalDate.now(ZONE_SHANGHAI).format(DATE_FMT);
-        String key = EXT_SEQ_KEY_PREFIX + orgCode + ":" + dateStr;
+        String key = RedisKeyConstants.Sequence.extAccount(orgCode, dateStr);
         Long seq = redissonClient.getScript(LongCodec.INSTANCE)
                 .eval(RScript.Mode.READ_WRITE, LUA_INCR_EXPIRE, RScript.ReturnType.INTEGER, Collections.singletonList(key));
         return orgCode + dateStr + String.format("%05d", seq);
@@ -102,7 +100,7 @@ public class AccountNoGenerator {
 
         // 获取序列号 (Redis key 包含 bizCode 与日期，每日自动过期重置)
         String bizCode = StrUtil.isNotBlank(context.getBusinessCode()) ? context.getBusinessCode() : orgCode;
-        String seqKey = EXT_SEQ_KEY_PREFIX + bizCode + ":" + dateStr;
+        String seqKey = RedisKeyConstants.Sequence.extAccount(bizCode, dateStr);
         Long seq = redissonClient.getScript(LongCodec.INSTANCE)
                 .eval(RScript.Mode.READ_WRITE, LUA_INCR_EXPIRE, RScript.ReturnType.INTEGER, Collections.singletonList(seqKey));
 
@@ -303,7 +301,7 @@ public class AccountNoGenerator {
      * Redis key：account:seq:inner:{subjectCode}（永久递增，不重置）
      */
     public String generateInternalAccountNo(String subjectCode) {
-        String key = INNER_SEQ_KEY_PREFIX + subjectCode;
+        String key = RedisKeyConstants.Sequence.innerAccount(subjectCode);
         Long seq = redissonClient.getScript(LongCodec.INSTANCE)
                 .eval(RScript.Mode.READ_WRITE, LUA_INCR, RScript.ReturnType.INTEGER, Collections.singletonList(key));
         return "INNER" + subjectCode + String.format("%03d", seq);

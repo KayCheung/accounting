@@ -17,6 +17,7 @@ import com.kltb.accounting.core.infrastructure.persistence.entity.TransactionPO;
 import com.kltb.accounting.core.infrastructure.persistence.repository.BusinessRecordRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.TransactionRepository;
 import com.kltb.accounting.core.infrastructure.redis.DistributedLockTemplate;
+import com.kltb.accounting.core.infrastructure.redis.RedisKeyConstants;
 import com.kltb.accounting.core.shared.exception.AccountException;
 import com.kltb.accounting.core.shared.exception.ServiceException;
 import lombok.RequiredArgsConstructor;
@@ -90,7 +91,7 @@ public class JournalingApplicationService {
         validateCustomerTypes(request.getDetails());
 
         // 4. 幂等锁 Key（含 tenantId，由 DistributedLockTemplate 内部自动拼接）
-        String lockKey = "idempotent:trace:" + request.getTraceNo() + "-" + request.getTraceSeq();
+        String lockKey = RedisKeyConstants.Lock.Idempotent.trace(request.getTraceNo(), request.getTraceSeq());
 
         try {
             return distributedLockTemplate.execute(

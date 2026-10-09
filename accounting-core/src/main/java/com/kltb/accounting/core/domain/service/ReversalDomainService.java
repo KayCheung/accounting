@@ -14,6 +14,7 @@ import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVouc
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherPO;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountingVoucherRepository;
 import com.kltb.accounting.core.infrastructure.redis.DistributedLockTemplate;
+import com.kltb.accounting.core.infrastructure.redis.RedisKeyConstants;
 import com.kltb.accounting.core.shared.context.TenantContext;
 import com.kltb.accounting.core.shared.exception.AccountException;
 import lombok.Data;
@@ -53,8 +54,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ReversalDomainService {
 
-    private static final String REVERSAL_LOCK_FORMAT = "reversal:%s";
-
     private final AccountingVoucherRepository voucherRepository;
     private final BusinessNoGenerator businessNoGenerator;
     private final DistributedLockTemplate distributedLockTemplate;
@@ -81,8 +80,8 @@ public class ReversalDomainService {
         AccountingVoucherPO preCheckVoucher = voucherRepository.selectByVoucherNoSimple(origVoucherNo);
         validateReversable(preCheckVoucher);
 
-        // 分布式锁内执行完整红冲流程
-        String lockKey = String.format(REVERSAL_LOCK_FORMAT, origVoucherNo);
+        // 分布式锁内执行完整红冲流程（凭证互斥锁，防止红冲与过账并发冲突）
+        String lockKey = RedisKeyConstants.Lock.Voucher.voucherMutex(origVoucherNo);
         return distributedLockTemplate.execute(
                 lockKey,
                 3, -1,

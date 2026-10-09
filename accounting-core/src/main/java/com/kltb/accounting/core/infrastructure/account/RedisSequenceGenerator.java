@@ -1,5 +1,6 @@
 package com.kltb.accounting.core.infrastructure.account;
 
+import com.kltb.accounting.core.infrastructure.redis.RedisKeyConstants;
 import lombok.RequiredArgsConstructor;
 import org.redisson.api.RFuture;
 import org.redisson.api.RScript;
@@ -58,7 +59,7 @@ public class RedisSequenceGenerator {
      */
     public String generate(String prefix, LocalDate date, int seqWidth, int ttlHours) {
         String dateStr = date.format(DATE_FMT);
-        String key = prefix.toLowerCase() + ":seq:" + dateStr;
+        String key = RedisKeyConstants.Sequence.common(prefix, dateStr);
 
         long seq = incr(key, ttlHours);
         return prefix + dateStr + String.format("%0" + seqWidth + "d", seq);
@@ -77,7 +78,7 @@ public class RedisSequenceGenerator {
     public String generate(String prefix, LocalDateTime dateTime, String timePattern,
                            int seqWidth, int ttlHours) {
         String timeStr = dateTime.format(DateTimeFormatter.ofPattern(timePattern));
-        String key = prefix.toLowerCase() + ":seq:" + timeStr;
+        String key = RedisKeyConstants.Sequence.common(prefix, timeStr);
 
         long seq = incr(key, ttlHours);
         return prefix + timeStr + String.format("%0" + seqWidth + "d", seq);

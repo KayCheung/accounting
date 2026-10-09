@@ -47,7 +47,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class DictionaryCacheService {
 
-    private static final String DICT_CACHE_KEY_FORMAT = "accounting:%s:dict:%s";
     private static final long LOCAL_CACHE_MAXIMUM_SIZE = 1000L;
     private static final int LOCAL_CACHE_TTL_MINUTES = 5;
     private static final int REDIS_CACHE_TTL_MINUTES = 10;
@@ -196,7 +195,7 @@ public class DictionaryCacheService {
     }
 
     String buildCacheKey(String dictType) {
-        return String.format(DICT_CACHE_KEY_FORMAT, TenantContext.get(), dictType);
+        return RedisKeyConstants.Cache.dictKey(TenantContext.get(), dictType);
     }
 
     private boolean isBlank(String str) {

@@ -23,6 +23,7 @@ import com.kltb.accounting.core.infrastructure.persistence.repository.SubjectRep
 import com.kltb.accounting.core.infrastructure.persistence.repository.SubAccountRepository;
 import com.kltb.accounting.core.infrastructure.redis.DictionaryCacheService;
 import com.kltb.accounting.core.infrastructure.redis.DistributedLockTemplate;
+import com.kltb.accounting.core.infrastructure.redis.RedisKeyConstants;
 import com.kltb.accounting.core.shared.exception.AccountException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -156,7 +157,7 @@ public class AccountOpeningDomainService {
             }
 
             final String templateSubjectCode = template.getSubjectCode();
-            final String lockKey = "account:open:" + ownerId + ":" + templateSubjectCode;
+            final String lockKey = RedisKeyConstants.Lock.AccountOpen.of(ownerId, templateSubjectCode);
             final int finalIndex = itemIndex;
 
             String subReqNo = requestNo != null ? requestNo : "";
@@ -248,7 +249,7 @@ public class AccountOpeningDomainService {
      * @param subjectCode 科目编码
      */
     public AccountPO openInternalAccount(String subjectCode) {
-        String lockKey = "account:open:INNER:" + subjectCode;
+        String lockKey = RedisKeyConstants.Lock.AccountOpen.ofInner(subjectCode);
         return distributedLockTemplate.execute(lockKey, 5, -1, () ->
                 doOpenInternalAccount(subjectCode));
     }
@@ -304,7 +305,7 @@ public class AccountOpeningDomainService {
         for (AccountSubjectPO subject : subjects) {
             String subjectCode = subject.getSubjectCode();
             try {
-                String lockKey = "account:open:INNER:" + subjectCode;
+                String lockKey = RedisKeyConstants.Lock.AccountOpen.ofInner(subjectCode);
                 distributedLockTemplate.execute(
                         lockKey, 2, -1,
                         () -> doOpenInternalAccount(subjectCode)

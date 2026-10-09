@@ -21,6 +21,7 @@ import com.kltb.accounting.core.infrastructure.persistence.repository.Accounting
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.TransactionRepository;
 import com.kltb.accounting.core.infrastructure.redis.DistributedLockTemplate;
+import com.kltb.accounting.core.infrastructure.redis.RedisKeyConstants;
 import com.kltb.accounting.core.shared.exception.AccountException;
 import com.kltb.accounting.core.shared.exception.ServiceException;
 import lombok.RequiredArgsConstructor;
@@ -138,8 +139,8 @@ public class PostingApplicationService {
             AccountValidator.validatePostable(account);
         }
 
-        // 4. 分布式锁
-        String lockKey = "posting:trx:" + voucherNo;
+        // 4. 分布式锁（凭证互斥锁，防止过账与红冲并发冲突）
+        String lockKey = RedisKeyConstants.Lock.Voucher.voucherMutex(voucherNo);
 
         return distributedLockTemplate.execute(lockKey, 0, 60, () -> {
             // 5. 在事务中执行过账

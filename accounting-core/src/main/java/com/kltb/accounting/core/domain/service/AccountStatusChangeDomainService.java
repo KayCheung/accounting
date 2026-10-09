@@ -9,6 +9,7 @@ import com.kltb.accounting.core.infrastructure.persistence.entity.SubAccountPO;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.SubAccountRepository;
 import com.kltb.accounting.core.infrastructure.redis.DistributedLockTemplate;
+import com.kltb.accounting.core.infrastructure.redis.RedisKeyConstants;
 import com.kltb.accounting.core.shared.exception.AccountException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -60,7 +61,7 @@ public class AccountStatusChangeDomainService {
         }
 
         return distributedLockTemplate.execute(
-                "account:status:" + accountNo,
+                RedisKeyConstants.Lock.Account.accountMutex(accountNo),
                 3, -1,
                 () -> transactionTemplate.execute(status -> {
                     AccountPO current = accountRepository.selectByAccountNo(accountNo);
@@ -102,7 +103,7 @@ public class AccountStatusChangeDomainService {
         }
 
         return distributedLockTemplate.execute(
-                "account:status:" + accountNo,
+                RedisKeyConstants.Lock.Account.accountMutex(accountNo),
                 3, -1,
                 () -> transactionTemplate.execute(status -> {
                     AccountPO current = accountRepository.selectByAccountNo(accountNo);
@@ -143,7 +144,7 @@ public class AccountStatusChangeDomainService {
         }
 
         return distributedLockTemplate.execute(
-                "account:status:" + accountNo,
+                RedisKeyConstants.Lock.Account.accountMutex(accountNo),
                 3, -1,
                 () -> transactionTemplate.execute(status -> {
                     AccountPO current = accountRepository.selectByAccountNo(accountNo);

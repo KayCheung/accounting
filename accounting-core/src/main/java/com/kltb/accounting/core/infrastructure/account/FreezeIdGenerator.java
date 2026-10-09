@@ -1,5 +1,6 @@
 package com.kltb.accounting.core.infrastructure.account;
 
+import com.kltb.accounting.core.infrastructure.redis.RedisKeyConstants;
 import lombok.RequiredArgsConstructor;
 import org.redisson.api.RScript;
 import org.redisson.api.RedissonClient;
@@ -28,7 +29,7 @@ public class FreezeIdGenerator {
      */
     public String generate() {
         String date = LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE);
-        String key = "frz:seq:" + date;
+        String key = RedisKeyConstants.Sequence.freeze(date);
 
         String luaScript =
                 "if redis.call('exists', KEYS[1]) == 0 then " +

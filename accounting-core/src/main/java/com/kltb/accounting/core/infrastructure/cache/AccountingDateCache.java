@@ -4,6 +4,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.kltb.accounting.core.infrastructure.persistence.entity.EodStatusPO;
 import com.kltb.accounting.core.infrastructure.persistence.repository.EodStatusRepository;
+import com.kltb.accounting.core.infrastructure.redis.RedisKeyConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RBucket;
@@ -34,8 +35,8 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class AccountingDateCache {
 
-    private static final String REDIS_KEY = "accounting:date:current";
-    private static final String PUBSUB_CHANNEL = "accounting:date:notify";
+    private static final String REDIS_KEY = RedisKeyConstants.Cache.ACCOUNTING_DATE_CURRENT;
+    private static final String PUBSUB_CHANNEL = RedisKeyConstants.PubSub.ACCOUNTING_DATE_NOTIFY;
     private static final long TTL_HOURS = 24;
 
     private final RedissonClient redissonClient;

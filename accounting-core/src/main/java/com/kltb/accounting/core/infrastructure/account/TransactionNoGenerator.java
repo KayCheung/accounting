@@ -1,6 +1,7 @@
 // accounting-core/src/main/java/com/kltb/accounting/core/infrastructure/account/TransactionNoGenerator.java
 package com.kltb.accounting.core.infrastructure.account;
 
+import com.kltb.accounting.core.infrastructure.redis.RedisKeyConstants;
 import lombok.RequiredArgsConstructor;
 import org.redisson.api.RFuture;
 import org.redisson.api.RScript;
@@ -31,7 +32,7 @@ public class TransactionNoGenerator {
      */
     public String generate() {
         String date = LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE);
-        String key = "txn:seq:" + date;
+        String key = RedisKeyConstants.Sequence.transaction(date);
 
         // Lua 脚本：原子化执行 "不存在则初始化 0 + 设置 TTL + 递增"
         String luaScript =

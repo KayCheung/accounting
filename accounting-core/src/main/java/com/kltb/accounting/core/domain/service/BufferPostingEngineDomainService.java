@@ -6,6 +6,7 @@ import com.kltb.accounting.core.infrastructure.account.AccountBalanceCalculator;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
 import com.kltb.accounting.core.infrastructure.persistence.repository.*;
 import com.kltb.accounting.core.infrastructure.redis.DistributedLockTemplate;
+import com.kltb.accounting.core.infrastructure.redis.RedisKeyConstants;
 import com.kltb.accounting.core.shared.exception.AccountException;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -38,7 +39,6 @@ import java.util.stream.Collectors;
 public class BufferPostingEngineDomainService {
 
     private static final int MAX_OPTIMISTIC_RETRIES = 3;
-    private static final String LOCK_KEY_PREFIX = "account:buffer:";
 
     private final BufferPostingDetailRepository bufferPostingDetailRepository;
     private final SubAccountRepository subAccountRepository;
@@ -466,7 +466,7 @@ public class BufferPostingEngineDomainService {
     }
 
     private String buildLockKey(String accountNo) {
-        return LOCK_KEY_PREFIX + accountNo;
+        return RedisKeyConstants.Lock.Account.accountMutex(accountNo);
     }
 
     /**
