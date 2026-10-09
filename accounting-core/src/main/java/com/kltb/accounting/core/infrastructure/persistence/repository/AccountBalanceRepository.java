@@ -10,6 +10,8 @@ import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
 
+import com.kltb.accounting.core.shared.context.TenantContext;
+
 @Repository
 @RequiredArgsConstructor
 public class AccountBalanceRepository {
@@ -19,6 +21,12 @@ public class AccountBalanceRepository {
     public void batchUpsert(List<AccountBalancePO> list) {
         if (list == null || list.isEmpty()) {
             return;
+        }
+        Integer defaultTenant = TenantContext.get();
+        for (AccountBalancePO po : list) {
+            if (po.getTenantId() == null) {
+                po.setTenantId(defaultTenant != null ? defaultTenant : TenantContext.SYSTEM_TENANT);
+            }
         }
         accountBalanceMapper.batchUpsertBalance(list);
     }

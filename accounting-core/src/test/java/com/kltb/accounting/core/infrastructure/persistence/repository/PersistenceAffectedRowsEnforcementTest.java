@@ -4,6 +4,8 @@ import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.AccountStatusEnum;
 import com.kltb.accounting.core.domain.enums.BalanceTypeEnum;
 import com.kltb.accounting.core.domain.enums.FreezeStatusEnum;
+import com.kltb.accounting.core.infrastructure.persistence.entity.AccountBalancePO;
+import com.kltb.accounting.core.infrastructure.persistence.entity.AccountBalanceSnapshotPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountDetailPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountFreezeDetailPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountPO;
@@ -11,7 +13,10 @@ import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVouc
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.SubAccountDetailPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.SubAccountPO;
+import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountBalanceMapper;
+import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountBalanceSnapshotMapper;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountDetailMapper;
+import com.kltb.accounting.core.shared.context.TenantContext;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountFreezeDetailMapper;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountMapper;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountingVoucherAttachmentMapper;
@@ -74,6 +79,12 @@ class PersistenceAffectedRowsEnforcementTest {
     @Mock
     private AccountingVoucherAttachmentMapper attachmentMapper;
 
+    @Mock
+    private AccountBalanceMapper accountBalanceMapper;
+
+    @Mock
+    private AccountBalanceSnapshotMapper accountBalanceSnapshotMapper;
+
     @InjectMocks
     private AccountRepository accountRepository;
 
@@ -91,6 +102,12 @@ class PersistenceAffectedRowsEnforcementTest {
 
     @InjectMocks
     private FreezeDetailRepository freezeDetailRepository;
+
+    @InjectMocks
+    private AccountBalanceRepository accountBalanceRepository;
+
+    @InjectMocks
+    private AccountBalanceSnapshotRepository accountBalanceSnapshotRepository;
 
     // ==================== AccountRepository ====================
 
@@ -315,5 +332,45 @@ class PersistenceAffectedRowsEnforcementTest {
 
         freezeDetailRepository.updateAmountsAndStatus("FRZ123", java.math.BigDecimal.ZERO, java.math.BigDecimal.TEN, java.math.BigDecimal.ZERO, FreezeStatusEnum.UNFROZEN, 1);
         verify(accountFreezeDetailMapper).updateAmountsAndStatus("FRZ123", java.math.BigDecimal.ZERO, java.math.BigDecimal.TEN, java.math.BigDecimal.ZERO, FreezeStatusEnum.UNFROZEN.getCode(), 1);
+    }
+
+    // ==================== AccountBalanceRepository & SnapshotRepository ====================
+
+    @Test
+    @DisplayName("AccountBalanceRepository.batchUpsert: 自动补齐为 null 的 tenantId 为当前上下文或默认值")
+    void accountBalanceRepository_batchUpsert_populatesTenantId() {
+        TenantContext.set(8888);
+        try {
+            AccountBalancePO b1 = new AccountBalancePO();
+            b1.setAccountNo("ACC_01");
+            AccountBalancePO b2 = new AccountBalancePO();
+            b2.setAccountNo("ACC_02");
+            b2.setTenantId(9999);
+
+            accountBalanceRepository.batchUpsert(List.of(b1, b2));
+
+            assertThat(b1.getTenantId()).isEqualTo(8888);
+            assertThat(b2.getTenantId()).isEqualTo(9999);
+            verify(accountBalanceMapper).batchUpsertBalance(List.of(b1, b2));
+        } finally {
+            TenantContext.clear();
+        }
+    }
+
+    @Test
+    @DisplayName("AccountBalanceSnapshotRepository.batchInsert: 自动补齐为 null 的 tenantId 为当前上下文或默认值")
+    void accountBalanceSnapshotRepository_batchInsert_populatesTenantId() {
+        TenantContext.set(8888);
+        try {
+            AccountBalanceSnapshotPO s1 = new AccountBalanceSnapshotPO();
+            s1.setAccountNo("ACC_01");
+
+            accountBalanceSnapshotRepository.batchInsert(List.of(s1));
+
+            assertThat(s1.getTenantId()).isEqualTo(8888);
+            verify(accountBalanceSnapshotMapper).batchInsertSnapshot(List.of(s1));
+        } finally {
+            TenantContext.clear();
+        }
     }
 }

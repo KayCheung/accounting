@@ -12,6 +12,7 @@ import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountingVouc
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountBalanceRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountBalanceSnapshotRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.SubjectRepository;
+import com.kltb.accounting.core.shared.context.TenantContext;
 import com.kltb.accounting.core.shared.exception.AccountException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -69,6 +70,7 @@ public class EodDomainService {
             balance.setCurrency(Constants.DEFAULT_CURRENCY);
             balance.setDebitAmount(debitAmount);
             balance.setCreditAmount(creditAmount);
+            balance.setTenantId(TenantContext.get());
 
             // Query previous day end balance for the same account
             AccountBalancePO previousDay = accountBalanceRepository
@@ -165,6 +167,7 @@ public class EodDomainService {
             snapshot.setCurrency(balance.getCurrency());
             snapshot.setBalanceDirection(balance.getBalanceDirection());
             snapshot.setBalance(balance.getEndBalance());
+            snapshot.setTenantId(balance.getTenantId() != null ? balance.getTenantId() : TenantContext.get());
             snapshot.setExtJson(String.format("{\"debitAmount\":%s,\"creditAmount\":%s}",
                     balance.getDebitAmount(), balance.getCreditAmount()));
             snapshots.add(snapshot);
@@ -180,6 +183,7 @@ public class EodDomainService {
                 monthSnapshot.setCurrency(balance.getCurrency());
                 monthSnapshot.setBalanceDirection(balance.getBalanceDirection());
                 monthSnapshot.setBalance(balance.getEndBalance());
+                monthSnapshot.setTenantId(balance.getTenantId() != null ? balance.getTenantId() : TenantContext.get());
                 monthSnapshot.setExtJson(String.format("{\"debitAmount\":%s,\"creditAmount\":%s}",
                         balance.getDebitAmount(), balance.getCreditAmount()));
                 snapshots.add(monthSnapshot);

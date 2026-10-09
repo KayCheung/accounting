@@ -11,7 +11,7 @@
         <foreach collection="list" item="item" separator=",">
             (#{item.accountingDate}, #{item.subjectCode}, #{item.accountNo}, #{item.currency},
              #{item.balanceDirection.code}, #{item.beginBalance}, #{item.debitAmount}, #{item.creditAmount}, #{item.endBalance},
-             NOW(), NOW(), 0, #{item.tenantId})
+             NOW(), NOW(), 0, COALESCE(#{item.tenantId}, -1))
         </foreach>
         ON DUPLICATE KEY UPDATE
             debit_amount = VALUES(debit_amount),

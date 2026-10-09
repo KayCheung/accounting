@@ -7,6 +7,8 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
+import com.kltb.accounting.core.shared.context.TenantContext;
+
 @Repository
 @RequiredArgsConstructor
 public class AccountBalanceSnapshotRepository {
@@ -16,6 +18,12 @@ public class AccountBalanceSnapshotRepository {
     public void batchInsert(List<AccountBalanceSnapshotPO> list) {
         if (list == null || list.isEmpty()) {
             return;
+        }
+        Integer defaultTenant = TenantContext.get();
+        for (AccountBalanceSnapshotPO po : list) {
+            if (po.getTenantId() == null) {
+                po.setTenantId(defaultTenant != null ? defaultTenant : TenantContext.SYSTEM_TENANT);
+            }
         }
         snapshotMapper.batchInsertSnapshot(list);
     }

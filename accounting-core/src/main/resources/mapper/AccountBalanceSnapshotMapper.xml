@@ -12,7 +12,7 @@
             (#{item.snapshotDate}, #{item.snapshotType.code}, #{item.snapshotTime},
              #{item.subjectCode}, #{item.accountNo}, #{item.currency},
              #{item.balanceDirection.code}, #{item.balance}, #{item.extJson},
-             NOW(), NOW(), 0, #{item.tenantId})
+             NOW(), NOW(), 0, COALESCE(#{item.tenantId}, -1))
         </foreach>
     </insert>
 

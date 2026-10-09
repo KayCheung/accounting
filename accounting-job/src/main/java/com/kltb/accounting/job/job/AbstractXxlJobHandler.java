@@ -5,6 +5,8 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * XXL-JOB 抽象基类，封装所有 Job 的公共逻辑
@@ -52,7 +54,7 @@ public abstract class AbstractXxlJobHandler {
         /** 总笔数（可选） */
         public int totalCount;
         /** 失败明细列表 */
-        private final java.util.List<String> failedDetails = new java.util.ArrayList<>();
+        private final List<String> failedDetails = new ArrayList<>();
 
         protected JobContext(String jobName) {
             this.jobName = jobName;

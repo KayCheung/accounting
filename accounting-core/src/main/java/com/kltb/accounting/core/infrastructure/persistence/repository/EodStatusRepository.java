@@ -2,9 +2,13 @@ package com.kltb.accounting.core.infrastructure.persistence.repository;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.infrastructure.persistence.entity.EodStatusPO;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.EodStatusMapper;
+import com.kltb.accounting.core.shared.exception.AccountException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
@@ -13,6 +17,7 @@ import java.time.LocalDateTime;
 /**
  * 日切状态持久化仓储（Step 17S 新增）
  */
+@Slf4j
 @Repository
 @RequiredArgsConstructor
 public class EodStatusRepository {
@@ -20,18 +25,73 @@ public class EodStatusRepository {
     private final EodStatusMapper eodStatusMapper;
 
     /**
-     * 创建日切状态记录（初始状态=1 未开始）
+     * 创建日切状态记录（支持日切失败重试幂等重置）
      *
      * @param accountingDate 会计日期
-     * @return 新创建的PO
+     * @return 状态PO
      */
     public EodStatusPO createStatus(LocalDate accountingDate) {
+        EodStatusPO existing = findByDate(accountingDate);
+        if (existing != null) {
+            if (existing.getEodStatus() != null && existing.getEodStatus() == 8) {
+                throw new AccountException(ResultCode.EOD_ALREADY_EXECUTED,
+                        "会计日 [" + accountingDate + "] 日切已完成，不可重复执行");
+            }
+            log.info("[EOD-STATUS] 会计日 [{}] 已存在日切记录(status={})，重置状态进行重试",
+                    accountingDate, existing.getEodStatus());
+            resetStatus(accountingDate);
+            existing.setEodStatus(1);
+            existing.setFailedStage("");
+            existing.setFailReason("");
+            existing.setTotalDurationMs(0L);
+            existing.setArchiveDateTime(null);
+            return existing;
+        }
+
         EodStatusPO po = new EodStatusPO();
         po.setAccountingDate(accountingDate);
         po.setEodStatus(1);
         po.setTotalDurationMs(0L);
-        eodStatusMapper.insert(po);
-        return po;
+        try {
+            eodStatusMapper.insert(po);
+            return po;
+        } catch (DuplicateKeyException e) {
+            log.warn("[EOD-STATUS] 并发创建日切状态冲突，转为重试重置模式: date={}", accountingDate);
+            EodStatusPO retryPo = findByDate(accountingDate);
+            if (retryPo != null) {
+                if (retryPo.getEodStatus() != null && retryPo.getEodStatus() == 8) {
+                    throw new AccountException(ResultCode.EOD_ALREADY_EXECUTED,
+                            "会计日 [" + accountingDate + "] 日切已完成，不可重复执行");
+                }
+                resetStatus(accountingDate);
+                retryPo.setEodStatus(1);
+                retryPo.setFailedStage("");
+                retryPo.setFailReason("");
+                retryPo.setTotalDurationMs(0L);
+                retryPo.setArchiveDateTime(null);
+                return retryPo;
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * 重置日切状态记录（用于失败后重试）
+     *
+     * @param accountingDate 会计日期
+     */
+    public void resetStatus(LocalDate accountingDate) {
+        int affected = eodStatusMapper.update(null,
+                new LambdaUpdateWrapper<EodStatusPO>()
+                        .eq(EodStatusPO::getAccountingDate, accountingDate)
+                        .set(EodStatusPO::getEodStatus, 1)
+                        .set(EodStatusPO::getFailedStage, "")
+                        .set(EodStatusPO::getFailReason, "")
+                        .set(EodStatusPO::getTotalDurationMs, 0L)
+                        .set(EodStatusPO::getArchiveDateTime, null));
+        if (affected == 0) {
+            throw new IllegalStateException("日切状态记录不存在: accountingDate=" + accountingDate);
+        }
     }
 
     /**

@@ -26,14 +26,14 @@ public class EodStatusDomainService {
     private final EodStatusRepository eodStatusRepository;
 
     /**
-     * 创建日切状态记录（初始状态=1 未开始）
+     * 创建或重置日切状态记录（初始状态=1 未开始，支持失败重试幂等）
      *
      * @param accountingDate 会计日期
-     * @return 新创建的PO
+     * @return 状态PO
      */
     public EodStatusPO createStatus(LocalDate accountingDate) {
         EodStatusPO po = eodStatusRepository.createStatus(accountingDate);
-        log.info("[EOD-STATUS] 创建日切状态: date={}, id={}", accountingDate, po.getId());
+        log.info("[EOD-STATUS] 创建或重置日切状态成功: date={}, id={}, status={}", accountingDate, po.getId(), po.getEodStatus());
         return po;
     }
 
