@@ -84,6 +84,9 @@ public class BalanceQueryAssembler {
         response.setFreezeId(po.getVoucherNo());
         response.setAccountNo(po.getAccountNo());
         response.setFreezeAmount(po.getFreezeAmount());
+        response.setOrigFreezeAmount(po.getOrigFreezeAmount());
+        response.setUnfrozenAmount(po.getUnfrozenAmount());
+        response.setDeductedAmount(po.getDeductedAmount());
         response.setStatus(Optional.ofNullable(po.getStatus()).map(FreezeStatusEnum::getCode).orElse(null));
         response.setStatusDesc(Optional.ofNullable(po.getStatus()).map(FreezeStatusEnum::getDesc).orElse(null));
         response.setExpireTime(po.getExpireTime());

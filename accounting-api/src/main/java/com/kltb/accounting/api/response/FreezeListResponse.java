@@ -25,8 +25,17 @@ public class FreezeListResponse implements Serializable {
     @Schema(description = "账户编号")
     private String accountNo;
 
-    @Schema(description = "冻结金额")
+    @Schema(description = "当前有效冻结金额（剩余冻结金额）")
     private BigDecimal freezeAmount;
+
+    @Schema(description = "初始冻结金额")
+    private BigDecimal origFreezeAmount;
+
+    @Schema(description = "累计已解冻金额")
+    private BigDecimal unfrozenAmount;
+
+    @Schema(description = "累计已扣款金额")
+    private BigDecimal deductedAmount;
 
     @Schema(description = "状态：1-冻结,2-已解冻")
     private Integer status;

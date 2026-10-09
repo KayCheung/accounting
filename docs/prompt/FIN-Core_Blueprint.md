@@ -627,7 +627,20 @@
       - **仓储层防御与自动化测试保障**：
         - `SubAccountDetailRepository.insert` 与 `AccountDetailRepository.insert` 增加 `entryId` 防 null/空字符串兜底；
         - `FreezeDomainServiceTest` 新增 `unfreezeFund_partialAndFullSuccess_noDuplicateEntry` 单测，覆盖“冻结 100 → 部分解冻 40 → 全部解冻剩余 60”完整链路，断言状态由 FROZEN 最终流转为 UNFROZEN，且生成 4 条子账户明细流水号各不相同；
-        - `PersistenceAffectedRowsEnforcementTest` 补充针对 `FreezeDetailRepository.updateAmountAndStatus` 的乐观锁生效与受影响行数阻断单测；全工程全量 248 个单测 100% 通过。
+  → 完成内容（Step 23.4.22 资金冻结明细初始金额与累计已解冻/已扣款扩展字段补齐治理）：
+    - **背景与守恒模型**：
+      - 为支持对资金冻结单据全生命周期的精确审计追溯，对冻结明细表补齐“初始冻结金额（`orig_freeze_amount`）”、“累计已解冻金额（`unfrozen_amount`）”、“累计已扣款金额（`deducted_amount`）”三项扩展字段；
+      - 严格满足金融核心守恒定律：`orig_freeze_amount == freeze_amount + unfrozen_amount + deducted_amount`；
+    - **DDL 脚本与持久化层落地**：
+      - 新增 Flyway 增量迁移脚本 `V16__add_freeze_detail_ext_amounts.sql`，支持幂等增列与历史存量数据平滑回填；
+      - `AccountFreezeDetailPO` 增加对应字段，`FreezeDetailRepository.insert` 加入防御性非空兜底；
+      - `AccountFreezeDetailMapper` 与 `FreezeDetailRepository` 新增 `updateAmountsAndStatus` 乐观锁更新方法；
+    - **领域服务流转与 API/UI 展现闭环**：
+      - `FreezeDomainService.freezeFund` 冻结时初始化初始金额为 `freezeAmount`，已解冻与已扣款置为 0；
+      - `unfreezeFundInternal` 与 `deductFromFreeze` 分别原子累加已解冻金额与已扣款金额，并同步递减剩余有效冻结金额；
+      - API 契约层 `FreezeDetailResponse` 与 `FreezeListResponse` 增加扩展金额字段；
+      - 前端 `accounting-ui`（`freeze/index.vue`）表格增加“初始冻结金额”、“已解冻金额”、“已扣款金额”列，详情抽屉与解冻/扣款弹窗同步透出初始金额与剩余可用额度；
+      - 全模块 Maven 单元测试 249 个用例 100% 通过，前端 `npm run build` 100% 成功。
   → 待进行业务页面：日切与试算平衡 (`business/eod`)、缓冲记账监控 (`business/buffer-monitor`)
 
 ---

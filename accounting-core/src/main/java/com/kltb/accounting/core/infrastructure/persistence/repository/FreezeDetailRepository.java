@@ -46,6 +46,15 @@ public class FreezeDetailRepository {
         if (po.getTraceSeq() == null) {
             po.setTraceSeq(1);
         }
+        if (po.getOrigFreezeAmount() == null) {
+            po.setOrigFreezeAmount(po.getFreezeAmount() != null ? po.getFreezeAmount() : java.math.BigDecimal.ZERO);
+        }
+        if (po.getUnfrozenAmount() == null) {
+            po.setUnfrozenAmount(java.math.BigDecimal.ZERO);
+        }
+        if (po.getDeductedAmount() == null) {
+            po.setDeductedAmount(java.math.BigDecimal.ZERO);
+        }
         int affected = accountFreezeDetailMapper.insert(po);
         if (affected == 0) {
             throw new AccountException(ResultCode.SYSTEM_ERROR,
@@ -98,7 +107,27 @@ public class FreezeDetailRepository {
      * @param version         当前版本号
      */
     public void updateAmountAndStatus(String voucherNo, java.math.BigDecimal newFreezeAmount, FreezeStatusEnum status, Integer version) {
-        int affected = accountFreezeDetailMapper.updateAmountAndStatus(voucherNo, newFreezeAmount, status.getCode(), version);
+        updateAmountsAndStatus(voucherNo, newFreezeAmount, null, null, status, version);
+    }
+
+    /**
+     * 更新冻结记录扩展金额（剩余冻结金额、累计已解冻、累计已扣款）与状态（乐观锁）
+     *
+     * @param voucherNo         冻结编号
+     * @param newFreezeAmount   扣减后的剩余冻结金额
+     * @param newUnfrozenAmount 累计已解冻金额
+     * @param newDeductedAmount 累计已扣款金额
+     * @param status            新状态
+     * @param version           当前版本号
+     */
+    public void updateAmountsAndStatus(String voucherNo,
+                                       java.math.BigDecimal newFreezeAmount,
+                                       java.math.BigDecimal newUnfrozenAmount,
+                                       java.math.BigDecimal newDeductedAmount,
+                                       FreezeStatusEnum status,
+                                       Integer version) {
+        int affected = accountFreezeDetailMapper.updateAmountsAndStatus(voucherNo,
+                newFreezeAmount, newUnfrozenAmount, newDeductedAmount, status.getCode(), version);
         if (affected == 0) {
             throw new AccountException(ResultCode.OPTIMISTIC_LOCK_FAILED, "冻结记录金额与状态更新冲突: " + voucherNo);
         }

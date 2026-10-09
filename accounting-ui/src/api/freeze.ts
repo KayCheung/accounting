@@ -8,6 +8,9 @@ export interface FreezeRecordItem {
   freezeId: string
   accountNo: string
   freezeAmount: number
+  origFreezeAmount?: number
+  unfrozenAmount?: number
+  deductedAmount?: number
   status: number
   statusDesc: string
   expireTime: string

@@ -167,6 +167,9 @@ public class FreezeDomainService {
                     freezeDetail.setTraceNo(freezeId);
                     freezeDetail.setTraceSeq(1);
                     freezeDetail.setFreezeAmount(freezeAmount);
+                    freezeDetail.setOrigFreezeAmount(freezeAmount);
+                    freezeDetail.setUnfrozenAmount(BigDecimal.ZERO);
+                    freezeDetail.setDeductedAmount(BigDecimal.ZERO);
                     freezeDetail.setStatus(FreezeStatusEnum.FROZEN);
                     freezeDetail.setExpireTime(expireTime != null ? expireTime : DEFAULT_EXPIRE_TIME);
                     freezeDetail.setTradeTime(now);
@@ -255,18 +258,24 @@ public class FreezeDomainService {
                             BalanceTypeEnum.AVAILABLE, DebitCreditEnum.DEBIT,
                             availableSub.getBalance(), unfreezeAmount, newAvailable, now, "资金解冻-可用增加");
 
-                    // 冻结记录剩余金额与状态流转（支持部分解冻与多次解冻）
+                    // 冻结记录剩余金额与状态流转（支持部分解冻与多次解冻，维护累计已解冻金额）
                     BigDecimal remainingFreezeAmount = currentRecord.getFreezeAmount().subtract(unfreezeAmount);
+                    BigDecimal currentUnfrozen = currentRecord.getUnfrozenAmount() != null
+                            ? currentRecord.getUnfrozenAmount() : BigDecimal.ZERO;
+                    BigDecimal newUnfrozen = currentUnfrozen.add(unfreezeAmount);
+                    BigDecimal currentDeducted = currentRecord.getDeductedAmount() != null
+                            ? currentRecord.getDeductedAmount() : BigDecimal.ZERO;
+
                     if (remainingFreezeAmount.compareTo(BigDecimal.ZERO) == 0) {
-                        freezeDetailRepository.updateAmountAndStatus(currentRecord.getVoucherNo(),
-                                BigDecimal.ZERO, FreezeStatusEnum.UNFROZEN, currentRecord.getVersion());
+                        freezeDetailRepository.updateAmountsAndStatus(currentRecord.getVoucherNo(),
+                                BigDecimal.ZERO, newUnfrozen, currentDeducted, FreezeStatusEnum.UNFROZEN, currentRecord.getVersion());
                     } else {
-                        freezeDetailRepository.updateAmountAndStatus(currentRecord.getVoucherNo(),
-                                remainingFreezeAmount, FreezeStatusEnum.FROZEN, currentRecord.getVersion());
+                        freezeDetailRepository.updateAmountsAndStatus(currentRecord.getVoucherNo(),
+                                remainingFreezeAmount, newUnfrozen, currentDeducted, FreezeStatusEnum.FROZEN, currentRecord.getVersion());
                     }
 
-                    log.info("[UNFREEZE] 资金解冻完成 freezeId={} amount={} remaining={}",
-                            freezeRecord.getVoucherNo(), unfreezeAmount, remainingFreezeAmount);
+                    log.info("[UNFREEZE] 资金解冻完成 freezeId={} amount={} remaining={} unfrozenTotal={}",
+                            freezeRecord.getVoucherNo(), unfreezeAmount, remainingFreezeAmount, newUnfrozen);
                     return null;
                 })
         );
@@ -358,18 +367,24 @@ public class FreezeDomainService {
                             currentAccount.getBalance(), deductAmount, newMainBalance, now,
                             DebitCreditEnum.CREDIT, "冻结扣款-主账户减少");
 
-                    // 冻结记录剩余金额与状态流转
+                    // 冻结记录剩余金额与状态流转（维护累计已扣款金额）
                     BigDecimal remainingFreezeAmount = currentRecord.getFreezeAmount().subtract(deductAmount);
+                    BigDecimal currentUnfrozen = currentRecord.getUnfrozenAmount() != null
+                            ? currentRecord.getUnfrozenAmount() : BigDecimal.ZERO;
+                    BigDecimal currentDeducted = currentRecord.getDeductedAmount() != null
+                            ? currentRecord.getDeductedAmount() : BigDecimal.ZERO;
+                    BigDecimal newDeducted = currentDeducted.add(deductAmount);
+
                     if (remainingFreezeAmount.compareTo(BigDecimal.ZERO) == 0) {
-                        freezeDetailRepository.updateAmountAndStatus(currentRecord.getVoucherNo(),
-                                BigDecimal.ZERO, FreezeStatusEnum.UNFROZEN, currentRecord.getVersion());
+                        freezeDetailRepository.updateAmountsAndStatus(currentRecord.getVoucherNo(),
+                                BigDecimal.ZERO, currentUnfrozen, newDeducted, FreezeStatusEnum.UNFROZEN, currentRecord.getVersion());
                     } else {
-                        freezeDetailRepository.updateAmountAndStatus(currentRecord.getVoucherNo(),
-                                remainingFreezeAmount, FreezeStatusEnum.FROZEN, currentRecord.getVersion());
+                        freezeDetailRepository.updateAmountsAndStatus(currentRecord.getVoucherNo(),
+                                remainingFreezeAmount, currentUnfrozen, newDeducted, FreezeStatusEnum.FROZEN, currentRecord.getVersion());
                     }
 
-                    log.info("[DEDUCT] 冻结扣款完成 freezeId={} amount={} remaining={}",
-                            freezeRecord.getVoucherNo(), deductAmount, remainingFreezeAmount);
+                    log.info("[DEDUCT] 冻结扣款完成 freezeId={} amount={} remaining={} deductedTotal={}",
+                            freezeRecord.getVoucherNo(), deductAmount, remainingFreezeAmount, newDeducted);
                     return null;
                 })
         );

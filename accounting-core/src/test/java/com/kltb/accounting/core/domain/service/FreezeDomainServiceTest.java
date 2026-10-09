@@ -125,6 +125,9 @@ class FreezeDomainServiceTest {
         assertThat(result.getBusinessCode()).isEqualTo(com.kltb.accounting.api.constant.Constants.DEFAULT_BUSINESS_CODE);
         assertThat(result.getTradingCode()).isEqualTo(com.kltb.accounting.api.constant.Constants.TRADING_CODE_FREEZE);
         assertThat(result.getFreezeAmount()).isEqualByComparingTo("100");
+        assertThat(result.getOrigFreezeAmount()).isEqualByComparingTo("100");
+        assertThat(result.getUnfrozenAmount()).isEqualByComparingTo("0");
+        assertThat(result.getDeductedAmount()).isEqualByComparingTo("0");
         verify(freezeDetailRepository).insert(any(AccountFreezeDetailPO.class));
     }
 
@@ -263,14 +266,17 @@ class FreezeDomainServiceTest {
 
         // 第一次：部分解冻 40 元
         freezeDomainService.unfreezeFund("FRZ20261009000001", new BigDecimal("40.00"), "第一次部分解冻40");
-        verify(freezeDetailRepository).updateAmountAndStatus(
+        verify(freezeDetailRepository).updateAmountsAndStatus(
                 eq("FRZ20261009000001"),
                 eq(new BigDecimal("60.00")),
+                eq(new BigDecimal("40.00")),
+                eq(BigDecimal.ZERO),
                 eq(FreezeStatusEnum.FROZEN),
                 eq(0));
 
-        // 模拟第一次解冻后数据库记录变化：剩余金额为 60.00，版本自增为 1
+        // 模拟第一次解冻后数据库记录变化：剩余金额为 60.00，累计已解冻 40.00，版本自增为 1
         record.setFreezeAmount(new BigDecimal("60.00"));
+        record.setUnfrozenAmount(new BigDecimal("40.00"));
         record.setVersion(1);
         frozenSub.setBalance(new BigDecimal("60.00"));
         frozenSub.setVersion(2L);
@@ -279,8 +285,10 @@ class FreezeDomainServiceTest {
 
         // 第二次：解冻剩余全部 60 元
         freezeDomainService.unfreezeFund("FRZ20261009000001", new BigDecimal("60.00"), "第二次解冻剩余60");
-        verify(freezeDetailRepository).updateAmountAndStatus(
+        verify(freezeDetailRepository).updateAmountsAndStatus(
                 eq("FRZ20261009000001"),
+                eq(BigDecimal.ZERO),
+                eq(new BigDecimal("100.00")),
                 eq(BigDecimal.ZERO),
                 eq(FreezeStatusEnum.UNFROZEN),
                 eq(1));

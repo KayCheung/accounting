@@ -291,7 +291,7 @@ class PersistenceAffectedRowsEnforcementTest {
     @Test
     @DisplayName("FreezeDetailRepository.updateAmountAndStatus: 受影响行数等于0时抛出 OPTIMISTIC_LOCK_FAILED")
     void freezeDetailRepository_updateAmountAndStatus_zeroAffected_throwsOptimisticLockFailed() {
-        when(accountFreezeDetailMapper.updateAmountAndStatus(anyString(), any(), anyInt(), anyInt())).thenReturn(0);
+        when(accountFreezeDetailMapper.updateAmountsAndStatus(anyString(), any(), any(), any(), anyInt(), anyInt())).thenReturn(0);
 
         assertThatThrownBy(() -> freezeDetailRepository.updateAmountAndStatus("FRZ123", java.math.BigDecimal.ZERO, FreezeStatusEnum.UNFROZEN, 1))
                 .isInstanceOf(AccountException.class)
@@ -299,11 +299,21 @@ class PersistenceAffectedRowsEnforcementTest {
     }
 
     @Test
-    @DisplayName("FreezeDetailRepository.updateAmountAndStatus: 受影响行数大于0时正常执行")
-    void freezeDetailRepository_updateAmountAndStatus_success() {
-        when(accountFreezeDetailMapper.updateAmountAndStatus("FRZ123", java.math.BigDecimal.ZERO, FreezeStatusEnum.UNFROZEN.getCode(), 1)).thenReturn(1);
+    @DisplayName("FreezeDetailRepository.updateAmountsAndStatus: 受影响行数等于0时抛出 OPTIMISTIC_LOCK_FAILED")
+    void freezeDetailRepository_updateAmountsAndStatus_zeroAffected_throwsOptimisticLockFailed() {
+        when(accountFreezeDetailMapper.updateAmountsAndStatus(anyString(), any(), any(), any(), anyInt(), anyInt())).thenReturn(0);
 
-        freezeDetailRepository.updateAmountAndStatus("FRZ123", java.math.BigDecimal.ZERO, FreezeStatusEnum.UNFROZEN, 1);
-        verify(accountFreezeDetailMapper).updateAmountAndStatus("FRZ123", java.math.BigDecimal.ZERO, FreezeStatusEnum.UNFROZEN.getCode(), 1);
+        assertThatThrownBy(() -> freezeDetailRepository.updateAmountsAndStatus("FRZ123", java.math.BigDecimal.ZERO, java.math.BigDecimal.TEN, java.math.BigDecimal.ZERO, FreezeStatusEnum.UNFROZEN, 1))
+                .isInstanceOf(AccountException.class)
+                .satisfies(ex -> assertThat(((AccountException) ex).getResultCode()).isEqualTo(ResultCode.OPTIMISTIC_LOCK_FAILED));
+    }
+
+    @Test
+    @DisplayName("FreezeDetailRepository.updateAmountsAndStatus: 受影响行数大于0时正常执行")
+    void freezeDetailRepository_updateAmountsAndStatus_success() {
+        when(accountFreezeDetailMapper.updateAmountsAndStatus("FRZ123", java.math.BigDecimal.ZERO, java.math.BigDecimal.TEN, java.math.BigDecimal.ZERO, FreezeStatusEnum.UNFROZEN.getCode(), 1)).thenReturn(1);
+
+        freezeDetailRepository.updateAmountsAndStatus("FRZ123", java.math.BigDecimal.ZERO, java.math.BigDecimal.TEN, java.math.BigDecimal.ZERO, FreezeStatusEnum.UNFROZEN, 1);
+        verify(accountFreezeDetailMapper).updateAmountsAndStatus("FRZ123", java.math.BigDecimal.ZERO, java.math.BigDecimal.TEN, java.math.BigDecimal.ZERO, FreezeStatusEnum.UNFROZEN.getCode(), 1);
     }
 }

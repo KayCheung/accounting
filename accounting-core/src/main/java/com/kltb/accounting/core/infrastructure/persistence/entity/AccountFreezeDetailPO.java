@@ -66,9 +66,24 @@ public class AccountFreezeDetailPO extends BaseEntity {
     private LocalDateTime tradeTime;
 
     /**
-     * 冻结金额
+     * 当前有效冻结金额（剩余冻结金额）
      */
     private BigDecimal freezeAmount;
+
+    /**
+     * 初始冻结金额
+     */
+    private BigDecimal origFreezeAmount;
+
+    /**
+     * 累计已解冻金额
+     */
+    private BigDecimal unfrozenAmount;
+
+    /**
+     * 累计已扣款金额
+     */
+    private BigDecimal deductedAmount;
 
     /**
      * 状态：1-冻结,2-已解冻

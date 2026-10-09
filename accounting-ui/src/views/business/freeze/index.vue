@@ -126,10 +126,34 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="freezeAmount" label="冻结金额" min-width="135" align="right">
+        <el-table-column prop="origFreezeAmount" label="初始冻结金额" min-width="130" align="right">
+          <template #default="{ row }">
+            <span class="freeze-amount-text">
+              <AmountDisplay :value="row.origFreezeAmount ?? row.freezeAmount" prefix="¥ " />
+            </span>
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="freezeAmount" label="剩余冻结金额" min-width="130" align="right">
           <template #default="{ row }">
             <span class="freeze-amount-text">
               <AmountDisplay :value="row.freezeAmount" prefix="¥ " />
+            </span>
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="unfrozenAmount" label="已解冻金额" min-width="120" align="right">
+          <template #default="{ row }">
+            <span class="unfrozen-amount-text">
+              <AmountDisplay :value="row.unfrozenAmount ?? 0" prefix="¥ " />
+            </span>
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="deductedAmount" label="已扣款金额" min-width="120" align="right">
+          <template #default="{ row }">
+            <span class="deducted-amount-text">
+              <AmountDisplay :value="row.deductedAmount ?? 0" prefix="¥ " />
             </span>
           </template>
         </el-table-column>
@@ -326,7 +350,13 @@
           <span class="value mono">{{ actionTarget.accountNo }}</span>
         </div>
         <div class="target-row">
-          <span class="label">当前冻结额度：</span>
+          <span class="label">初始冻结：</span>
+          <span class="value">
+            <AmountDisplay :value="actionTarget.origFreezeAmount ?? actionTarget.freezeAmount" prefix="¥ " />
+          </span>
+        </div>
+        <div class="target-row">
+          <span class="label">当前剩余冻结：</span>
           <span class="value amount-highlight">
             <AmountDisplay :value="actionTarget.freezeAmount" prefix="¥ " />
           </span>
@@ -403,7 +433,13 @@
           <span class="value mono">{{ actionTarget.accountNo }}</span>
         </div>
         <div class="target-row">
-          <span class="label">可扣额度：</span>
+          <span class="label">初始冻结：</span>
+          <span class="value">
+            <AmountDisplay :value="actionTarget.origFreezeAmount ?? actionTarget.freezeAmount" prefix="¥ " />
+          </span>
+        </div>
+        <div class="target-row">
+          <span class="label">当前可扣额度：</span>
           <span class="value amount-highlight">
             <AmountDisplay :value="actionTarget.freezeAmount" prefix="¥ " />
           </span>
@@ -482,9 +518,24 @@
         </div>
 
         <el-descriptions title="资金核心属性" :column="1" border size="small" class="detail-desc">
-          <el-descriptions-item label="冻结金额">
+          <el-descriptions-item label="初始冻结金额">
             <span class="drawer-amount">
+              <AmountDisplay :value="selectedRecord.origFreezeAmount ?? selectedRecord.freezeAmount" prefix="¥ " />
+            </span>
+          </el-descriptions-item>
+          <el-descriptions-item label="剩余冻结金额">
+            <span class="drawer-amount" :class="{ 'text-muted': selectedRecord.freezeAmount === 0 }">
               <AmountDisplay :value="selectedRecord.freezeAmount" prefix="¥ " />
+            </span>
+          </el-descriptions-item>
+          <el-descriptions-item label="累计已解冻金额">
+            <span class="unfrozen-amount-text">
+              <AmountDisplay :value="selectedRecord.unfrozenAmount ?? 0" prefix="¥ " />
+            </span>
+          </el-descriptions-item>
+          <el-descriptions-item label="累计已扣款金额">
+            <span class="deducted-amount-text">
+              <AmountDisplay :value="selectedRecord.deductedAmount ?? 0" prefix="¥ " />
             </span>
           </el-descriptions-item>
           <el-descriptions-item label="关联账户编号">
@@ -982,6 +1033,16 @@ onMounted(() => {
 .freeze-amount-text {
   font-weight: 600;
   color: #fa8c16;
+}
+
+.unfrozen-amount-text {
+  font-weight: 500;
+  color: #52c41a;
+}
+
+.deducted-amount-text {
+  font-weight: 500;
+  color: #ff4d4f;
 }
 
 .expire-time-cell {
