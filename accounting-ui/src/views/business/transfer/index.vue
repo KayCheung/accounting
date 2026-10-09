@@ -938,7 +938,7 @@ async function fetchRuleList() {
       pageNo: 1,
       pageSize: 100
     })
-    allActiveRules.value = res.records || []
+    allActiveRules.value = res.list || res.records || []
     // 默认全选所有启用的规则
     selectAllActiveRules()
   } catch (err: any) {
@@ -1119,7 +1119,7 @@ async function fetchRecordList() {
   loadingRecords.value = true
   try {
     const res = await getTransferRecordPage(recordQueryForm)
-    recordList.value = res.records || []
+    recordList.value = res.list || res.records || []
     recordTotal.value = res.total || 0
   } catch (err: any) {
     toast.error(err.message || '加载结转审计记录失败')

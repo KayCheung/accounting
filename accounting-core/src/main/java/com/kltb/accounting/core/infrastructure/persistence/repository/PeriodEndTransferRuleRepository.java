@@ -60,10 +60,20 @@ public class PeriodEndTransferRuleRepository {
                                                     Boolean autoTransfer, Integer periodCycle) {
         Page<PeriodEndTransferRulePO> page = new Page<>(pageNo, pageSize);
         LambdaQueryWrapper<PeriodEndTransferRulePO> wrapper = new LambdaQueryWrapper<PeriodEndTransferRulePO>()
-                .eq(PeriodEndTransferRulePO::getIsDelete, 0)
-                .like(ruleCode != null && !ruleCode.isBlank(), PeriodEndTransferRulePO::getRuleCode, ruleCode)
-                .like(ruleName != null && !ruleName.isBlank(), PeriodEndTransferRulePO::getRuleName, ruleName)
-                .orderByAsc(PeriodEndTransferRulePO::getExecuteOrder)
+                .eq(PeriodEndTransferRulePO::getIsDelete, 0);
+
+        boolean hasCode = ruleCode != null && !ruleCode.isBlank();
+        boolean hasName = ruleName != null && !ruleName.isBlank();
+        if (hasCode && hasName && ruleCode.trim().equalsIgnoreCase(ruleName.trim())) {
+            String keyword = ruleCode.trim();
+            wrapper.and(w -> w.like(PeriodEndTransferRulePO::getRuleCode, keyword)
+                    .or().like(PeriodEndTransferRulePO::getRuleName, keyword));
+        } else {
+            wrapper.like(hasCode, PeriodEndTransferRulePO::getRuleCode, hasCode ? ruleCode.trim() : null)
+                    .like(hasName, PeriodEndTransferRulePO::getRuleName, hasName ? ruleName.trim() : null);
+        }
+
+        wrapper.orderByAsc(PeriodEndTransferRulePO::getExecuteOrder)
                 .orderByDesc(PeriodEndTransferRulePO::getId);
 
         if (transferType != null) {

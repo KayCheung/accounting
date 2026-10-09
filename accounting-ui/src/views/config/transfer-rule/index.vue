@@ -475,7 +475,7 @@ async function fetchData() {
       autoTransfer: queryForm.autoTransfer,
       status: queryForm.status
     })
-    tableData.value = res.records || []
+    tableData.value = res.list || res.records || []
     pagination.total = res.total || 0
   } catch (err: any) {
     ElMessage.error(err.message || '加载结转规则列表失败')
