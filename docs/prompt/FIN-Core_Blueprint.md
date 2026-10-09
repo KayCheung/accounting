@@ -752,6 +752,12 @@
         - 全模块 275 个后端单元与集成测试 100% 通过，前端 `npm run build` 100% 成功。
       - **Flyway 数据库迁移升级脚本（db/migration）**：
         - 新增 `V17__add_transfer_rule_cycle_fields.sql`：为表 `t_period_end_transfer_rule` 补充 `auto_transfer`（是否自动结转）与 `period_cycle`（结转周期）列及复合索引 `idx_auto_cycle`，支持幂等执行。
+  → 完成内容（Step 23.4.30 期末结转分页数据绑定与搜索互斥缺陷修复 BUG261009-005）：
+    - **前端分页字段统一对齐（PageResponse）**：
+      - 后端接口统一返回 `PageResponse<T>`（结构为 `list, total, pages, current`）；
+      - 修复 `transfer-rule/index.vue`（结转规则管理）、`transfer/index.vue`（结转工作台规则列表与台账审计列表）从 `res.records` 误取导致渲染为空数组的问题，统一为 `res.list || res.records || []`；
+    - **后端多维关键字搜索解耦（Repository）**：
+      - 修复 `PeriodEndTransferRuleRepository.selectPage` 当 `ruleCode` 与 `ruleName` 传入相同搜索关键字时原 `AND` 关系互斥导致的无数据问题，优化为 `OR` 模糊匹配。
 - [x] **Step 23** · 业务功能页面开发全量交付完毕（100% 完成）
 
 
