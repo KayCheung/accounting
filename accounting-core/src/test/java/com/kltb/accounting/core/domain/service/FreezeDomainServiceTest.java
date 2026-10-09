@@ -4,6 +4,7 @@ import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.AccountStatusEnum;
 import com.kltb.accounting.core.domain.enums.BalanceTypeEnum;
 import com.kltb.accounting.core.domain.enums.FreezeStatusEnum;
+import com.kltb.accounting.core.infrastructure.account.BusinessNoGenerator;
 import com.kltb.accounting.core.infrastructure.account.FreezeIdGenerator;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountDetailRepository;
@@ -47,6 +48,7 @@ class FreezeDomainServiceTest {
     @Mock private DistributedLockTemplate distributedLockTemplate;
     @Mock private TransactionTemplate transactionTemplate;
     @Mock private FreezeIdGenerator freezeIdGenerator;
+    @Mock private BusinessNoGenerator businessNoGenerator;
 
     @InjectMocks private FreezeDomainService freezeDomainService;
 
@@ -228,6 +230,63 @@ class FreezeDomainServiceTest {
         doAnswer(invocation -> ((org.springframework.transaction.support.TransactionCallback<?>) invocation.getArgument(0)).doInTransaction(null))
                 .when(transactionTemplate).execute(any());
         freezeDomainService.deductFromFreeze("FRZ001", new BigDecimal("500"), "test");
+    }
+
+    @Test
+    @DisplayName("资金解冻: 支持部分解冻与第二次解冻剩余全部金额，不发生唯一键冲突")
+    void unfreezeFund_partialAndFullSuccess_noDuplicateEntry() {
+        // 初始冻结 100 元
+        AccountFreezeDetailPO record = new AccountFreezeDetailPO();
+        record.setVoucherNo("FRZ20261009000001");
+        record.setStatus(FreezeStatusEnum.FROZEN);
+        record.setFreezeAmount(new BigDecimal("100.00"));
+        record.setAccountNo("A001");
+        record.setVersion(0);
+
+        AccountPO account = buildAccount("A001");
+        SubAccountPO frozenSub = new SubAccountPO().setBalance(new BigDecimal("100.00")).setVersion(1L);
+        SubAccountPO availableSub = new SubAccountPO().setBalance(new BigDecimal("500.00")).setVersion(1L);
+
+        when(freezeDetailRepository.selectByVoucherNo("FRZ20261009000001")).thenReturn(record);
+        when(accountRepository.selectByAccountNo("A001")).thenReturn(account);
+        when(subAccountRepository.selectByAccountNoAndType("A001", BalanceTypeEnum.FROZEN.getCode())).thenReturn(frozenSub);
+        when(subAccountRepository.selectByAccountNoAndType("A001", BalanceTypeEnum.AVAILABLE.getCode())).thenReturn(availableSub);
+        when(businessNoGenerator.generateEntryId("UFZ"))
+                .thenReturn("UFZ202610090001")
+                .thenReturn("UFZ202610090002")
+                .thenReturn("UFZ202610090003")
+                .thenReturn("UFZ202610090004");
+        doAnswer(invocation -> ((Supplier<?>) invocation.getArgument(3)).get())
+                .when(distributedLockTemplate).execute(anyString(), anyLong(), anyLong(), any());
+        doAnswer(invocation -> ((org.springframework.transaction.support.TransactionCallback<?>) invocation.getArgument(0)).doInTransaction(null))
+                .when(transactionTemplate).execute(any());
+
+        // 第一次：部分解冻 40 元
+        freezeDomainService.unfreezeFund("FRZ20261009000001", new BigDecimal("40.00"), "第一次部分解冻40");
+        verify(freezeDetailRepository).updateAmountAndStatus(
+                eq("FRZ20261009000001"),
+                eq(new BigDecimal("60.00")),
+                eq(FreezeStatusEnum.FROZEN),
+                eq(0));
+
+        // 模拟第一次解冻后数据库记录变化：剩余金额为 60.00，版本自增为 1
+        record.setFreezeAmount(new BigDecimal("60.00"));
+        record.setVersion(1);
+        frozenSub.setBalance(new BigDecimal("60.00"));
+        frozenSub.setVersion(2L);
+        availableSub.setBalance(new BigDecimal("540.00"));
+        availableSub.setVersion(2L);
+
+        // 第二次：解冻剩余全部 60 元
+        freezeDomainService.unfreezeFund("FRZ20261009000001", new BigDecimal("60.00"), "第二次解冻剩余60");
+        verify(freezeDetailRepository).updateAmountAndStatus(
+                eq("FRZ20261009000001"),
+                eq(BigDecimal.ZERO),
+                eq(FreezeStatusEnum.UNFROZEN),
+                eq(1));
+
+        // 验证写入了 4 条子账户明细（每次解冻 2 条），且由于 entryId 唯一绝不冲突
+        verify(subAccountDetailRepository, times(4)).insert(any(SubAccountDetailPO.class));
     }
 
     @Test

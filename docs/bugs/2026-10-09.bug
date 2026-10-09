@@ -1,0 +1,11 @@
+BUG261009-001：资金冻结与扣款功能支持资金部分解冻，当发起部分解冻后能成功解冻，但是想做第二次将剩余的全部解冻会报错（系统内部错误: SQLIntegrityConstraintViolationException: Duplicate entry 'FRZ20261009000001-FRZ20261009000001-2-UFZ' for key 'uk_voucher_no'）。
+根因：
+1. 子账户明细表 t_sub_account_detail 存在唯一联合索引 uk_voucher_no (voucher_no, entry_id)；
+2. FreezeDomainService.insertSubAccountDetail 原先通过固定规则 voucherNo + "-" + balanceType.getCode() + "-" + operation 生成 entry_id（如 FRZ20261009000001-2-UFZ）；
+3. 当同一笔冻结单发起第二次解冻时，voucherNo 与 operation ("UFZ") 相同，导致生成的 entry_id 与第一次解冻完全一致，插入时触发唯一约束冲突；多次扣款时主账户明细也存在同样风险；
+4. 此外，单笔冻结单据在部分解冻时未扣减其自身剩余冻结金额 freeze_amount，且单据状态仅依据账户整体子账户余额判断，导致多笔冻结并存时单据状态与剩余额度失真。
+修复：
+1. FreezeDomainService 引入 BusinessNoGenerator，解冻与扣款每次生成全局唯一的分录流水号（如 businessNoGenerator.generateEntryId("UFZ") / generateEntryId("DED")），从根本上消除 (voucher_no, entry_id) 重复；
+2. 在 FreezeDetailRepository 与 AccountFreezeDetailMapper 中新增 updateAmountAndStatus(voucherNo, newFreezeAmount, status, version)，在解冻/扣款时按单据剩余金额扣减并配合乐观锁流转状态（归零转 UNFROZEN，剩余则保持 FROZEN）；
+3. 强化 SubAccountDetailRepository 与 AccountDetailRepository 的 entryId 非空兜底；
+4. 编写部分解冻与剩余全解完整流转单测与仓储乐观锁单测，全量 248 个测试 100% 通过。

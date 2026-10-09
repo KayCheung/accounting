@@ -3,6 +3,7 @@ package com.kltb.accounting.core.infrastructure.persistence.repository;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.AccountStatusEnum;
 import com.kltb.accounting.core.domain.enums.BalanceTypeEnum;
+import com.kltb.accounting.core.domain.enums.FreezeStatusEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountDetailPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountFreezeDetailPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountPO;
@@ -34,7 +35,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -285,5 +286,24 @@ class PersistenceAffectedRowsEnforcementTest {
         assertThatThrownBy(() -> freezeDetailRepository.insert(detail))
                 .isInstanceOf(AccountException.class)
                 .satisfies(ex -> assertThat(((AccountException) ex).getResultCode()).isEqualTo(ResultCode.SYSTEM_ERROR));
+    }
+
+    @Test
+    @DisplayName("FreezeDetailRepository.updateAmountAndStatus: 受影响行数等于0时抛出 OPTIMISTIC_LOCK_FAILED")
+    void freezeDetailRepository_updateAmountAndStatus_zeroAffected_throwsOptimisticLockFailed() {
+        when(accountFreezeDetailMapper.updateAmountAndStatus(anyString(), any(), anyInt(), anyInt())).thenReturn(0);
+
+        assertThatThrownBy(() -> freezeDetailRepository.updateAmountAndStatus("FRZ123", java.math.BigDecimal.ZERO, FreezeStatusEnum.UNFROZEN, 1))
+                .isInstanceOf(AccountException.class)
+                .satisfies(ex -> assertThat(((AccountException) ex).getResultCode()).isEqualTo(ResultCode.OPTIMISTIC_LOCK_FAILED));
+    }
+
+    @Test
+    @DisplayName("FreezeDetailRepository.updateAmountAndStatus: 受影响行数大于0时正常执行")
+    void freezeDetailRepository_updateAmountAndStatus_success() {
+        when(accountFreezeDetailMapper.updateAmountAndStatus("FRZ123", java.math.BigDecimal.ZERO, FreezeStatusEnum.UNFROZEN.getCode(), 1)).thenReturn(1);
+
+        freezeDetailRepository.updateAmountAndStatus("FRZ123", java.math.BigDecimal.ZERO, FreezeStatusEnum.UNFROZEN, 1);
+        verify(accountFreezeDetailMapper).updateAmountAndStatus("FRZ123", java.math.BigDecimal.ZERO, FreezeStatusEnum.UNFROZEN.getCode(), 1);
     }
 }

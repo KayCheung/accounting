@@ -43,6 +43,9 @@ public class AccountDetailRepository {
             throw new AccountException(ResultCode.PARAM_ERROR, "待插入账户明细对象不能为空");
         }
         // 防御性补全：数据库 NOT NULL 且无默认值的字段统一防 null 兜底
+        if (detail.getEntryId() == null) {
+            detail.setEntryId(cn.hutool.core.util.IdUtil.fastSimpleUUID());
+        }
         if (detail.getTxnNo() == null) {
             detail.setTxnNo("");
         }

@@ -85,7 +85,22 @@ public class FreezeDetailRepository {
     public void updateStatus(String voucherNo, FreezeStatusEnum status, Integer version) {
         int affected = accountFreezeDetailMapper.updateStatus(voucherNo, status.getCode(), version.longValue());
         if (affected == 0) {
-            throw new AccountException("冻结记录状态更新冲突: " + voucherNo);
+            throw new AccountException(ResultCode.OPTIMISTIC_LOCK_FAILED, "冻结记录状态更新冲突: " + voucherNo);
+        }
+    }
+
+    /**
+     * 更新冻结记录金额与状态（乐观锁）
+     *
+     * @param voucherNo       冻结编号
+     * @param newFreezeAmount 扣减后的剩余冻结金额
+     * @param status          新状态
+     * @param version         当前版本号
+     */
+    public void updateAmountAndStatus(String voucherNo, java.math.BigDecimal newFreezeAmount, FreezeStatusEnum status, Integer version) {
+        int affected = accountFreezeDetailMapper.updateAmountAndStatus(voucherNo, newFreezeAmount, status.getCode(), version);
+        if (affected == 0) {
+            throw new AccountException(ResultCode.OPTIMISTIC_LOCK_FAILED, "冻结记录金额与状态更新冲突: " + voucherNo);
         }
     }
 

@@ -9,6 +9,7 @@ import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
 import com.kltb.accounting.core.domain.enums.FreezeStatusEnum;
 import com.kltb.accounting.core.domain.enums.TradeTypeEnum;
 import com.kltb.accounting.core.infrastructure.account.AccountValidator;
+import com.kltb.accounting.core.infrastructure.account.BusinessNoGenerator;
 import com.kltb.accounting.core.infrastructure.account.FreezeIdGenerator;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountDetailPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountFreezeDetailPO;
@@ -62,6 +63,7 @@ public class FreezeDomainService {
     private final DistributedLockTemplate distributedLockTemplate;
     private final TransactionTemplate transactionTemplate;
     private final FreezeIdGenerator freezeIdGenerator;
+    private final BusinessNoGenerator businessNoGenerator;
 
     /**
      * 资金冻结（可用余额 → 冻结余额，使用默认通用业务线）
@@ -218,6 +220,10 @@ public class FreezeDomainService {
                         throw new AccountException(ResultCode.FREEZE_STATUS_INVALID,
                                 "冻结记录状态非法（双重检查）: " + freezeRecord.getVoucherNo());
                     }
+                    if (unfreezeAmount.compareTo(currentRecord.getFreezeAmount()) > 0) {
+                        throw new AccountException(ResultCode.FREEZE_AMOUNT_EXCEEDED,
+                                "解冻金额超过冻结记录剩余金额（双重检查）: unfreeze=" + unfreezeAmount + ", freeze=" + currentRecord.getFreezeAmount());
+                    }
 
                     SubAccountPO frozenSub = subAccountRepository.selectByAccountNoAndType(
                             accountNo, BalanceTypeEnum.FROZEN.getCode());
@@ -249,13 +255,18 @@ public class FreezeDomainService {
                             BalanceTypeEnum.AVAILABLE, DebitCreditEnum.DEBIT,
                             availableSub.getBalance(), unfreezeAmount, newAvailable, now, "资金解冻-可用增加");
 
-                    // 完全解冻时更新状态（冻结子账户余额归零）
-                    if (newFrozen.compareTo(BigDecimal.ZERO) == 0) {
-                        freezeDetailRepository.updateStatus(currentRecord.getVoucherNo(),
-                                FreezeStatusEnum.UNFROZEN, currentRecord.getVersion());
+                    // 冻结记录剩余金额与状态流转（支持部分解冻与多次解冻）
+                    BigDecimal remainingFreezeAmount = currentRecord.getFreezeAmount().subtract(unfreezeAmount);
+                    if (remainingFreezeAmount.compareTo(BigDecimal.ZERO) == 0) {
+                        freezeDetailRepository.updateAmountAndStatus(currentRecord.getVoucherNo(),
+                                BigDecimal.ZERO, FreezeStatusEnum.UNFROZEN, currentRecord.getVersion());
+                    } else {
+                        freezeDetailRepository.updateAmountAndStatus(currentRecord.getVoucherNo(),
+                                remainingFreezeAmount, FreezeStatusEnum.FROZEN, currentRecord.getVersion());
                     }
 
-                    log.info("[UNFREEZE] 资金解冻完成 freezeId={} amount={}", freezeRecord.getVoucherNo(), unfreezeAmount);
+                    log.info("[UNFREEZE] 资金解冻完成 freezeId={} amount={} remaining={}",
+                            freezeRecord.getVoucherNo(), unfreezeAmount, remainingFreezeAmount);
                     return null;
                 })
         );
@@ -300,11 +311,15 @@ public class FreezeDomainService {
                 RedisKeyConstants.Lock.Account.accountMutex(accountNo),
                 3, -1,
                 () -> transactionTemplate.execute(s -> {
-                    // 双重检查冻结记录状态
+                    // 双重检查冻结记录状态与剩余金额
                     AccountFreezeDetailPO currentRecord = freezeDetailRepository.selectByVoucherNo(freezeRecord.getVoucherNo());
                     if (currentRecord == null || currentRecord.getStatus() != FreezeStatusEnum.FROZEN) {
                         throw new AccountException(ResultCode.FREEZE_STATUS_INVALID,
                                 "冻结记录状态非法（双重检查）: " + freezeRecord.getVoucherNo());
+                    }
+                    if (deductAmount.compareTo(currentRecord.getFreezeAmount()) > 0) {
+                        throw new AccountException(ResultCode.FREEZE_AMOUNT_EXCEEDED,
+                                "扣款金额超过冻结记录剩余金额（双重检查）: deduct=" + deductAmount + ", freeze=" + currentRecord.getFreezeAmount());
                     }
 
                     // 双重检查冻结子账户余额
@@ -343,11 +358,18 @@ public class FreezeDomainService {
                             currentAccount.getBalance(), deductAmount, newMainBalance, now,
                             DebitCreditEnum.CREDIT, "冻结扣款-主账户减少");
 
-                    // 更新冻结记录为已解冻
-                    freezeDetailRepository.updateStatus(currentRecord.getVoucherNo(),
-                            FreezeStatusEnum.UNFROZEN, currentRecord.getVersion());
+                    // 冻结记录剩余金额与状态流转
+                    BigDecimal remainingFreezeAmount = currentRecord.getFreezeAmount().subtract(deductAmount);
+                    if (remainingFreezeAmount.compareTo(BigDecimal.ZERO) == 0) {
+                        freezeDetailRepository.updateAmountAndStatus(currentRecord.getVoucherNo(),
+                                BigDecimal.ZERO, FreezeStatusEnum.UNFROZEN, currentRecord.getVersion());
+                    } else {
+                        freezeDetailRepository.updateAmountAndStatus(currentRecord.getVoucherNo(),
+                                remainingFreezeAmount, FreezeStatusEnum.FROZEN, currentRecord.getVersion());
+                    }
 
-                    log.info("[DEDUCT] 冻结扣款完成 freezeId={} amount={}", freezeRecord.getVoucherNo(), deductAmount);
+                    log.info("[DEDUCT] 冻结扣款完成 freezeId={} amount={} remaining={}",
+                            freezeRecord.getVoucherNo(), deductAmount, remainingFreezeAmount);
                     return null;
                 })
         );
@@ -445,7 +467,10 @@ public class FreezeDomainService {
                                      LocalDateTime tradeTime, DebitCreditEnum debitCredit, String summary) {
         AccountDetailPO detail = new AccountDetailPO();
         detail.setVoucherNo(voucherNo);
-        detail.setEntryId(voucherNo + "-MAIN-0");
+        String entryId = (businessNoGenerator != null)
+                ? businessNoGenerator.generateEntryId("DED")
+                : (voucherNo + "-MAIN-" + System.currentTimeMillis());
+        detail.setEntryId(entryId);
         detail.setAccountNo(account.getAccountNo());
         detail.setSubjectCode(account.getSubjectCode());
         detail.setTradeType(TradeTypeEnum.NORMAL);
@@ -471,11 +496,17 @@ public class FreezeDomainService {
                                         LocalDateTime tradeTime, String summary) {
         SubAccountDetailPO detail = new SubAccountDetailPO();
         detail.setVoucherNo(voucherNo);
-        detail.setEntryId(voucherNo + "-" + balanceType.getCode() + "-" + operation);
+        String entryId = (businessNoGenerator != null)
+                ? businessNoGenerator.generateEntryId(operation)
+                : (voucherNo + "-" + balanceType.getCode() + "-" + operation + "-" + System.currentTimeMillis());
+        detail.setEntryId(entryId);
         detail.setTxnNo("");
         detail.setTraceNo(voucherNo);
         detail.setTraceSeq(1);
-        detail.setTradingCode(Constants.TRADING_CODE_FREEZE);
+        String tradingCode = "UFZ".equalsIgnoreCase(operation)
+                ? Constants.TRADING_CODE_UNFREEZE
+                : ("DED".equalsIgnoreCase(operation) ? Constants.TRADING_CODE_DEDUCT : Constants.TRADING_CODE_FREEZE);
+        detail.setTradingCode(tradingCode);
         detail.setAccountNo(accountNo);
         detail.setBalanceType(balanceType);
         detail.setTradeType(TradeTypeEnum.NORMAL);

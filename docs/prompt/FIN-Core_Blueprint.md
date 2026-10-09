@@ -610,6 +610,24 @@
       - **上游透传与默认兜底兼顾**：请求 DTO `FundFreezeRequest` 扩展可选 `businessCode` 字段，应用层与领域服务 `FreezeDomainService.freezeFund` 支持按业务线冻结并使用 `Constants.DEFAULT_BUSINESS_CODE` 安全兜底；
       - **全量必填字段补全与仓储守门**：`FreezeDomainService` 补齐 `AccountFreezeDetailPO` 插入时的 `txnNo`、`tradingCode`、`traceNo`、`traceSeq` 等必填字段；在 `FreezeDetailRepository.insert` 中加入受影响行数强校验与防 null 兜底；
       - **自动化测试保障**：在 `FreezeDomainServiceTest`、`FreezeApplicationServiceTest`、`PersistenceAffectedRowsEnforcementTest` 中补齐业务线断言与防御性单测，全工程 238 个测试用例 100% 通过。
+  → 完成内容（Step 23.4.21 资金部分解冻与剩余全解分录流水号冲突修复及剩余金额流转治理 BUG261009-001）：
+    - **根因定位与分析**：
+      - 现象：资金冻结支持部分解冻，首次部分解冻成功，但第二次发起解冻（解冻剩余全部资金）时报错：`SQLIntegrityConstraintViolationException: Duplicate entry 'FRZ20261009000001-FRZ20261009000001-2-UFZ' for key 'uk_voucher_no'`；
+      - 根因 1（分录流水号静态拼接引发唯一键冲突）：MySQL 表 `t_sub_account_detail` 存在唯一约束 `UNIQUE KEY uk_voucher_no (voucher_no, entry_id)`（其中 `entry_id VARCHAR(32)`）。原 `FreezeDomainService.insertSubAccountDetail` 生成 `entry_id` 时采用静态字符串拼接：`voucherNo + "-" + balanceType.getCode() + "-" + operation`（如 `FRZ...-2-UFZ`）。同一冻结凭证号（`voucher_no`）在多次解冻时，`voucherNo`、`balanceType`、`operation` 均完全相同，导致第 2 次解冻生成的 `entry_id` 必然与第 1 次重复，触发数据库唯一键冲突；同理多次扣款时主账户明细 `t_account_detail` 的 `(voucher_no, entry_id)` 也存在相同隐患；
+      - 根因 2（单据剩余金额未扣减与终态判定失准）：原逻辑在部分解冻时未更新 `t_account_freeze_detail` 单据本身的剩余金额（`freeze_amount`），且解冻与扣款后单据状态判断使用了 `newFrozen.compareTo(BigDecimal.ZERO) == 0`（即整个账户冻结子账户余额是否为 0）。若账户存在多笔冻结，该判断将严重失真，且单据剩余额度无法正确追踪。
+    - **修复与治理落地**：
+      - **分录流水号动态唯一化重构**：
+        - `FreezeDomainService` 引入 `BusinessNoGenerator` 统一流水号生成器；
+        - 子账户明细 `insertSubAccountDetail` 统一采用 `businessNoGenerator.generateEntryId(operation)`（格式如 `UFZ20261009000001`，长度 24 位 <= 32 位），扣款主账户明细 `insertAccountDetail` 统一采用 `businessNoGenerator.generateEntryId("DED")`，彻底杜绝多次解冻与多次扣款场景下的主/子明细流水号冲突；
+        - 交易编码与动作规范对齐，解冻使用 `Constants.TRADING_CODE_UNFREEZE`，扣款使用 `Constants.TRADING_CODE_DEDUCT`，冻结使用 `Constants.TRADING_CODE_FREEZE`；
+      - **单据剩余金额扣减与状态流转闭环**：
+        - 在 `AccountFreezeDetailMapper` 与 `FreezeDetailRepository` 中新增带乐观锁校验的 `updateAmountAndStatus(voucherNo, newFreezeAmount, status, version)`；
+        - `FreezeDomainService` 严密校验解冻金额不超过单据当前剩余金额（`unfreezeAmount <= currentRecord.getFreezeAmount()`），计算单据剩余金额 `remaining = currentRecord.getFreezeAmount().subtract(unfreezeAmount)`；
+        - 若 `remaining == 0`，单据状态更新为 `UNFROZEN(2)`，金额更新为 0；若 `remaining > 0`，单据状态保持 `FROZEN(1)`，金额更新为 `remaining`；扣款逻辑同样精确维护单据剩余金额与状态流转；
+      - **仓储层防御与自动化测试保障**：
+        - `SubAccountDetailRepository.insert` 与 `AccountDetailRepository.insert` 增加 `entryId` 防 null/空字符串兜底；
+        - `FreezeDomainServiceTest` 新增 `unfreezeFund_partialAndFullSuccess_noDuplicateEntry` 单测，覆盖“冻结 100 → 部分解冻 40 → 全部解冻剩余 60”完整链路，断言状态由 FROZEN 最终流转为 UNFROZEN，且生成 4 条子账户明细流水号各不相同；
+        - `PersistenceAffectedRowsEnforcementTest` 补充针对 `FreezeDetailRepository.updateAmountAndStatus` 的乐观锁生效与受影响行数阻断单测；全工程全量 248 个单测 100% 通过。
   → 待进行业务页面：日切与试算平衡 (`business/eod`)、缓冲记账监控 (`business/buffer-monitor`)
 
 ---

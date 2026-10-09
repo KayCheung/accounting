@@ -72,4 +72,17 @@ public interface AccountFreezeDetailMapper extends BaseMapper<AccountFreezeDetai
                 .set(AccountFreezeDetailPO::getStatus, status)
                 .setSql("version = version + 1"));
     }
+
+    /**
+     * 更新冻结记录金额与状态（乐观锁）
+     */
+    default int updateAmountAndStatus(String voucherNo, java.math.BigDecimal newFreezeAmount, Integer status, Integer version) {
+        return this.update(null, new LambdaUpdateWrapper<AccountFreezeDetailPO>()
+                .eq(AccountFreezeDetailPO::getVoucherNo, voucherNo)
+                .eq(AccountFreezeDetailPO::getVersion, version)
+                .eq(AccountFreezeDetailPO::getIsDelete, 0)
+                .set(AccountFreezeDetailPO::getFreezeAmount, newFreezeAmount)
+                .set(AccountFreezeDetailPO::getStatus, status)
+                .setSql("version = version + 1"));
+    }
 }
