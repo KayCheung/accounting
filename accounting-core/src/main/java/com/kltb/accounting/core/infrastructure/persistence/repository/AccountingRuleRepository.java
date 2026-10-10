@@ -180,12 +180,11 @@ public class AccountingRuleRepository {
     }
 
     /**
-     * 逻辑删除指定规则下的全部明细
+     * 逻辑删除指定规则下的全部明细及辅助核算项（is_delete = id，彻底避免固定值 1 引起的唯一索引冲突）
      */
     public void deleteRuleDetailByRuleId(Long ruleId) {
-        ruleDetailMapper.delete(new LambdaQueryWrapper<AccountingRuleDetailPO>()
-                .eq(AccountingRuleDetailPO::getRuleId, ruleId)
-                .eq(AccountingRuleDetailPO::getIsDelete, 0));
+        ruleDetailMapper.logicDeleteByRuleId(ruleId);
+        ruleAuxiliaryMapper.logicDeleteByRuleId(ruleId);
     }
 
     /**

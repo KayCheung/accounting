@@ -186,6 +186,34 @@ class RuleApplicationServiceTest {
         verify(accountingRuleRepository).updateRuleById(rule);
     }
 
+    @Test
+    @DisplayName("更新规则: 替换分录时先逻辑删除旧明细再批量插入新明细")
+    void update_shouldDeleteDetailsAndInsertNewEntries() {
+        AccountingRulePO rule = new AccountingRulePO()
+                .setStatus(RuleStatusEnum.DISABLED);
+        when(accountingRuleRepository.selectRuleById(2L)).thenReturn(rule);
+        when(subjectRepository.selectByCode("1001")).thenReturn(new AccountSubjectPO());
+        when(subjectRepository.selectByCode("2001")).thenReturn(new AccountSubjectPO());
+        doAnswer(invocation -> {
+            ((org.springframework.transaction.support.TransactionCallback<?>) invocation.getArgument(0)).doInTransaction(null);
+            return null;
+        }).when(transactionTemplate).execute(any());
+
+        com.kltb.accounting.api.request.RuleUpdateRequest request = new com.kltb.accounting.api.request.RuleUpdateRequest();
+        request.setRuleName("更新后规则");
+        request.setVoucherType("GENERAL");
+        request.setStatus(1);
+        request.setEntries(List.of(
+                buildEntry("1001", 1),
+                buildEntry("2001", 2)
+        ));
+
+        ruleApplicationService.update(2L, request);
+
+        verify(accountingRuleRepository).deleteRuleDetailByRuleId(2L);
+        verify(accountingRuleRepository, times(2)).insertRuleDetail(any());
+    }
+
     // ===== 辅助方法 =====
 
     private RuleEntryRequest buildEntry(String subjectCode, int debitCredit) {

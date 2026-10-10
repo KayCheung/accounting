@@ -643,7 +643,7 @@
     <el-dialog
       v-model="auxDialogVisible"
       title="配置分录辅助核算项"
-      width="780px"
+      width="860px"
       append-to-body
       destroy-on-close
     >
@@ -652,7 +652,7 @@
           type="info"
           :closable="false"
           show-icon
-          title="辅助核算项支持按固定金额或按比例分摊。若选择【按比例】，同一明细下所有比例之和必须精确等于 1.000000。"
+          title="辅助核算项支持按固定金额、按比例或 SpEL 表达式分摊计算。选择【按比例】时总和必须为 1.000000；选择【SpEL 表达式】时支持通过 #amount、#extra['creditParty'] 等动态计算金额或提取核算对象。"
         />
       </div>
 
@@ -688,10 +688,10 @@
         </el-table-column>
         <el-table-column label="辅助核算编码 *" min-width="140">
           <template #default="{ row }">
-            <el-input v-model="row.auxCode" placeholder="如 DEPT_001" size="small" />
+            <el-input v-model="row.auxCode" placeholder="如 DEPT_001 或 #{#extra['party']}" size="small" />
           </template>
         </el-table-column>
-        <el-table-column label="分摊方式 *" width="120">
+        <el-table-column label="分摊方式 *" width="130">
           <template #default="{ row }">
             <el-select v-model="row.allocationMethod" size="small">
               <el-option
@@ -703,8 +703,8 @@
             </el-select>
           </template>
         </el-table-column>
-        <el-table-column label="分摊值" width="130">
-          <template #default="{ row }">
+        <el-table-column label="分摊值 / 脚本" min-width="170">
+          <template #default="{ row, $index }">
             <el-input
               v-if="row.allocationMethod === 3"
               v-model="row.allocationValue"
@@ -714,9 +714,26 @@
             <el-input
               v-else-if="row.allocationMethod === 2"
               v-model="row.allocationValue"
-              placeholder="固定金额"
+              placeholder="固定金额，如 50.00"
               size="small"
             />
+            <el-input
+              v-else-if="row.allocationMethod === 4"
+              v-model="row.allocationValue"
+              placeholder="如 #extra['rate'] 或 #amount*0.1"
+              size="small"
+            >
+              <template #suffix>
+                <el-tooltip content="大视窗编辑辅助核算 SpEL 脚本" placement="top">
+                  <el-icon
+                    class="input-suffix-icon"
+                    @click.stop="openAuxSpelEditor(row, $index)"
+                  >
+                    <FullScreen />
+                  </el-icon>
+                </el-tooltip>
+              </template>
+            </el-input>
             <span v-else class="text-placeholder">无需分摊值</span>
           </template>
         </el-table-column>
@@ -794,6 +811,22 @@
               @click="insertIntoEditor('#root.extMap[\'customRate\']')"
             >
               #root.extMap['customRate'] (扩展参数)
+            </el-tag>
+            <el-tag
+              class="clickable-tag"
+              size="small"
+              effect="plain"
+              @click="insertIntoEditor('#extra[\'partnerCode\']')"
+            >
+              #extra['partnerCode'] (业务方扩展属性)
+            </el-tag>
+            <el-tag
+              class="clickable-tag"
+              size="small"
+              effect="plain"
+              @click="insertIntoEditor('#extra[\'creditParty\']')"
+            >
+              #extra['creditParty'] (授信方)
             </el-tag>
           </div>
         </div>
@@ -1160,8 +1193,13 @@ const textEditorRowIndex = ref<number>(-1)
 const textEditorRowNum = ref<number>(1)
 const textEditorDebitCredit = ref<number>(1)
 const textEditorContent = ref('')
+const isAuxSpelMode = ref(false)
+const auxSpelItemIndex = ref(-1)
 
 const textEditorTitle = computed(() => {
+  if (isAuxSpelMode.value) {
+    return `编辑辅助核算项 SpEL 计算脚本 (项 #${auxSpelItemIndex.value + 1})`
+  }
   const dcLabel = textEditorDebitCredit.value === 1 ? '借方' : '贷方'
   const fieldName = textEditorField.value === 'extendScript' ? 'SpEL 计算脚本' : '分录摘要说明'
   return `分录编辑（第 ${textEditorRowNum.value} 行 / ${dcLabel}）- ${fieldName}`
@@ -1602,6 +1640,10 @@ const saveAuxiliaries = () => {
       ElMessage.warning('辅助核算类型与项目编码均不可为空')
       return
     }
+    if (item.allocationMethod === 4 && (!item.allocationValue || !String(item.allocationValue).trim())) {
+      ElMessage.warning('选择 SpEL 表达式分摊时，必须填写 SpEL 脚本')
+      return
+    }
   }
   if (currentEntryIndex.value >= 0 && formModel.value.entries[currentEntryIndex.value]) {
     formModel.value.entries[currentEntryIndex.value].auxiliaries = JSON.parse(JSON.stringify(currentAuxList.value))
@@ -1613,7 +1655,13 @@ const saveAuxiliaries = () => {
 // 展开行查看辅助核算项
 const viewRowAuxiliaries = (row: any) => {
   const lines = (row.auxiliaries || []).map((a: any, i: number) => {
-    const methodText = a.allocationMethod === 3 ? `按比例(${a.allocationValue})` : a.allocationMethod === 2 ? `固定金额(${a.allocationValue})` : '不分摊'
+    const methodText = a.allocationMethod === 3
+      ? `按比例(${a.allocationValue})`
+      : a.allocationMethod === 2
+      ? `固定金额(${a.allocationValue})`
+      : a.allocationMethod === 4
+      ? `SpEL脚本(${a.allocationValue})`
+      : '不分摊'
     return `${i + 1}. [${a.auxType}] 编码:${a.auxCode} ｜ ${methodText}`
   }).join('\n')
   ElMessageBox.alert(lines || '无辅助核算项', '分录辅助核算明细', {
@@ -1623,11 +1671,24 @@ const viewRowAuxiliaries = (row: any) => {
 
 // ===== SpEL计算脚本 / 摘要 大视窗编辑器操作 =====
 const openTextEditor = (row: RuleEntryRequest, field: 'extendScript' | 'summary', index: number) => {
+  isAuxSpelMode.value = false
+  auxSpelItemIndex.value = -1
   textEditorRowIndex.value = index
   textEditorRowNum.value = row.rowNum || (index + 1)
   textEditorDebitCredit.value = row.debitCredit
   textEditorField.value = field
   textEditorContent.value = (row[field] as string) || ''
+  textEditorVisible.value = true
+}
+
+// 打开辅助核算项 SpEL 脚本大视窗编辑器
+const openAuxSpelEditor = (row: any, index: number) => {
+  isAuxSpelMode.value = true
+  auxSpelItemIndex.value = index
+  textEditorRowIndex.value = currentEntryIndex.value
+  textEditorRowNum.value = currentEntryIndex.value + 1
+  textEditorField.value = 'extendScript'
+  textEditorContent.value = (row.allocationValue as string) || ''
   textEditorVisible.value = true
 }
 
@@ -1640,6 +1701,16 @@ const insertIntoEditor = (text: string) => {
 }
 
 const saveLargeTextEditor = () => {
+  if (isAuxSpelMode.value) {
+    if (auxSpelItemIndex.value >= 0 && currentAuxList.value[auxSpelItemIndex.value]) {
+      currentAuxList.value[auxSpelItemIndex.value].allocationValue = textEditorContent.value.trim()
+    }
+    isAuxSpelMode.value = false
+    auxSpelItemIndex.value = -1
+    textEditorVisible.value = false
+    ElMessage.success('辅助核算 SpEL 脚本已更新')
+    return
+  }
   if (textEditorRowIndex.value >= 0 && formModel.value.entries[textEditorRowIndex.value]) {
     formModel.value.entries[textEditorRowIndex.value][textEditorField.value] = textEditorContent.value.trim()
   }

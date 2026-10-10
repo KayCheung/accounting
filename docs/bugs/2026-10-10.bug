@@ -7,3 +7,15 @@ BUG261010-002：资产负债表目前余额显示的都是零，但是有两个�
 4. 科目总账中的科目级次筛选是固定的还是读取的字典表或者通过科目表获取到的？
 
 BUG261010-003：FinancialReportJobHandler 只是做了数据生成，但是没有对数据做持久化，该定时任务等于是空跑。
+
+BUG261010-004：配置分录辅助核算项中选择 SpEL 表达式后没有地方输入 SpEL 脚本
+
+BUG261010-005：编辑记账规则，然后删除一条分录明细保存，重新打开后还是出现删除的那条分录明细。重新删除在保存报异常：
+2026-10-10 18:00:35.564 [http-nio-8080-exec-3] ERROR [TID: N/A] c.k.a.core.application.RuleApplicationService - [RULE-UPDATE] 更新规则失败 ruleId=2 error=
+### Error updating database.  Cause: java.sql.SQLIntegrityConstraintViolationException: Duplicate entry '2-1-1' for key 'uk_rule_id'
+### The error may exist in com/kltb/accounting/core/infrastructure/persistence/mapper/AccountingRuleDetailMapper.java (best guess)
+### The error may involve com.kltb.accounting.core.infrastructure.persistence.mapper.AccountingRuleDetailMapper.delete-Inline
+### The error occurred while setting parameters
+### SQL: UPDATE t_accounting_rule_detail SET is_delete = 1 WHERE is_delete = 0 AND (rule_id = ? AND is_delete = ?) AND tenant_id = -1
+### Cause: java.sql.SQLIntegrityConstraintViolationException: Duplicate entry '2-1-1' for key 'uk_rule_id'
+; Duplicate entry '2-1-1' for key 'uk_rule_id'

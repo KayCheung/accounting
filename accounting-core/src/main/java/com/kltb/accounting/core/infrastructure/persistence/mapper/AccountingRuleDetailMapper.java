@@ -32,4 +32,12 @@ public interface AccountingRuleDetailMapper extends BaseMapper<AccountingRuleDet
                 .eq(AccountingRuleDetailPO::getSubjectCode, subjectCode)
                 .eq(AccountingRuleDetailPO::getIsDelete, 0)).intValue();
     }
+
+    /**
+     * 按规则ID批量逻辑删除明细（将 is_delete 置为自身主键 id，彻底避免固定值唯一索引冲突）
+     *
+     * @param ruleId 规则ID
+     * @return 影响行数
+     */
+    int logicDeleteByRuleId(@Param("ruleId") Long ruleId);
 }

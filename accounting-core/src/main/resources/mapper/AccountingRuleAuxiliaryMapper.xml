@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.kltb.accounting.core.infrastructure.persistence.mapper.AccountingRuleAuxiliaryMapper">
+    <!-- 逻辑删除规则辅助核算项（is_delete = id，避免固定值 1 造成的唯一索引冲突） -->
+    <update id="logicDeleteByRuleId">
+        UPDATE t_accounting_rule_auxiliary
+        SET is_delete = id
+        WHERE rule_id = #{ruleId}
+          AND is_delete = 0
+    </update>
 </mapper>

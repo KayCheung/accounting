@@ -14,4 +14,12 @@
         ORDER BY d.row_num ASC
     </select>
 
+    <!-- 逻辑删除规则明细（is_delete = id，避免固定值 1 造成的 uk_rule_id 唯一索引冲突） -->
+    <update id="logicDeleteByRuleId">
+        UPDATE t_accounting_rule_detail
+        SET is_delete = id
+        WHERE rule_id = #{ruleId}
+          AND is_delete = 0
+    </update>
+
 </mapper>

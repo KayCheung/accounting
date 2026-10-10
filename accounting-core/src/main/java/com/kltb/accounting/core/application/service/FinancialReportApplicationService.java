@@ -25,6 +25,8 @@ public class FinancialReportApplicationService {
 
     private final FinancialReportDomainService reportDomainService;
     private final com.kltb.accounting.core.infrastructure.persistence.repository.SubjectRepository subjectRepository;
+    private final com.kltb.accounting.core.infrastructure.persistence.repository.FinancialReportSnapshotRepository snapshotRepository;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     /**
      * 查询资产负债表
@@ -62,14 +64,14 @@ public class FinancialReportApplicationService {
     }
 
     /**
-     * 定时任务/手工触发：定期生成并预热指定会计日期的所有财务报表
+     * 定时任务/手工触发：定期生成并持久化归档指定会计日期的所有财务报表
      *
      * @param accountingDate 会计日期
      */
     public void generateAndArchiveReports(LocalDate accountingDate) {
-        log.info("[REPORT-JOB] 定期生成并预热财务报表开始: date={}", accountingDate);
+        log.info("[REPORT-JOB] 定期生成并归档财务报表开始: date={}", accountingDate);
 
-        // 1. 生成资产负债表
+        // 1. 生成资产负债表并持久化归档
         BalanceSheetQueryRequest bsReq = new BalanceSheetQueryRequest();
         bsReq.setAccountingDate(accountingDate);
         bsReq.setCompareYearStart(true);
@@ -77,7 +79,24 @@ public class FinancialReportApplicationService {
         log.info("[REPORT-JOB] 资产负债表生成完成: date={}, 平衡={}, 资产总计={}",
                 accountingDate, bsResp.getBalanced(), bsResp.getTotalAssetEnd());
 
-        // 2. 生成利润表
+        try {
+            com.kltb.accounting.core.infrastructure.persistence.entity.FinancialReportSnapshotPO bsSnapshot =
+                    new com.kltb.accounting.core.infrastructure.persistence.entity.FinancialReportSnapshotPO();
+            bsSnapshot.setReportType("BALANCE_SHEET");
+            bsSnapshot.setReportName("资产负债表");
+            bsSnapshot.setAccountingDate(accountingDate);
+            bsSnapshot.setPeriodType("DAY");
+            bsSnapshot.setTotalAsset(bsResp.getTotalAssetEnd());
+            bsSnapshot.setTotalLiabilityEquity(bsResp.getTotalLiabilityAndEquityEnd());
+            bsSnapshot.setIsBalanced(Boolean.TRUE.equals(bsResp.getBalanced()) ? 1 : 0);
+            bsSnapshot.setReportContent(objectMapper.writeValueAsString(bsResp));
+            snapshotRepository.saveOrUpdate(bsSnapshot);
+            log.info("[REPORT-JOB] 资产负债表持久化归档成功: date={}", accountingDate);
+        } catch (Exception e) {
+            log.error("[REPORT-JOB] 资产负债表持久化归档失败: date={}, err={}", accountingDate, e.getMessage(), e);
+        }
+
+        // 2. 生成利润表并持久化归档
         IncomeStatementQueryRequest isReq = new IncomeStatementQueryRequest();
         isReq.setYear(accountingDate.getYear());
         isReq.setMonth(accountingDate.getMonthValue());
@@ -86,7 +105,26 @@ public class FinancialReportApplicationService {
         log.info("[REPORT-JOB] 利润表生成完成: period={}, 营收={}, 净利润={}",
                 isResp.getPeriodDesc(), isResp.getKpi().getRevenueMonth(), isResp.getKpi().getNetProfitMonth());
 
-        log.info("[REPORT-JOB] 定期生成并预热财务报表完毕: date={}", accountingDate);
+        try {
+            com.kltb.accounting.core.infrastructure.persistence.entity.FinancialReportSnapshotPO isSnapshot =
+                    new com.kltb.accounting.core.infrastructure.persistence.entity.FinancialReportSnapshotPO();
+            isSnapshot.setReportType("INCOME_STATEMENT");
+            isSnapshot.setReportName("利润表");
+            isSnapshot.setAccountingDate(accountingDate);
+            isSnapshot.setPeriodType("MONTH");
+            if (isResp.getKpi() != null) {
+                isSnapshot.setTotalAsset(isResp.getKpi().getRevenueMonth());
+                isSnapshot.setTotalLiabilityEquity(isResp.getKpi().getNetProfitMonth());
+            }
+            isSnapshot.setIsBalanced(1);
+            isSnapshot.setReportContent(objectMapper.writeValueAsString(isResp));
+            snapshotRepository.saveOrUpdate(isSnapshot);
+            log.info("[REPORT-JOB] 利润表持久化归档成功: date={}", accountingDate);
+        } catch (Exception e) {
+            log.error("[REPORT-JOB] 利润表持久化归档失败: date={}, err={}", accountingDate, e.getMessage(), e);
+        }
+
+        log.info("[REPORT-JOB] 定期生成并归档财务报表完毕: date={}", accountingDate);
     }
 
     /**

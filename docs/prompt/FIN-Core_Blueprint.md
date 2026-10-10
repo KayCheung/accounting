@@ -926,6 +926,10 @@
       - **领域职责重构与解耦**：彻底纠正此前辅助核算分摊算法与明细持久化错误混入 `BufferPostingDomainService` 的单一职责违背（SRP）问题；新建专职领域服务 `AuxiliaryDomainService`，全权掌管辅助核算固定金额、SpEL 脚本动态计算、比例分摊补差与明细批量入库；
       - **缓冲记账服务轻量化**：`BufferPostingDomainService` 重新纯化为专注于缓冲规则匹配、并发分片计算与缓冲持久化，旧方法保持向下兼容委托并标记 `@Deprecated`；
       - **测试覆盖**：新增 `AuxiliaryDomainServiceTest`（5 个用例），更新全量单测，全工程 341 个测试用例 100% 通过。
+    - **财务报表持久化、辅助核算 SpEL 输入与规则分录逻辑删除唯一键冲突治理（Step 23.15 缺陷闭环）**：
+      - **BUG261010-003（财务报表定时任务空跑治理与快照归档持久化）**：新增 Flyway 迁移脚本 `V22__financial_report_snapshot.sql` 创建 `t_financial_report_snapshot` 表；新建 `FinancialReportSnapshotPO`、`FinancialReportSnapshotMapper` 与 `FinancialReportSnapshotRepository`；重构 `FinancialReportApplicationService.generateAndArchiveReports`，在生成资产负债表与利润表后，将完整报表 JSON 与核心财务指标持久化至快照表，彻底解决调度任务未持久化空跑问题；新增 `FinancialReportApplicationServiceTest` 单元测试保障；
+      - **BUG261010-004（分录辅助核算项 SpEL 表达式输入支持）**：在 `accounting-ui` 规则配置中针对 `allocationMethod === 4` 补充输入框、placeholder 提示与大视窗编辑器入口，扩展大视窗支持辅助核算上下文并新增 `#extra['partnerCode']`、`#extra['creditParty']` 快捷变量插入，弹窗校验与行展开查看全链路对齐；前端生产构建 0 错误通过；
+      - **BUG261010-005（编辑规则删除分录 Duplicate entry '2-1-1' for key 'uk_rule_id' 根治）**：排查并彻底解决 MyBatis-Plus `@TableLogic` 将删除记录固定赋值为 `is_delete = 1` 导致与 `uk_rule_id (rule_id, row_num, is_delete)` 唯一索引冲突而回滚的严重缺陷；在 `AccountingRuleDetailMapper` 与 `AccountingRuleAuxiliaryMapper` 中增加 `logicDeleteByRuleId`，执行 `SET is_delete = id`（利用自增主键全局绝对唯一特性），从数学上彻底杜绝删除操作唯一键碰撞可能；同时在 `V22` 脚本中平滑清洗存量 `is_delete = 1` 脏数据，完善单测保障。
 - [x] **Step 23** · 业务功能页面开发全量交付完毕（100% 完成）
 
 

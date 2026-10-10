@@ -25,4 +25,12 @@ public interface AccountingRuleAuxiliaryMapper extends BaseMapper<AccountingRule
                 .orderByAsc(AccountingRuleAuxiliaryPO::getRuleDetailId)
                 .orderByAsc(AccountingRuleAuxiliaryPO::getId));
     }
+
+    /**
+     * 按规则ID批量逻辑删除辅助核算项（将 is_delete 置为自身主键 id）
+     *
+     * @param ruleId 规则ID
+     * @return 影响行数
+     */
+    int logicDeleteByRuleId(@org.apache.ibatis.annotations.Param("ruleId") Long ruleId);
 }
