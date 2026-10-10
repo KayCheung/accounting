@@ -12,6 +12,7 @@ import com.kltb.accounting.core.infrastructure.persistence.repository.Accounting
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountingVoucherRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.BusinessDetailRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.BusinessRecordRepository;
+import com.kltb.accounting.core.infrastructure.spel.JournalSpelContext;
 import com.kltb.accounting.core.infrastructure.spel.RuleScriptExecutor;
 import com.kltb.accounting.core.shared.exception.AccountException;
 import com.kltb.accounting.core.shared.exception.ServiceException;
@@ -84,18 +85,29 @@ public class VoucheringDomainService {
 
     /**
      * 执行 SpEL 脚本计算分录金额
-     * P1-4 修复：#root 为 BusinessDetailPO
+     * P1-4 修复：#root 为 BusinessDetailPO / JournalSpelContext
      */
     public BigDecimal calculateEntryAmount(
             AccountingRuleDetailPO ruleDetail,
             BusinessDetailPO businessDetail) {
+        return calculateEntryAmount(ruleDetail, businessDetail, null);
+    }
+
+    /**
+     * 执行 SpEL 脚本计算分录金额（包含流水主单上下文）
+     */
+    public BigDecimal calculateEntryAmount(
+            AccountingRuleDetailPO ruleDetail,
+            BusinessDetailPO businessDetail,
+            BusinessRecordPO journal) {
 
         String script = ruleDetail.getExtendScript();
         if (StringUtils.isBlank(script)) {
             // 无 SpEL 脚本时，直接使用业务明细金额
             return businessDetail.getAmount();
         }
-        return ruleScriptExecutor.execute(script, businessDetail);
+        JournalSpelContext context = JournalSpelContext.of(businessDetail, journal);
+        return ruleScriptExecutor.execute(script, context);
     }
 
     /**

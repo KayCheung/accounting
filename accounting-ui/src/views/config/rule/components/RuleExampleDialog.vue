@@ -121,11 +121,11 @@
 
         <div class="spel-context-note mt-2">
           <el-alert
-            type="info"
+            type="success"
             :closable="false"
             show-icon
-            title="SpEL 上下文与扩展字段说明："
-            description="当前 SpEL 脚本绑定对象 #root 为流水明细 (BusinessDetailPO)，可用属性包括 #root.amount、#root.customerId、#root.customerType 等。目前核心入参未包含通用拓展参数 (extraAttrs)，若业务场景需要传入自定义扩展字段（如授信方、合作方、渠道来源）并驱动辅助核算项匹配，属于下一步架构扩展建议方向。"
+            title="SpEL 上下文与扩展字段 (extraAttrs) 深度支持："
+            description="账务核心已原生支持扩展业务参数透传：业务请求中可传入 extraAttrs（如授信方 creditParty、合作方 partnerCode、渠道来源等）。在 SpEL 脚本中，可通过 #extra['creditParty'] 或 #extra['partnerCode'] 读取主单扩展属性；通过 #detailExtra 读取细项扩展属性；辅助核算项亦支持 SpEL 表达式计算分摊额及 #{#extra['partnerCode']} 动态编码求值。"
           />
         </div>
       </div>
@@ -513,6 +513,20 @@ const paramSpecData = computed(() => {
       required: true,
       ruleValue: customAmount.value.toFixed(2),
       desc: '该细项发生金额（必须大于0）。所有 details[].amount 之和必须严格等于主单总金额 amount。'
+    },
+    {
+      field: 'extraAttrs',
+      type: 'Object / Map',
+      required: false,
+      ruleValue: '{ creditParty, partnerCode, ... }',
+      desc: '主单级扩展业务参数（如授信方、合作方、渠道来源等）。自动注入 SpEL 执行上下文变量 #extra，供分录金额计算与动态辅助核算项匹配。'
+    },
+    {
+      field: 'details[].extraAttrs',
+      type: 'Object / Map',
+      required: false,
+      ruleValue: '{ subAccountNo, bizTag, ... }',
+      desc: '细项级扩展业务参数。自动注入 SpEL 上下文变量 #detailExtra，供款项维度的特殊规则运算。'
     }
   ]
 })

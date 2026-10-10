@@ -35,4 +35,9 @@ public class JournalDetailRequest {
     @NotNull(message = "amount不能为空")
     @DecimalMin(value = "0.000001", message = "amount必须大于0")
     private BigDecimal amount;
+
+    /**
+     * 款项明细扩展参数（键值对，如 subProduct, rate 等）
+     */
+    private java.util.Map<String, Object> extraAttrs;
 }

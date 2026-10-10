@@ -53,6 +53,11 @@ public class JournalSubmitRequest {
     @Size(max = 64, message = "origFreezeNo长度不能超过64")
     private String origFreezeNo;
 
+    /**
+     * 业务扩展参数（键值对，如 creditParty, partnerCode, channelSource 等）
+     */
+    private java.util.Map<String, Object> extraAttrs;
+
     @NotEmpty(message = "details不能为空")
     @Valid
     private List<JournalDetailRequest> details;

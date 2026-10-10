@@ -95,9 +95,9 @@ public class VoucheringApplicationService {
                         "未找到匹配的款项类型: fundsType=" + ruleDetail.getFundsType());
             }
 
-            // 计算分录金额
+            // 计算分录金额（支持 SpEL 与主单/明细扩展属性透传）
             BigDecimal amount = voucheringDomainService.calculateEntryAmount(
-                    ruleDetail, matchedDetail);
+                    ruleDetail, matchedDetail, journal);
 
             // 确定账户编号（P1-2 修复：使用 customerId 作为 fallback）
             String accountNo = resolveAccountNo(ruleDetail, matchedDetail);
@@ -123,7 +123,7 @@ public class VoucheringApplicationService {
             List<AccountingRuleAuxiliaryPO> auxConfigs = auxMap.get(ruleDetail.getId());
             if (auxConfigs != null && !auxConfigs.isEmpty()) {
                 List<AuxiliaryItemData> auxItems = bufferPostingDomainService
-                        .calculateAuxiliaryAllocation(entry, auxConfigs);
+                        .calculateAuxiliaryAllocation(entry, auxConfigs, matchedDetail, journal);
                 allAuxItems.addAll(auxItems);
             }
         }

@@ -65,6 +65,9 @@ public class BusinessRecordPO extends BaseEntity {
     /** 关联预冻结单号(freeze_id) */
     private String origFreezeNo;
 
+    /** 扩展业务参数（JSON格式存储） */
+    private String extraAttrs;
+
     /** 状态：处理中/成功/失败 */
     private BusinessRecordStatusEnum status;
 

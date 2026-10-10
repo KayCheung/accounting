@@ -148,7 +148,8 @@ export const ACCOUNT_SCOPE_OPTIONS: SelectOption<number>[] = [
 export const ALLOCATION_METHOD_OPTIONS: SelectOption<number>[] = [
   { label: '不分摊', value: 1, tagType: 'info' },
   { label: '固定金额', value: 2, tagType: 'warning' },
-  { label: '按比例', value: 3, tagType: 'success' }
+  { label: '按比例', value: 3, tagType: 'success' },
+  { label: 'SpEL表达式', value: 4, tagType: 'danger' }
 ]
 
 /**

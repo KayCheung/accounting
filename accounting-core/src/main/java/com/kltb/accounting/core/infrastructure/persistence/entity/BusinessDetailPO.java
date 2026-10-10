@@ -48,4 +48,7 @@ public class BusinessDetailPO extends BaseEntity {
      * 必须使用 BigDecimal，禁止 new BigDecimal(double)
      */
     private BigDecimal amount;
+
+    /** 细项扩展业务参数（JSON格式存储） */
+    private String extraAttrs;
 }

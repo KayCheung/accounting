@@ -127,9 +127,28 @@ class VoucheringDomainServiceTest {
         ruleDetail.setExtendScript("#root.amount");
         BusinessDetailPO businessDetail = new BusinessDetailPO();
         businessDetail.setAmount(new BigDecimal("10000"));
-        when(ruleScriptExecutor.execute("#root.amount", businessDetail)).thenReturn(new BigDecimal("10000"));
+        when(ruleScriptExecutor.execute(eq("#root.amount"), any())).thenReturn(new BigDecimal("10000"));
         assertThat(voucheringDomainService.calculateEntryAmount(ruleDetail, businessDetail)).isEqualTo(new BigDecimal("10000"));
-        verify(ruleScriptExecutor).execute("#root.amount", businessDetail);
+        verify(ruleScriptExecutor).execute(eq("#root.amount"), any());
+    }
+
+    @Test
+    @DisplayName("SpEL 金额计算: 包含主单 extraAttrs 扩展属性透传")
+    void calculateAmount_withJournalExtraAttrs_shouldPassContext() {
+        AccountingRuleDetailPO ruleDetail = new AccountingRuleDetailPO();
+        ruleDetail.setExtendScript("#extra['rate'] * #amount");
+
+        BusinessDetailPO businessDetail = new BusinessDetailPO();
+        businessDetail.setAmount(new BigDecimal("10000"));
+
+        BusinessRecordPO journal = new BusinessRecordPO();
+        journal.setExtraAttrs("{\"rate\":0.05}");
+
+        when(ruleScriptExecutor.execute(eq("#extra['rate'] * #amount"), any())).thenReturn(new BigDecimal("500.00"));
+
+        BigDecimal result = voucheringDomainService.calculateEntryAmount(ruleDetail, businessDetail, journal);
+        assertThat(result).isEqualByComparingTo(new BigDecimal("500.00"));
+        verify(ruleScriptExecutor).execute(eq("#extra['rate'] * #amount"), any());
     }
 
     @Test

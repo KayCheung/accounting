@@ -906,6 +906,13 @@
       - 预冻结全流程联动：针对 `requirePreFreeze=1` 规则提供第一步预冻结（`/freeze`）、第二步核销入账（`/submit`）及异常撤销（`/unfreeze`）的双步成套代码与业务指引；
       - 页面交互集成：创建 `RuleExampleDialog.vue`（支持 Host 与金额自定义调试重算、一键复制代码、SpEL 预览测算看板、字段规范参数字典），并在规则列表操作菜单及详情档案抽屉中全量集成入口；
       - 构建验证：`vue-tsc --noEmit` 0 错误，`npm run build` 构建 100% 成功。
+    - **流水扩展业务参数与 SpEL 引擎深度打通（Step 23.12）**：
+      - **API 契约层（accounting-api）**：`JournalSubmitRequest`、`JournalFreezeRequest` 与 `JournalDetailRequest` 均扩展 `Map<String, Object> extraAttrs`，支持业务方在提交流水与预冻结时传入授信方（`creditParty`）、合作方（`partnerCode`）、渠道来源（`channelSource`）等自定义扩展属性；
+      - **数据持久层（accounting-core）**：新增 Flyway 脚本 `V21__add_extra_params_and_auxiliary_spel.sql`，在 `t_business_record` 与 `t_business_detail` 新增 `extra_attrs` 字段，并在 `JournalingDomainService` 中持久化为 JSON 字符串；
+      - **SpEL 执行引擎上下文重构**：新建 `JournalSpelContext` 统一上下文类，暴露 `#root.amount`、`#extra`、`#detailExtra`、`#detail`、`#journal` 等对象，并在 `RuleScriptExecutor` 中提供 `executeTemplate` 方法支持 `#{#extra['partnerCode']}` 动态字符串模板解析；
+      - **辅助核算 SpEL 分摊与动态编码**：枚举 `AllocationMethodEnum` 扩充 `SPEL_SCRIPT(4)`，在 `BufferPostingDomainService` 中打通辅助核算脚本分摊计算与 `auxCode` 动态核算对象编码解析，向下严格兼容固定金额与按比例补差；
+      - **前端接入示例联动更新**：前端 `ALLOCATION_METHOD_OPTIONS` 增加 SpEL 表达式选项，代码示例生成器及示例弹窗（`RuleExampleDialog.vue`）同步展示 `extraAttrs`、全量字段规范与辅助核算动态脚本注释；
+      - **质量验收与测试覆盖**：新增 `RuleScriptExecutorTest`，完善 `BufferPostingDomainServiceTest`、`VoucheringDomainServiceTest`、`JournalingApplicationServiceTest` 等单元测试，全量通过（56/56 个用例），前端 `npm run build` 成功。
 - [x] **Step 23** · 业务功能页面开发全量交付完毕（100% 完成）
 
 

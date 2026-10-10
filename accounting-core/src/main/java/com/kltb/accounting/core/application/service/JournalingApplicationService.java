@@ -135,13 +135,13 @@ public class JournalingApplicationService {
                     "该业务记账规则要求必须先完成资金预冻结，缺失原预冻结流水号(origFreezeNo)");
         }
 
-        // 流水持久化（record + detail + transaction，支持 origFreezeNo）
+        // 流水持久化（record + detail + transaction，支持 origFreezeNo 与 extraAttrs）
         JournalSubmitResult result = journalingDomainService.persistJournal(
                 request.getTraceNo(), request.getTraceSeq(),
                 request.getBusinessCode(), request.getTradingCode(), request.getPayChannel(),
                 request.getTradeType(), request.getAmount(), request.getTradeTime(),
                 request.getSummary(), request.getDetails(), accountingDate,
-                request.getOrigFreezeNo());
+                request.getOrigFreezeNo(), request.getExtraAttrs());
 
         // 预开户检查 + 自动开户
         Map<String, CustomerTypeEnum> customerMap = buildCustomerMap(request.getDetails());
@@ -273,12 +273,12 @@ public class JournalingApplicationService {
             payoutRuleDetails.add(ruleDetails.get(0));
         }
 
-        // 流水持久化
+        // 流水持久化（支持 extraAttrs）
         BusinessRecordPO record = journalingDomainService.persistFreezeRecord(
                 request.getTraceNo(), request.getTraceSeq(),
                 request.getBusinessCode(), request.getTradingCode(), request.getPayChannel(),
                 request.getAmount(), request.getTradeTime(), request.getSummary(),
-                request.getDetails(), accountingDate);
+                request.getDetails(), accountingDate, request.getExtraAttrs());
 
         // 执行多账户资金冻结（统一预冻结有效时长配置化，默认 1800 秒）
         long expireSeconds = (freezeProperties != null && freezeProperties.getDefaultExpireSeconds() > 0)

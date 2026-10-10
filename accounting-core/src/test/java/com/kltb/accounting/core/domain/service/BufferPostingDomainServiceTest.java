@@ -41,6 +41,9 @@ class BufferPostingDomainServiceTest {
     @Mock
     private AccountingVoucherAuxiliaryMapper voucherAuxiliaryMapper;
 
+    @Mock
+    private com.kltb.accounting.core.infrastructure.spel.RuleScriptExecutor ruleScriptExecutor;
+
     @InjectMocks
     private BufferPostingDomainService bufferPostingDomainService;
 
@@ -404,5 +407,42 @@ class BufferPostingDomainServiceTest {
         config.setAllocationMethod(method);
         config.setAllocationValue(allocationValue);
         return config;
+    }
+
+    @Test
+    @DisplayName("辅助核算分摊: SpEL 表达式计算金额成功")
+    void calculateAuxiliaryAllocation_spelScript_shouldCalculateAmount() {
+        VoucherEntryData entry = buildEntryData("ENT001", "1001", 1, new BigDecimal("100.00"));
+
+        AccountingRuleAuxiliaryPO config1 = buildAuxiliaryConfig(1L, "DEPT01", AllocationMethodEnum.SPEL_SCRIPT, null);
+        config1.setExtendScript("#amount * 0.2");
+
+        AccountingRuleAuxiliaryPO config2 = buildAuxiliaryConfig(2L, "DEPT02", AllocationMethodEnum.PERCENTAGE, new BigDecimal("100"));
+
+        when(ruleScriptExecutor.execute(eq("#amount * 0.2"), any())).thenReturn(new BigDecimal("20.00"));
+
+        List<AuxiliaryItemData> items = bufferPostingDomainService.calculateAuxiliaryAllocation(
+                entry, List.of(config1, config2), null, null);
+
+        assertThat(items).hasSize(2);
+        assertThat(items.get(0).getAmount()).isEqualByComparingTo(new BigDecimal("20.00"));
+        assertThat(items.get(1).getAmount()).isEqualByComparingTo(new BigDecimal("80.00"));
+    }
+
+    @Test
+    @DisplayName("辅助核算分摊: 动态核算编码模板解析成功")
+    void calculateAuxiliaryAllocation_dynamicAuxCode_shouldResolveTemplate() {
+        VoucherEntryData entry = buildEntryData("ENT001", "1001", 1, new BigDecimal("100.00"));
+
+        AccountingRuleAuxiliaryPO config = buildAuxiliaryConfig(1L, "#{#extra['partnerCode']}", AllocationMethodEnum.FIXED_AMOUNT, new BigDecimal("100.00"));
+
+        when(ruleScriptExecutor.executeTemplate(eq("#{#extra['partnerCode']}"), any())).thenReturn("PARTNER_ICBC");
+
+        List<AuxiliaryItemData> items = bufferPostingDomainService.calculateAuxiliaryAllocation(
+                entry, List.of(config), null, null);
+
+        assertThat(items).hasSize(1);
+        assertThat(items.get(0).getAuxCode()).isEqualTo("PARTNER_ICBC");
+        assertThat(items.get(0).getAmount()).isEqualByComparingTo(new BigDecimal("100.00"));
     }
 }

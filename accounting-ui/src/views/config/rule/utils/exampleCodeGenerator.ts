@@ -24,6 +24,9 @@ export interface SpelScriptEntryInfo {
   subjectCode: string
   fundsType: string
   extendScript: string
+  type?: 'entry' | 'auxiliary'
+  auxType?: string
+  auxCode?: string
 }
 
 export interface GeneratedRuleExample {
@@ -72,19 +75,51 @@ export function getSampleTraceNo(prefix = 'TR'): string {
 }
 
 /**
- * 提取规则中所有配置了 SpEL 计算表达式的分录
+ * 提取规则中所有配置了 SpEL 计算表达式的分录及辅助核算
  */
 export function extractSpelEntries(rule: RuleResponse): SpelScriptEntryInfo[] {
   if (!rule.entries || rule.entries.length === 0) return []
-  return rule.entries
-    .filter((e) => e.extendScript && e.extendScript.trim().length > 0)
-    .map((e) => ({
-      rowNum: e.rowNum,
-      debitCredit: e.debitCredit,
-      subjectCode: e.subjectCode,
-      fundsType: e.fundsType,
-      extendScript: e.extendScript!.trim()
-    }))
+  const list: SpelScriptEntryInfo[] = []
+  for (const e of rule.entries) {
+    if (e.extendScript && e.extendScript.trim().length > 0) {
+      list.push({
+        rowNum: e.rowNum,
+        debitCredit: e.debitCredit,
+        subjectCode: e.subjectCode,
+        fundsType: e.fundsType,
+        extendScript: e.extendScript.trim(),
+        type: 'entry'
+      })
+    }
+    if (e.auxiliaries && e.auxiliaries.length > 0) {
+      for (const aux of e.auxiliaries) {
+        if (aux.extendScript && aux.extendScript.trim().length > 0) {
+          list.push({
+            rowNum: e.rowNum,
+            debitCredit: e.debitCredit,
+            subjectCode: e.subjectCode,
+            fundsType: e.fundsType,
+            extendScript: aux.extendScript.trim(),
+            type: 'auxiliary',
+            auxType: aux.auxType,
+            auxCode: aux.auxCode
+          })
+        } else if (aux.auxCode && aux.auxCode.includes('#{')) {
+          list.push({
+            rowNum: e.rowNum,
+            debitCredit: e.debitCredit,
+            subjectCode: e.subjectCode,
+            fundsType: e.fundsType,
+            extendScript: `动态编码模板: ${aux.auxCode}`,
+            type: 'auxiliary',
+            auxType: aux.auxType,
+            auxCode: aux.auxCode
+          })
+        }
+      }
+    }
+  }
+  return list
 }
 
 /**
@@ -93,18 +128,20 @@ export function extractSpelEntries(rule: RuleResponse): SpelScriptEntryInfo[] {
 function buildSpelNote(spelEntries: SpelScriptEntryInfo[], commentPrefix = '//'): string {
   if (spelEntries.length === 0) return ''
   const lines = [
-    `${commentPrefix} [SpEL 脚本提示] 当前规则配置了分录金额计算脚本：`,
-    ...spelEntries.map(
-      (s) =>
-        `${commentPrefix}   - 行 ${s.rowNum} [${s.debitCredit === 1 ? '借' : '贷'}方·科目 ${s.subjectCode}·款项 ${s.fundsType}]: ${s.extendScript}`
-    ),
-    `${commentPrefix} 系统在生成凭证分录时，将以传入的 details[].amount 原始金额代入上述表达式进行运算。`
+    `${commentPrefix} [SpEL 脚本与动态核算提示] 当前规则配置了计算表达式或动态辅助核算：`,
+    ...spelEntries.map((s) => {
+      if (s.type === 'auxiliary') {
+        return `${commentPrefix}   - 行 ${s.rowNum} 辅助核算 [类型 ${s.auxType}·编码 ${s.auxCode}]: ${s.extendScript}`
+      }
+      return `${commentPrefix}   - 行 ${s.rowNum} [${s.debitCredit === 1 ? '借' : '贷'}方·科目 ${s.subjectCode}·款项 ${s.fundsType}]: ${s.extendScript}`
+    }),
+    `${commentPrefix} 系统在生成凭证分录及辅助核算时，将以传入的 details[].amount 与 extraAttrs 扩展属性代入运算。`
   ]
   return lines.join('\n') + '\n'
 }
 
 /**
- * 根据规则 entries 提取去重后的款项类型并构造 details
+ * 根据规则 entries 提取去重后的款项类型并构造 details（包含明细 extraAttrs 示例）
  */
 export function buildSampleDetails(rule: RuleResponse, totalAmount: number) {
   const fundsTypes: string[] = []
@@ -124,10 +161,14 @@ export function buildSampleDetails(rule: RuleResponse, totalAmount: number) {
     return [
       {
         customerId: 'CUST_10001',
-        customerType: 1,
+        customerType: 1, // 1-个人, 2-企业
         fundsType: fundsTypes[0],
         itemCode: 'ITEM_001',
-        amount: Number(totalAmount.toFixed(2))
+        amount: Number(totalAmount.toFixed(2)),
+        extraAttrs: {
+          subAccountNo: 'SUB_ACC_10001',
+          bizTag: 'PRIMARY'
+        }
       }
     ]
   }
@@ -144,10 +185,14 @@ export function buildSampleDetails(rule: RuleResponse, totalAmount: number) {
     }
     return {
       customerId: `CUST_${10001 + index}`,
-      customerType: 1,
+      customerType: 1, // 1-个人, 2-企业
       fundsType: ft,
       itemCode: `ITEM_${index + 1}`,
-      amount: itemAmt
+      amount: itemAmt,
+      extraAttrs: {
+        subAccountNo: `SUB_ACC_${10001 + index}`,
+        bizTag: `PART_${index + 1}`
+      }
     }
   })
 }
@@ -370,6 +415,11 @@ export function generateRuleExample(rule: RuleResponse, config: ExampleConfig): 
     tradeTime: tradeTime,
     summary: `${rule.ruleName || '业务记账'}`,
     ...(isPreFreeze ? { origFreezeNo: sampleFreezeNo } : {}),
+    extraAttrs: {
+      creditParty: 'BANK_ICBC',
+      partnerCode: 'PARTNER_9527',
+      channelSource: 'APP_ONLINE'
+    },
     details: details
   }
 
@@ -383,6 +433,11 @@ export function generateRuleExample(rule: RuleResponse, config: ExampleConfig): 
     amount: totalAmount,
     tradeTime: tradeTime,
     summary: `${rule.ruleName || '业务交易'}预冻结`,
+    extraAttrs: {
+      creditParty: 'BANK_ICBC',
+      partnerCode: 'PARTNER_9527',
+      channelSource: 'APP_ONLINE'
+    },
     details: details
   }
 

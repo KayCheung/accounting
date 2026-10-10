@@ -15,7 +15,8 @@ public enum AllocationMethodEnum {
 
     NONE(1, "不分摊"),
     FIXED_AMOUNT(2, "固定金额"),
-    PERCENTAGE(3, "按比例");
+    PERCENTAGE(3, "按比例"),
+    SPEL_SCRIPT(4, "SpEL表达式");
 
     @EnumValue
     @JsonValue

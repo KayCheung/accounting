@@ -19,10 +19,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import cn.hutool.json.JSONUtil;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 流水入库领域服务
@@ -102,6 +104,19 @@ public class JournalingDomainService {
             BigDecimal amount, LocalDateTime tradeTime, String summary,
             List<JournalDetailRequest> details, LocalDate accountingDate,
             String origFreezeNo) {
+        return persistJournal(traceNo, traceSeq, businessCode, tradingCode, payChannel,
+                tradeType, amount, tradeTime, summary, details, accountingDate, origFreezeNo, null);
+    }
+
+    /**
+     * 在事务中写入流水 + 明细 + 创建事务记录（支持关联预冻结单号与扩展属性）
+     */
+    public JournalSubmitResult persistJournal(
+            String traceNo, Integer traceSeq, String businessCode,
+            String tradingCode, String payChannel, Integer tradeType,
+            BigDecimal amount, LocalDateTime tradeTime, String summary,
+            List<JournalDetailRequest> details, LocalDate accountingDate,
+            String origFreezeNo, Map<String, Object> extraAttrs) {
 
         // P1-1 修复：使用 TransactionTemplate.execute() 返回值直接返回 txnNo，消除 String[] 闭包反模式
         return transactionTemplate.execute(status -> {
@@ -117,6 +132,9 @@ public class JournalingDomainService {
             record.setAmount(amount).setTradeTime(tradeTime);
             record.setAccountingDate(accountingDate).setSummary(summary);
             record.setOrigFreezeNo(origFreezeNo);
+            if (extraAttrs != null && !extraAttrs.isEmpty()) {
+                record.setExtraAttrs(JSONUtil.toJsonStr(extraAttrs));
+            }
             record.setStatus(BusinessRecordStatusEnum.PROCESSING);
             businessRecordRepository.save(record);
 
@@ -129,6 +147,9 @@ public class JournalingDomainService {
                 detailPO.setFundsType(detail.getFundsType());
                 detailPO.setItemCode(detail.getItemCode()); // N2 修复
                 detailPO.setAmount(detail.getAmount());
+                if (detail.getExtraAttrs() != null && !detail.getExtraAttrs().isEmpty()) {
+                    detailPO.setExtraAttrs(JSONUtil.toJsonStr(detail.getExtraAttrs()));
+                }
                 businessDetailRepository.save(detailPO);
             }
 
@@ -153,6 +174,19 @@ public class JournalingDomainService {
             String tradingCode, String payChannel,
             BigDecimal amount, LocalDateTime tradeTime, String summary,
             List<JournalDetailRequest> details, LocalDate accountingDate) {
+        return persistFreezeRecord(traceNo, traceSeq, businessCode, tradingCode, payChannel,
+                amount, tradeTime, summary, details, accountingDate, null);
+    }
+
+    /**
+     * 写入预冻结流水记录（支持扩展业务属性）
+     */
+    public BusinessRecordPO persistFreezeRecord(
+            String traceNo, Integer traceSeq, String businessCode,
+            String tradingCode, String payChannel,
+            BigDecimal amount, LocalDateTime tradeTime, String summary,
+            List<JournalDetailRequest> details, LocalDate accountingDate,
+            Map<String, Object> extraAttrs) {
 
         return transactionTemplate.execute(status -> {
             BusinessRecordPO record = new BusinessRecordPO();
@@ -162,6 +196,9 @@ public class JournalingDomainService {
             record.setTradeType(TradeTypeEnum.PRE_FREEZE);
             record.setAmount(amount).setTradeTime(tradeTime);
             record.setAccountingDate(accountingDate).setSummary(summary);
+            if (extraAttrs != null && !extraAttrs.isEmpty()) {
+                record.setExtraAttrs(JSONUtil.toJsonStr(extraAttrs));
+            }
             record.setStatus(BusinessRecordStatusEnum.PROCESSING);
             businessRecordRepository.save(record);
 
@@ -173,6 +210,9 @@ public class JournalingDomainService {
                 detailPO.setFundsType(detail.getFundsType());
                 detailPO.setItemCode(detail.getItemCode());
                 detailPO.setAmount(detail.getAmount());
+                if (detail.getExtraAttrs() != null && !detail.getExtraAttrs().isEmpty()) {
+                    detailPO.setExtraAttrs(JSONUtil.toJsonStr(detail.getExtraAttrs()));
+                }
                 businessDetailRepository.save(detailPO);
             }
 

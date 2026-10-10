@@ -136,7 +136,7 @@ class JournalingApplicationServiceTest {
         when(journalingDomainService.checkIdempotent("TRACE001", 0)).thenReturn(null);
         when(journalingDomainService.determineAccountingDate(any())).thenReturn(LocalDate.of(2026, 3, 1));
         when(journalingDomainService.persistJournal(anyString(), anyInt(), anyString(), anyString(), anyString(),
-                anyInt(), any(), any(), any(), anyList(), any(), any()))
+                anyInt(), any(), any(), any(), anyList(), any(), any(), any()))
                 .thenReturn(new JournalSubmitResult("TRACE001", LocalDate.of(2026, 3, 1), "TXN001"));
 
         JournalSubmitResponse response = service.submitJournal(request);
@@ -199,7 +199,7 @@ class JournalingApplicationServiceTest {
         recordPO.setTraceNo("FRZ_TRACE_001");
         recordPO.setAccountingDate(LocalDate.of(2026, 3, 1));
         when(journalingDomainService.persistFreezeRecord(anyString(), anyInt(), anyString(), anyString(), anyString(),
-                any(), any(), any(), anyList(), any())).thenReturn(recordPO);
+                any(), any(), any(), anyList(), any(), any())).thenReturn(recordPO);
 
         AccountFreezeDetailPO freezeDetailPO = new AccountFreezeDetailPO();
         freezeDetailPO.setVoucherNo("FRZ_ID_888");
@@ -498,7 +498,7 @@ class JournalingApplicationServiceTest {
         when(journalingDomainService.checkIdempotent("TRACE_FULL_001", 0)).thenReturn(null);
         when(journalingDomainService.determineAccountingDate(any())).thenReturn(LocalDate.of(2026, 3, 1));
         when(journalingDomainService.persistJournal(anyString(), anyInt(), anyString(), anyString(), anyString(),
-                anyInt(), any(), any(), any(), anyList(), any(), any()))
+                anyInt(), any(), any(), any(), anyList(), any(), any(), any()))
                 .thenReturn(new JournalSubmitResult("TRACE_FULL_001", LocalDate.of(2026, 3, 1), "TXN_FULL_001"));
 
         VoucherGenerateResponse voucherResp = new VoucherGenerateResponse();

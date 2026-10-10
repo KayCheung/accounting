@@ -1,23 +1,29 @@
 package com.kltb.accounting.core.domain.service;
 
+import cn.hutool.core.util.StrUtil;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.*;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.*;
+import com.kltb.accounting.core.infrastructure.spel.JournalSpelContext;
+import com.kltb.accounting.core.infrastructure.spel.RuleScriptExecutor;
 import com.kltb.accounting.core.shared.exception.AccountException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
 /**
  * 缓冲规则匹配 + 辅助核算分摊领域服务
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class BufferPostingDomainService {
@@ -25,9 +31,10 @@ public class BufferPostingDomainService {
     private final BufferPostingRuleMapper bufferPostingRuleMapper;
     private final BufferPostingDetailMapper bufferPostingDetailMapper;
     private final AccountingVoucherAuxiliaryMapper voucherAuxiliaryMapper;
+    private final RuleScriptExecutor ruleScriptExecutor;
 
     /**
-     * 辅助核算分摊引擎
+     * 辅助核算分摊引擎（向下兼容）
      *
      * @param entryData        分录数据
      * @param auxiliaryConfigs 该分录行对应的辅助核算配置列表
@@ -36,19 +43,51 @@ public class BufferPostingDomainService {
     public List<AuxiliaryItemData> calculateAuxiliaryAllocation(
             VoucherEntryData entryData,
             List<AccountingRuleAuxiliaryPO> auxiliaryConfigs) {
+        return calculateAuxiliaryAllocation(entryData, auxiliaryConfigs, null, null);
+    }
+
+    /**
+     * 辅助核算分摊引擎（支持流水明细、主单上下文、SpEL 动态脚本与动态核算编码解析）
+     *
+     * @param entryData        分录数据
+     * @param auxiliaryConfigs 该分录行对应的辅助核算配置列表
+     * @param businessDetail   关联的业务流水明细（可为空）
+     * @param journal          关联的业务流水主单（可为空）
+     * @return 分摊后的辅助核算项列表
+     */
+    public List<AuxiliaryItemData> calculateAuxiliaryAllocation(
+            VoucherEntryData entryData,
+            List<AccountingRuleAuxiliaryPO> auxiliaryConfigs,
+            BusinessDetailPO businessDetail,
+            BusinessRecordPO journal) {
+
+        if (auxiliaryConfigs == null || auxiliaryConfigs.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // 构建 SpEL 统一上下文
+        JournalSpelContext spelContext = JournalSpelContext.of(
+                entryData != null ? entryData.getAmount() : BigDecimal.ZERO,
+                businessDetail,
+                journal
+        );
 
         List<AuxiliaryItemData> result = new ArrayList<>();
 
         // 按分摊方式分组
-        List<AccountingRuleAuxiliaryPO> proportional = auxiliaryConfigs.stream()
-                .filter(c -> c.getAllocationMethod() != null && c.getAllocationMethod() == AllocationMethodEnum.PERCENTAGE)
-                .collect(Collectors.toList());
-
         List<AccountingRuleAuxiliaryPO> fixed = auxiliaryConfigs.stream()
                 .filter(c -> c.getAllocationMethod() != null && c.getAllocationMethod() == AllocationMethodEnum.FIXED_AMOUNT)
                 .collect(Collectors.toList());
 
-        // 固定金额分摊
+        List<AccountingRuleAuxiliaryPO> spelConfigs = auxiliaryConfigs.stream()
+                .filter(c -> c.getAllocationMethod() != null && c.getAllocationMethod() == AllocationMethodEnum.SPEL_SCRIPT)
+                .collect(Collectors.toList());
+
+        List<AccountingRuleAuxiliaryPO> proportional = auxiliaryConfigs.stream()
+                .filter(c -> c.getAllocationMethod() != null && c.getAllocationMethod() == AllocationMethodEnum.PERCENTAGE)
+                .collect(Collectors.toList());
+
+        // 1. 固定金额分摊
         BigDecimal fixedTotal = BigDecimal.ZERO;
         for (AccountingRuleAuxiliaryPO config : fixed) {
             BigDecimal auxAmount = config.getAllocationValue();
@@ -61,12 +100,36 @@ public class BufferPostingDomainService {
                                 + ", auxAmount=" + auxAmount + ", entryAmount=" + entryData.getAmount());
             }
             fixedTotal = fixedTotal.add(auxAmount);
-            result.add(buildAuxiliaryItem(entryData, config, auxAmount));
+            result.add(buildAuxiliaryItem(entryData, config, auxAmount, spelContext));
         }
 
-        // 按比例分摊（前 N-1 按比例，最后一条补差）
+        // 2. SpEL 脚本动态金额分摊
+        BigDecimal spelTotal = BigDecimal.ZERO;
+        for (AccountingRuleAuxiliaryPO config : spelConfigs) {
+            BigDecimal auxAmount = BigDecimal.ZERO;
+            if (StrUtil.isNotBlank(config.getExtendScript()) && ruleScriptExecutor != null) {
+                auxAmount = ruleScriptExecutor.execute(config.getExtendScript(), spelContext);
+            }
+            if (auxAmount == null || auxAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            if (auxAmount.compareTo(entryData.getAmount()) > 0) {
+                throw new AccountException(ResultCode.AUXILIARY_AMOUNT_MISMATCH,
+                        "辅助核算SpEL计算金额超过分录金额: auxCode=" + config.getAuxCode()
+                                + ", auxAmount=" + auxAmount + ", entryAmount=" + entryData.getAmount());
+            }
+            spelTotal = spelTotal.add(auxAmount);
+            result.add(buildAuxiliaryItem(entryData, config, auxAmount, spelContext));
+        }
+
+        // 3. 按比例分摊（在扣除固定金额和 SpEL 金额后的剩余金额上按比例分摊，前 N-1 按比例，最后一条补差）
         if (!proportional.isEmpty()) {
-            BigDecimal remaining = entryData.getAmount().subtract(fixedTotal);
+            BigDecimal remaining = entryData.getAmount().subtract(fixedTotal).subtract(spelTotal);
+            if (remaining.compareTo(BigDecimal.ZERO) < 0) {
+                throw new AccountException(ResultCode.AUXILIARY_AMOUNT_MISMATCH,
+                        "辅助核算固定与SpEL分摊合计超过分录金额: entryAmount=" + entryData.getAmount()
+                                + ", fixedTotal=" + fixedTotal + ", spelTotal=" + spelTotal);
+            }
             BigDecimal allocated = BigDecimal.ZERO;
 
             for (int i = 0; i < proportional.size(); i++) {
@@ -84,7 +147,7 @@ public class BufferPostingDomainService {
                     auxAmount = remaining.subtract(allocated);
                 }
 
-                result.add(buildAuxiliaryItem(entryData, config, auxAmount));
+                result.add(buildAuxiliaryItem(entryData, config, auxAmount, spelContext));
             }
         }
 
@@ -107,20 +170,33 @@ public class BufferPostingDomainService {
     }
 
     /**
-     * 构建辅助核算项
+     * 构建辅助核算项（支持动态 #{...} 表达式解析 auxCode）
      */
     private AuxiliaryItemData buildAuxiliaryItem(
             VoucherEntryData entryData,
             AccountingRuleAuxiliaryPO config,
-            BigDecimal amount) {
+            BigDecimal amount,
+            JournalSpelContext spelContext) {
+
+        String resolvedAuxCode = config.getAuxCode();
+        if (resolvedAuxCode != null && resolvedAuxCode.contains("#{") && ruleScriptExecutor != null && spelContext != null) {
+            try {
+                String dynamicCode = ruleScriptExecutor.executeTemplate(resolvedAuxCode, spelContext);
+                if (StrUtil.isNotBlank(dynamicCode)) {
+                    resolvedAuxCode = dynamicCode;
+                }
+            } catch (Exception e) {
+                log.warn("[Auxiliary] 辅助核算编码 SpEL 模板解析异常: auxCode={}, error={}", resolvedAuxCode, e.getMessage());
+            }
+        }
 
         return new AuxiliaryItemData(
                 entryData.getEntryId(),
                 entryData.getVoucherNo(),
                 entryData.getSubjectCode(),
                 config.getAuxType(),
-                config.getAuxCode(),
-                config.getAuxCode(),
+                resolvedAuxCode,
+                resolvedAuxCode,
                 entryData.getDebitCredit(),
                 amount,
                 entryData.getAccountingDate()
