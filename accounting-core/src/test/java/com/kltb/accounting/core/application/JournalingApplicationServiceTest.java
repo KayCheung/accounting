@@ -7,6 +7,8 @@ import com.kltb.accounting.core.application.service.JournalingApplicationService
 import com.kltb.accounting.core.domain.enums.*;
 import com.kltb.accounting.core.domain.service.AccountPreCheckDomainService;
 import com.kltb.accounting.core.domain.service.FreezeDomainService;
+import com.kltb.accounting.core.domain.model.FreezeRecordCommand;
+import com.kltb.accounting.core.domain.model.JournalCreateCommand;
 import com.kltb.accounting.core.domain.service.JournalSubmitResult;
 import com.kltb.accounting.core.domain.service.JournalingDomainService;
 import com.kltb.accounting.core.infrastructure.config.FreezeProperties;
@@ -135,8 +137,7 @@ class JournalingApplicationServiceTest {
 
         when(journalingDomainService.checkIdempotent("TRACE001", 0)).thenReturn(null);
         when(journalingDomainService.determineAccountingDate(any())).thenReturn(LocalDate.of(2026, 3, 1));
-        when(journalingDomainService.persistJournal(anyString(), anyInt(), anyString(), anyString(), anyString(),
-                anyInt(), any(), any(), any(), anyList(), any(), any(), any()))
+        when(journalingDomainService.persistJournal(any(JournalCreateCommand.class)))
                 .thenReturn(new JournalSubmitResult("TRACE001", LocalDate.of(2026, 3, 1), "TXN001"));
 
         JournalSubmitResponse response = service.submitJournal(request);
@@ -198,8 +199,7 @@ class JournalingApplicationServiceTest {
         BusinessRecordPO recordPO = new BusinessRecordPO();
         recordPO.setTraceNo("FRZ_TRACE_001");
         recordPO.setAccountingDate(LocalDate.of(2026, 3, 1));
-        when(journalingDomainService.persistFreezeRecord(anyString(), anyInt(), anyString(), anyString(), anyString(),
-                any(), any(), any(), anyList(), any(), any())).thenReturn(recordPO);
+        when(journalingDomainService.persistFreezeRecord(any(FreezeRecordCommand.class))).thenReturn(recordPO);
 
         AccountFreezeDetailPO freezeDetailPO = new AccountFreezeDetailPO();
         freezeDetailPO.setVoucherNo("FRZ_ID_888");
@@ -497,8 +497,7 @@ class JournalingApplicationServiceTest {
 
         when(journalingDomainService.checkIdempotent("TRACE_FULL_001", 0)).thenReturn(null);
         when(journalingDomainService.determineAccountingDate(any())).thenReturn(LocalDate.of(2026, 3, 1));
-        when(journalingDomainService.persistJournal(anyString(), anyInt(), anyString(), anyString(), anyString(),
-                anyInt(), any(), any(), any(), anyList(), any(), any(), any()))
+        when(journalingDomainService.persistJournal(any(JournalCreateCommand.class)))
                 .thenReturn(new JournalSubmitResult("TRACE_FULL_001", LocalDate.of(2026, 3, 1), "TXN_FULL_001"));
 
         VoucherGenerateResponse voucherResp = new VoucherGenerateResponse();

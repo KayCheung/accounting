@@ -30,9 +30,10 @@ public class AccountingRuleRepository {
     private final AccountingRuleDetailMapper ruleDetailMapper;
     private final AccountingRuleAuxiliaryMapper ruleAuxiliaryMapper;
     private final BufferPostingDetailMapper bufferPostingDetailMapper;
+    private final com.kltb.accounting.core.infrastructure.redis.AccountingRuleCacheService accountingRuleCacheService;
 
     /**
-     * 按业务键查询记账规则
+     * 按业务键查询记账规则（优先走 L1/L2 二级缓存）
      *
      * @param businessCode 业务线编码
      * @param tradingCode 交易编码
@@ -40,6 +41,9 @@ public class AccountingRuleRepository {
      * @return 规则PO，不存在时返回null
      */
     public AccountingRulePO selectByBusinessKey(String businessCode, String tradingCode, String payChannel) {
+        if (accountingRuleCacheService != null) {
+            return accountingRuleCacheService.getByBusinessKey(businessCode, tradingCode, payChannel);
+        }
         return ruleMapper.selectByBusinessKey(businessCode, tradingCode, payChannel);
     }
 
@@ -58,13 +62,20 @@ public class AccountingRuleRepository {
      */
     public void insertRule(AccountingRulePO rule) {
         ruleMapper.insert(rule);
+        if (accountingRuleCacheService != null && rule != null) {
+            accountingRuleCacheService.evictCache(rule.getBusinessCode(), rule.getTradingCode(), rule.getPayChannel());
+        }
     }
 
     /**
      * 更新规则
      */
     public boolean updateRuleById(AccountingRulePO rule) {
-        return ruleMapper.updateById(rule) > 0;
+        boolean ok = ruleMapper.updateById(rule) > 0;
+        if (accountingRuleCacheService != null && rule != null) {
+            accountingRuleCacheService.evictCache(rule.getBusinessCode(), rule.getTradingCode(), rule.getPayChannel());
+        }
+        return ok;
     }
 
     /**

@@ -195,6 +195,25 @@ public final class RedisKeyConstants {
         public static String dictKey(Object tenantId, String dictType) {
             return String.format(DICT_CACHE_FORMAT, tenantId, dictType);
         }
+
+        /** 记账规则二级缓存 Key 格式：accounting:{tenantId}:rule:{businessCode}:{tradingCode}:{payChannel} */
+        public static final String RULE_CACHE_FORMAT = "accounting:%s:rule:%s:%s:%s";
+
+        /**
+         * 获取租户级记账规则缓存 Key
+         *
+         * @param tenantId     租户ID
+         * @param businessCode 业务线编码
+         * @param tradingCode  交易编码
+         * @param payChannel   支付渠道
+         * @return 完整 Redis Key（如 accounting:1001:rule:LOAN:DISBURSE:BANK）
+         */
+        public static String ruleKey(Object tenantId, String businessCode, String tradingCode, String payChannel) {
+            return String.format(RULE_CACHE_FORMAT, tenantId,
+                    StrUtil.nullToEmpty(businessCode).trim(),
+                    StrUtil.nullToEmpty(tradingCode).trim(),
+                    StrUtil.nullToEmpty(payChannel).trim());
+        }
     }
 
     /**

@@ -8,6 +8,7 @@ import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 记账流水提交请求 DTO
@@ -56,7 +57,7 @@ public class JournalSubmitRequest {
     /**
      * 业务扩展参数（键值对，如 creditParty, partnerCode, channelSource 等）
      */
-    private java.util.Map<String, Object> extraAttrs;
+    private Map<String, Object> extraAttrs;
 
     @NotEmpty(message = "details不能为空")
     @Valid

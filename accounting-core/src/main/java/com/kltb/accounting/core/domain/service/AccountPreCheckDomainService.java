@@ -57,12 +57,25 @@ public class AccountPreCheckDomainService {
             String businessCode, String tradingCode, String payChannel,
             Map<String, CustomerTypeEnum> customerMap, String traceNo) {
 
-        // 1. 匹配记账规则（已有方法，P0-4 确保只返回 status=2）
+        // 1. 匹配记账规则（优先走二级缓存）
         AccountingRulePO rule = accountingRuleRepository.selectByBusinessKey(
                 businessCode, tradingCode, payChannel);
         if (rule == null) {
             throw new AccountException(ResultCode.RULE_NOT_FOUND,
                     "记账规则不存在: " + businessCode + "/" + tradingCode + "/" + payChannel);
+        }
+        return checkAndOpenAccounts(rule, customerMap, traceNo);
+    }
+
+    /**
+     * 预开户检查（直接复用流程上下文中已查询的记账规则实体，彻底避免重复查询）
+     */
+    public List<String> checkAndOpenAccounts(
+            AccountingRulePO rule,
+            Map<String, CustomerTypeEnum> customerMap, String traceNo) {
+
+        if (rule == null) {
+            throw new AccountException(ResultCode.RULE_NOT_FOUND, "记账规则不存在");
         }
         if (rule.getStatus() != RuleStatusEnum.ENABLED) {
             // 防御性检查：即使 XML 有 status=2 过滤，也加一层 Java 判断
@@ -107,7 +120,7 @@ public class AccountPreCheckDomainService {
                 int i = index.incrementAndGet();
                 String requestNo = "JOURNAL-" + traceNo + "-" + i + "-" + System.nanoTime();
                 AccountPO opened = accountOpeningDomainService.openExternalAccount(
-                        businessCode, item.ownerId, item.customerType, item.subjectCode,
+                        rule.getBusinessCode(), item.ownerId, item.customerType, item.subjectCode,
                         requestNo);
                 accountNo = opened.getAccountNo();
             }

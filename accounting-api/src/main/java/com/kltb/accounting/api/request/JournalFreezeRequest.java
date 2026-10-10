@@ -8,6 +8,7 @@ import lombok.Data;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 业务预冻结请求 DTO
@@ -49,7 +50,7 @@ public class JournalFreezeRequest {
     /**
      * 业务扩展参数（键值对，如 creditParty, partnerCode, channelSource 等）
      */
-    private java.util.Map<String, Object> extraAttrs;
+    private Map<String, Object> extraAttrs;
 
     @NotEmpty(message = "details不能为空")
     @Valid

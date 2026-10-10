@@ -24,4 +24,18 @@ public enum VoucherStatusEnum {
     private final Integer code;
 
     private final String desc;
+
+    /**
+     * 判断状态码是否与当前枚举匹配（安全避免包装类型引用比较与NPE陷阱）
+     */
+    public boolean matches(Integer statusCode) {
+        return statusCode != null && statusCode.equals(this.code);
+    }
+
+    /**
+     * 判断状态码是否表示已过账
+     */
+    public static boolean isPosted(Integer statusCode) {
+        return POSTED.matches(statusCode);
+    }
 }

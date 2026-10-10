@@ -913,6 +913,10 @@
       - **辅助核算 SpEL 分摊与动态编码**：枚举 `AllocationMethodEnum` 扩充 `SPEL_SCRIPT(4)`，在 `BufferPostingDomainService` 中打通辅助核算脚本分摊计算与 `auxCode` 动态核算对象编码解析，向下严格兼容固定金额与按比例补差；
       - **前端接入示例联动更新**：前端 `ALLOCATION_METHOD_OPTIONS` 增加 SpEL 表达式选项，代码示例生成器及示例弹窗（`RuleExampleDialog.vue`）同步展示 `extraAttrs`、全量字段规范与辅助核算动态脚本注释；
       - **质量验收与测试覆盖**：新增 `RuleScriptExecutorTest`，完善 `BufferPostingDomainServiceTest`、`VoucheringDomainServiceTest`、`JournalingApplicationServiceTest` 等单元测试，全量通过（56/56 个用例），前端 `npm run build` 成功。
+    - **核心代码规范治理、参数对象化重构与规则二级缓存落地（Step 23.13）**：
+      - **领域命令对象封装（消除方法长参数）**：新建 `JournalCreateCommand` 与 `FreezeRecordCommand` 领域值对象/命令对象，彻底替换 `JournalingDomainService.persistJournal`（13 个参数）与 `persistFreezeRecord`（11 个参数）的长参数反模式，原多参数重载标记 `@Deprecated`，符合 Clean Code 原则；
+      - **凭证状态枚举比较安全修复**：针对 `JournalingApplicationService` 中 `postResp.getVoucherStatus() == VoucherStatusEnum.POSTED.getCode()` 包装类直接 `==` 比较的反模式，在 `VoucherStatusEnum` 中补充语义化防御方法 `matches(Integer)` 与 `isPosted(Integer)`，彻底消除潜在 NPE 与 Integer 引用比较陷阱；
+      - **记账规则二级高可用缓存（Caffeine L1 + Redis L2）**：排查并治理 `AccountingRuleRepository.selectByBusinessKey` 在记账流程中无缓存且单次请求重复查库 3 次的性能瓶颈。新增 `AccountingRuleCacheService`，构建 L1 本地缓存（Caffeine，容量 1000，TTL 5min）+ L2 分布式缓存（Redisson，TTL 1h），具备防穿透空值哨兵、主动写失效（`insertRule`/`updateRuleById`）以及 Redis 宕机自动降级 DB 的高可用机制；同时在记账与冻结编排流程中复用上下文匹配规则，将同流程查询次数压降至 0 DB I/O。
 - [x] **Step 23** · 业务功能页面开发全量交付完毕（100% 完成）
 
 

@@ -5,6 +5,7 @@ import lombok.Data;
 
 import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
+import java.util.Map;
 
 /**
  * 记账流水明细请求 DTO（N2 修复：含 itemCode 字段）
@@ -39,5 +40,5 @@ public class JournalDetailRequest {
     /**
      * 款项明细扩展参数（键值对，如 subProduct, rate 等）
      */
-    private java.util.Map<String, Object> extraAttrs;
+    private Map<String, Object> extraAttrs;
 }

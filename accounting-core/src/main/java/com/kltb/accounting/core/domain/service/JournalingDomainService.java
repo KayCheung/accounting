@@ -86,18 +86,79 @@ public class JournalingDomainService {
      * @param accountingDate 会计日期
      * @return 领域层结果对象
      */
+    /**
+     * 在事务中写入流水 + 明细 + 创建事务记录（推荐使用领域命令对象）
+     */
+    public JournalSubmitResult persistJournal(com.kltb.accounting.core.domain.model.JournalCreateCommand command) {
+        if (command == null) {
+            throw new IllegalArgumentException("command 不能为空");
+        }
+        return transactionTemplate.execute(status -> {
+            // 1. 生成事务编号
+            String txnNo = transactionNoGenerator.generate();
+
+            // 2. 写入 t_business_record
+            BusinessRecordPO record = new BusinessRecordPO();
+            record.setTraceNo(command.getTraceNo()).setTraceSeq(command.getTraceSeq());
+            record.setBusinessCode(command.getBusinessCode()).setTradingCode(command.getTradingCode());
+            record.setPayChannel(command.getPayChannel());
+            record.setTradeType(TradeTypeEnum.fromCode(command.getTradeType()));
+            record.setAmount(command.getAmount()).setTradeTime(command.getTradeTime());
+            record.setAccountingDate(command.getAccountingDate()).setSummary(command.getSummary());
+            record.setOrigFreezeNo(command.getOrigFreezeNo());
+            if (command.getExtraAttrs() != null && !command.getExtraAttrs().isEmpty()) {
+                record.setExtraAttrs(JSONUtil.toJsonStr(command.getExtraAttrs()));
+            }
+            record.setStatus(BusinessRecordStatusEnum.PROCESSING);
+            businessRecordRepository.save(record);
+
+            // 3. 写入 t_business_detail（逐条）
+            if (command.getDetails() != null) {
+                for (JournalDetailRequest detail : command.getDetails()) {
+                    BusinessDetailPO detailPO = new BusinessDetailPO();
+                    detailPO.setTraceNo(command.getTraceNo()).setTraceSeq(command.getTraceSeq());
+                    detailPO.setCustomerId(detail.getCustomerId());
+                    detailPO.setCustomerType(CustomerTypeEnum.fromValue(detail.getCustomerType()));
+                    detailPO.setFundsType(detail.getFundsType());
+                    detailPO.setItemCode(detail.getItemCode()); // N2 修复
+                    detailPO.setAmount(detail.getAmount());
+                    if (detail.getExtraAttrs() != null && !detail.getExtraAttrs().isEmpty()) {
+                        detailPO.setExtraAttrs(JSONUtil.toJsonStr(detail.getExtraAttrs()));
+                    }
+                    businessDetailRepository.save(detailPO);
+                }
+            }
+
+            // 4. 创建 t_transaction
+            TransactionPO transaction = new TransactionPO();
+            transaction.setTxnNo(txnNo).setTraceNo(command.getTraceNo());
+            transaction.setAccountingDate(command.getAccountingDate());
+            transaction.setAmount(command.getAmount()).setCurrency(Constants.DEFAULT_CURRENCY);
+            transaction.setStatus(TransactionStatusEnum.PROCESSING);
+            transaction.setRelateAccountCount(0); // 预开户后更新
+            transactionRepository.save(transaction);
+
+            return new JournalSubmitResult(command.getTraceNo(), command.getAccountingDate(), txnNo);
+        });
+    }
+
+    /**
+     * @deprecated 请使用 {@link #persistJournal(com.kltb.accounting.core.domain.model.JournalCreateCommand)}
+     */
+    @Deprecated
     public JournalSubmitResult persistJournal(
             String traceNo, Integer traceSeq, String businessCode,
             String tradingCode, String payChannel, Integer tradeType,
             BigDecimal amount, LocalDateTime tradeTime, String summary,
             List<JournalDetailRequest> details, LocalDate accountingDate) {
         return persistJournal(traceNo, traceSeq, businessCode, tradingCode, payChannel,
-                tradeType, amount, tradeTime, summary, details, accountingDate, null);
+                tradeType, amount, tradeTime, summary, details, accountingDate, null, null);
     }
 
     /**
-     * 在事务中写入流水 + 明细 + 创建事务记录（支持关联预冻结单号）
+     * @deprecated 请使用 {@link #persistJournal(com.kltb.accounting.core.domain.model.JournalCreateCommand)}
      */
+    @Deprecated
     public JournalSubmitResult persistJournal(
             String traceNo, Integer traceSeq, String businessCode,
             String tradingCode, String payChannel, Integer tradeType,
@@ -109,8 +170,9 @@ public class JournalingDomainService {
     }
 
     /**
-     * 在事务中写入流水 + 明细 + 创建事务记录（支持关联预冻结单号与扩展属性）
+     * @deprecated 请使用 {@link #persistJournal(com.kltb.accounting.core.domain.model.JournalCreateCommand)}
      */
+    @Deprecated
     public JournalSubmitResult persistJournal(
             String traceNo, Integer traceSeq, String businessCode,
             String tradingCode, String payChannel, Integer tradeType,
@@ -118,57 +180,69 @@ public class JournalingDomainService {
             List<JournalDetailRequest> details, LocalDate accountingDate,
             String origFreezeNo, Map<String, Object> extraAttrs) {
 
-        // P1-1 修复：使用 TransactionTemplate.execute() 返回值直接返回 txnNo，消除 String[] 闭包反模式
-        return transactionTemplate.execute(status -> {
-            // 1. 生成事务编号
-            String txnNo = transactionNoGenerator.generate();
+        com.kltb.accounting.core.domain.model.JournalCreateCommand command = com.kltb.accounting.core.domain.model.JournalCreateCommand.builder()
+                .traceNo(traceNo)
+                .traceSeq(traceSeq)
+                .businessCode(businessCode)
+                .tradingCode(tradingCode)
+                .payChannel(payChannel)
+                .tradeType(tradeType)
+                .amount(amount)
+                .tradeTime(tradeTime)
+                .summary(summary)
+                .details(details)
+                .accountingDate(accountingDate)
+                .origFreezeNo(origFreezeNo)
+                .extraAttrs(extraAttrs)
+                .build();
+        return persistJournal(command);
+    }
 
-            // 2. 写入 t_business_record
+    /**
+     * 写入预冻结流水记录（推荐使用领域命令对象）
+     */
+    public BusinessRecordPO persistFreezeRecord(com.kltb.accounting.core.domain.model.FreezeRecordCommand command) {
+        if (command == null) {
+            throw new IllegalArgumentException("command 不能为空");
+        }
+        return transactionTemplate.execute(status -> {
             BusinessRecordPO record = new BusinessRecordPO();
-            record.setTraceNo(traceNo).setTraceSeq(traceSeq);
-            record.setBusinessCode(businessCode).setTradingCode(tradingCode);
-            record.setPayChannel(payChannel);
-            record.setTradeType(TradeTypeEnum.fromCode(tradeType));
-            record.setAmount(amount).setTradeTime(tradeTime);
-            record.setAccountingDate(accountingDate).setSummary(summary);
-            record.setOrigFreezeNo(origFreezeNo);
-            if (extraAttrs != null && !extraAttrs.isEmpty()) {
-                record.setExtraAttrs(JSONUtil.toJsonStr(extraAttrs));
+            record.setTraceNo(command.getTraceNo()).setTraceSeq(command.getTraceSeq());
+            record.setBusinessCode(command.getBusinessCode()).setTradingCode(command.getTradingCode());
+            record.setPayChannel(command.getPayChannel());
+            record.setTradeType(TradeTypeEnum.PRE_FREEZE);
+            record.setAmount(command.getAmount()).setTradeTime(command.getTradeTime());
+            record.setAccountingDate(command.getAccountingDate()).setSummary(command.getSummary());
+            if (command.getExtraAttrs() != null && !command.getExtraAttrs().isEmpty()) {
+                record.setExtraAttrs(JSONUtil.toJsonStr(command.getExtraAttrs()));
             }
             record.setStatus(BusinessRecordStatusEnum.PROCESSING);
             businessRecordRepository.save(record);
 
-            // 3. 写入 t_business_detail（逐条）
-            for (JournalDetailRequest detail : details) {
-                BusinessDetailPO detailPO = new BusinessDetailPO();
-                detailPO.setTraceNo(traceNo).setTraceSeq(traceSeq);
-                detailPO.setCustomerId(detail.getCustomerId());
-                detailPO.setCustomerType(CustomerTypeEnum.fromValue(detail.getCustomerType()));
-                detailPO.setFundsType(detail.getFundsType());
-                detailPO.setItemCode(detail.getItemCode()); // N2 修复
-                detailPO.setAmount(detail.getAmount());
-                if (detail.getExtraAttrs() != null && !detail.getExtraAttrs().isEmpty()) {
-                    detailPO.setExtraAttrs(JSONUtil.toJsonStr(detail.getExtraAttrs()));
+            if (command.getDetails() != null) {
+                for (JournalDetailRequest detail : command.getDetails()) {
+                    BusinessDetailPO detailPO = new BusinessDetailPO();
+                    detailPO.setTraceNo(command.getTraceNo()).setTraceSeq(command.getTraceSeq());
+                    detailPO.setCustomerId(detail.getCustomerId());
+                    detailPO.setCustomerType(CustomerTypeEnum.fromValue(detail.getCustomerType()));
+                    detailPO.setFundsType(detail.getFundsType());
+                    detailPO.setItemCode(detail.getItemCode());
+                    detailPO.setAmount(detail.getAmount());
+                    if (detail.getExtraAttrs() != null && !detail.getExtraAttrs().isEmpty()) {
+                        detailPO.setExtraAttrs(JSONUtil.toJsonStr(detail.getExtraAttrs()));
+                    }
+                    businessDetailRepository.save(detailPO);
                 }
-                businessDetailRepository.save(detailPO);
             }
 
-            // 4. 创建 t_transaction
-            TransactionPO transaction = new TransactionPO();
-            transaction.setTxnNo(txnNo).setTraceNo(traceNo);
-            transaction.setAccountingDate(accountingDate);
-            transaction.setAmount(amount).setCurrency(Constants.DEFAULT_CURRENCY);
-            transaction.setStatus(TransactionStatusEnum.PROCESSING);
-            transaction.setRelateAccountCount(0); // 预开户后更新
-            transactionRepository.save(transaction);
-
-            return new JournalSubmitResult(traceNo, accountingDate, txnNo);
+            return record;
         });
     }
 
     /**
-     * 写入预冻结流水记录
+     * @deprecated 请使用 {@link #persistFreezeRecord(com.kltb.accounting.core.domain.model.FreezeRecordCommand)}
      */
+    @Deprecated
     public BusinessRecordPO persistFreezeRecord(
             String traceNo, Integer traceSeq, String businessCode,
             String tradingCode, String payChannel,
@@ -179,8 +253,9 @@ public class JournalingDomainService {
     }
 
     /**
-     * 写入预冻结流水记录（支持扩展业务属性）
+     * @deprecated 请使用 {@link #persistFreezeRecord(com.kltb.accounting.core.domain.model.FreezeRecordCommand)}
      */
+    @Deprecated
     public BusinessRecordPO persistFreezeRecord(
             String traceNo, Integer traceSeq, String businessCode,
             String tradingCode, String payChannel,
@@ -188,36 +263,20 @@ public class JournalingDomainService {
             List<JournalDetailRequest> details, LocalDate accountingDate,
             Map<String, Object> extraAttrs) {
 
-        return transactionTemplate.execute(status -> {
-            BusinessRecordPO record = new BusinessRecordPO();
-            record.setTraceNo(traceNo).setTraceSeq(traceSeq);
-            record.setBusinessCode(businessCode).setTradingCode(tradingCode);
-            record.setPayChannel(payChannel);
-            record.setTradeType(TradeTypeEnum.PRE_FREEZE);
-            record.setAmount(amount).setTradeTime(tradeTime);
-            record.setAccountingDate(accountingDate).setSummary(summary);
-            if (extraAttrs != null && !extraAttrs.isEmpty()) {
-                record.setExtraAttrs(JSONUtil.toJsonStr(extraAttrs));
-            }
-            record.setStatus(BusinessRecordStatusEnum.PROCESSING);
-            businessRecordRepository.save(record);
-
-            for (JournalDetailRequest detail : details) {
-                BusinessDetailPO detailPO = new BusinessDetailPO();
-                detailPO.setTraceNo(traceNo).setTraceSeq(traceSeq);
-                detailPO.setCustomerId(detail.getCustomerId());
-                detailPO.setCustomerType(CustomerTypeEnum.fromValue(detail.getCustomerType()));
-                detailPO.setFundsType(detail.getFundsType());
-                detailPO.setItemCode(detail.getItemCode());
-                detailPO.setAmount(detail.getAmount());
-                if (detail.getExtraAttrs() != null && !detail.getExtraAttrs().isEmpty()) {
-                    detailPO.setExtraAttrs(JSONUtil.toJsonStr(detail.getExtraAttrs()));
-                }
-                businessDetailRepository.save(detailPO);
-            }
-
-            return record;
-        });
+        com.kltb.accounting.core.domain.model.FreezeRecordCommand command = com.kltb.accounting.core.domain.model.FreezeRecordCommand.builder()
+                .traceNo(traceNo)
+                .traceSeq(traceSeq)
+                .businessCode(businessCode)
+                .tradingCode(tradingCode)
+                .payChannel(payChannel)
+                .amount(amount)
+                .tradeTime(tradeTime)
+                .summary(summary)
+                .details(details)
+                .accountingDate(accountingDate)
+                .extraAttrs(extraAttrs)
+                .build();
+        return persistFreezeRecord(command);
     }
 
     /**

@@ -9,6 +9,8 @@ import com.kltb.accounting.api.request.*;
 import com.kltb.accounting.api.response.*;
 import com.kltb.accounting.core.application.assembler.JournalingAssembler;
 import com.kltb.accounting.core.domain.enums.*;
+import com.kltb.accounting.core.domain.model.FreezeRecordCommand;
+import com.kltb.accounting.core.domain.model.JournalCreateCommand;
 import com.kltb.accounting.core.domain.service.AccountPreCheckDomainService;
 import com.kltb.accounting.core.domain.service.FreezeDomainService;
 import com.kltb.accounting.core.domain.service.JournalSubmitResult;
@@ -135,19 +137,33 @@ public class JournalingApplicationService {
                     "该业务记账规则要求必须先完成资金预冻结，缺失原预冻结流水号(origFreezeNo)");
         }
 
-        // 流水持久化（record + detail + transaction，支持 origFreezeNo 与 extraAttrs）
-        JournalSubmitResult result = journalingDomainService.persistJournal(
-                request.getTraceNo(), request.getTraceSeq(),
-                request.getBusinessCode(), request.getTradingCode(), request.getPayChannel(),
-                request.getTradeType(), request.getAmount(), request.getTradeTime(),
-                request.getSummary(), request.getDetails(), accountingDate,
-                request.getOrigFreezeNo(), request.getExtraAttrs());
+        // 流水持久化（采用 Command 领域命令对象，消除长参数列表坏味道）
+        JournalCreateCommand createCmd = JournalCreateCommand.builder()
+                .traceNo(request.getTraceNo())
+                .traceSeq(request.getTraceSeq())
+                .businessCode(request.getBusinessCode())
+                .tradingCode(request.getTradingCode())
+                .payChannel(request.getPayChannel())
+                .tradeType(request.getTradeType())
+                .amount(request.getAmount())
+                .tradeTime(request.getTradeTime())
+                .summary(request.getSummary())
+                .details(request.getDetails())
+                .accountingDate(accountingDate)
+                .origFreezeNo(request.getOrigFreezeNo())
+                .extraAttrs(request.getExtraAttrs())
+                .build();
+        JournalSubmitResult result = journalingDomainService.persistJournal(createCmd);
 
-        // 预开户检查 + 自动开户
+        // 预开户检查 + 自动开户（直接复用流程已匹配规则，彻底避免重复查询）
         Map<String, CustomerTypeEnum> customerMap = buildCustomerMap(request.getDetails());
-        accountPreCheckDomainService.checkAndOpenAccounts(
-                request.getBusinessCode(), request.getTradingCode(), request.getPayChannel(),
-                customerMap, request.getTraceNo());
+        if (rule != null) {
+            accountPreCheckDomainService.checkAndOpenAccounts(rule, customerMap, request.getTraceNo());
+        } else {
+            accountPreCheckDomainService.checkAndOpenAccounts(
+                    request.getBusinessCode(), request.getTradingCode(), request.getPayChannel(),
+                    customerMap, request.getTraceNo());
+        }
 
         // Phase 2: 凭证生成（Vouchering）
         VoucherGenerateRequest voucherReq = new VoucherGenerateRequest();
@@ -163,8 +179,7 @@ public class JournalingApplicationService {
             PostingExecuteResponse postResp = postingApplicationService.executePosting(postReq);
 
             // 若凭证状态已过账，联动更新流水为 SUCCESS
-            if (postResp != null && postResp.getVoucherStatus() != null
-                    && postResp.getVoucherStatus() == VoucherStatusEnum.POSTED.getCode()) {
+            if (postResp != null && VoucherStatusEnum.isPosted(postResp.getVoucherStatus())) {
                 businessRecordRepository.updateStatusByTraceNo(request.getTraceNo(), BusinessRecordStatusEnum.SUCCESS);
             }
         }
@@ -233,13 +248,7 @@ public class JournalingApplicationService {
         // 确定会计日期
         LocalDate accountingDate = journalingDomainService.determineAccountingDate(request.getTradeTime());
 
-        // 预开户检查 + 自动开户
-        Map<String, CustomerTypeEnum> customerMap = buildCustomerMap(request.getDetails());
-        accountPreCheckDomainService.checkAndOpenAccounts(
-                request.getBusinessCode(), request.getTradingCode(), request.getPayChannel(),
-                customerMap, request.getTraceNo());
-
-        // 匹配记账规则以识别出金方
+        // 匹配记账规则以识别出金方（优先走二级缓存）
         AccountingRulePO rule = accountingRuleRepository.selectByBusinessKey(
                 request.getBusinessCode(), request.getTradingCode(), request.getPayChannel());
         if (rule == null) {
@@ -250,6 +259,10 @@ public class JournalingApplicationService {
             throw new AccountException(ResultCode.PARAM_ERROR,
                     "当前记账规则未启用预冻结要求: " + request.getBusinessCode() + "/" + request.getTradingCode());
         }
+
+        // 预开户检查 + 自动开户（直接复用规则，避免重复查库）
+        Map<String, CustomerTypeEnum> customerMap = buildCustomerMap(request.getDetails());
+        accountPreCheckDomainService.checkAndOpenAccounts(rule, customerMap, request.getTraceNo());
         List<AccountingRuleDetailPO> ruleDetails = accountingRuleRepository.selectDetailsWithAuxiliary(rule.getId());
         if (ruleDetails == null || ruleDetails.isEmpty()) {
             throw new AccountException(ResultCode.RULE_NOT_FOUND, "记账规则明细为空");
@@ -273,12 +286,21 @@ public class JournalingApplicationService {
             payoutRuleDetails.add(ruleDetails.get(0));
         }
 
-        // 流水持久化（支持 extraAttrs）
-        BusinessRecordPO record = journalingDomainService.persistFreezeRecord(
-                request.getTraceNo(), request.getTraceSeq(),
-                request.getBusinessCode(), request.getTradingCode(), request.getPayChannel(),
-                request.getAmount(), request.getTradeTime(), request.getSummary(),
-                request.getDetails(), accountingDate, request.getExtraAttrs());
+        // 流水持久化（采用 Command 领域命令对象，消除长参数列表坏味道）
+        FreezeRecordCommand freezeCmd = FreezeRecordCommand.builder()
+                .traceNo(request.getTraceNo())
+                .traceSeq(request.getTraceSeq())
+                .businessCode(request.getBusinessCode())
+                .tradingCode(request.getTradingCode())
+                .payChannel(request.getPayChannel())
+                .amount(request.getAmount())
+                .tradeTime(request.getTradeTime())
+                .summary(request.getSummary())
+                .details(request.getDetails())
+                .accountingDate(accountingDate)
+                .extraAttrs(request.getExtraAttrs())
+                .build();
+        BusinessRecordPO record = journalingDomainService.persistFreezeRecord(freezeCmd);
 
         // 执行多账户资金冻结（统一预冻结有效时长配置化，默认 1800 秒）
         long expireSeconds = (freezeProperties != null && freezeProperties.getDefaultExpireSeconds() > 0)
@@ -565,8 +587,7 @@ public class JournalingApplicationService {
                 postReq.setVoucherNo(voucher.getVoucherNo());
                 postReq.setOperatorName(Constants.SYSTEM_OPERATOR);
                 PostingExecuteResponse postResp = postingApplicationService.executePosting(postReq);
-                if (postResp != null && postResp.getVoucherStatus() != null
-                        && postResp.getVoucherStatus() == VoucherStatusEnum.POSTED.getCode()) {
+                if (postResp != null && VoucherStatusEnum.isPosted(postResp.getVoucherStatus())) {
                     businessRecordRepository.updateStatusByTraceNo(traceNo, BusinessRecordStatusEnum.SUCCESS);
                 }
             }
