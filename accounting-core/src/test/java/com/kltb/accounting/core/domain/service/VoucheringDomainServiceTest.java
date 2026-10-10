@@ -1,5 +1,6 @@
 package com.kltb.accounting.core.domain.service;
 
+import com.kltb.accounting.api.constant.Constants;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.*;
 import com.kltb.accounting.core.infrastructure.account.RedisSequenceGenerator;
@@ -248,7 +249,7 @@ class VoucheringDomainServiceTest {
         when(seqGen.generate(eq("ENT"), any(LocalDateTime.class), eq("yyyyMMddHHmmssSSS"), eq(4), eq(2)))
                 .thenReturn("ENT202606241030000001")
                 .thenReturn("ENT202606241030000002");
-        String voucherNo = voucheringDomainService.persistVoucher(journal, rule, entries, "SYSTEM");
+        String voucherNo = voucheringDomainService.persistVoucher(journal, rule, entries, Constants.SYSTEM_OPERATOR);
         assertThat(voucherNo).isEqualTo("PAY20260624000001");
         verify(accountingVoucherRepository).insert(argThat(v ->
                 v.getVoucherNo().equals("PAY20260624000001")

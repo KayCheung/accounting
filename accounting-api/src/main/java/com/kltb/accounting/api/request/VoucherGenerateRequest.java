@@ -1,5 +1,6 @@
 package com.kltb.accounting.api.request;
 
+import com.kltb.accounting.api.constant.Constants;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
@@ -15,5 +16,5 @@ public class VoucherGenerateRequest {
     private String traceNo;
 
     @Size(max = 32, message = "bookkeeperName 长度不能超过 32")
-    private String bookkeeperName = "SYSTEM";
+    private String bookkeeperName = Constants.SYSTEM_OPERATOR;
 }

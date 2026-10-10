@@ -9,6 +9,7 @@ import com.kltb.accounting.core.domain.service.AccountPreCheckDomainService;
 import com.kltb.accounting.core.domain.service.FreezeDomainService;
 import com.kltb.accounting.core.domain.service.JournalSubmitResult;
 import com.kltb.accounting.core.domain.service.JournalingDomainService;
+import com.kltb.accounting.core.infrastructure.config.FreezeProperties;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
 import com.kltb.accounting.core.infrastructure.persistence.repository.*;
 import com.kltb.accounting.core.infrastructure.redis.DistributedLockTemplate;
@@ -93,6 +94,9 @@ class JournalingApplicationServiceTest {
 
     @Spy
     private JournalingAssembler assembler = new JournalingAssembler();
+
+    @Spy
+    private FreezeProperties freezeProperties = new FreezeProperties();
 
     @InjectMocks
     private JournalingApplicationService service;

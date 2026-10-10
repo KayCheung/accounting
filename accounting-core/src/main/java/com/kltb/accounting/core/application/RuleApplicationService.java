@@ -2,6 +2,7 @@ package com.kltb.accounting.core.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.kltb.accounting.api.constant.Constants;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.api.request.RuleAuxiliaryRequest;
 import com.kltb.accounting.api.request.RuleCreateRequest;
@@ -154,8 +155,8 @@ public class RuleApplicationService {
                     return null;
                 }
                 po.setStatus(RuleStatusEnum.ENABLED);
-                po.setUpdateId("system");
-                po.setUpdateName("system");
+                po.setUpdateId(Constants.SYSTEM_OPERATOR);
+                po.setUpdateName(Constants.SYSTEM_OPERATOR);
                 accountingRuleRepository.updateRuleById(po);
                 return null;
             } catch (ServiceException e) {
@@ -191,8 +192,8 @@ public class RuleApplicationService {
                 }
 
                 po.setStatus(RuleStatusEnum.DISABLED);
-                po.setUpdateId("system");
-                po.setUpdateName("system");
+                po.setUpdateId(Constants.SYSTEM_OPERATOR);
+                po.setUpdateName(Constants.SYSTEM_OPERATOR);
                 accountingRuleRepository.updateRuleById(po);
                 return null;
             } catch (ServiceException e) {

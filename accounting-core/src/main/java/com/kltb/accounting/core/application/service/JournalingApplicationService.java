@@ -1,8 +1,9 @@
-// accounting-core/src/main/java/com/kltb/accounting/core/application/service/JournalingApplicationService.java
 package com.kltb.accounting.core.application.service;
 
+import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.kltb.accounting.api.constant.Constants;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.api.request.*;
 import com.kltb.accounting.api.response.*;
@@ -12,6 +13,7 @@ import com.kltb.accounting.core.domain.service.AccountPreCheckDomainService;
 import com.kltb.accounting.core.domain.service.FreezeDomainService;
 import com.kltb.accounting.core.domain.service.JournalSubmitResult;
 import com.kltb.accounting.core.domain.service.JournalingDomainService;
+import com.kltb.accounting.core.infrastructure.config.FreezeProperties;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
 import com.kltb.accounting.core.infrastructure.persistence.repository.*;
 import com.kltb.accounting.core.infrastructure.redis.DistributedLockTemplate;
@@ -59,6 +61,7 @@ public class JournalingApplicationService {
     private final BufferPostingDetailRepository bufferPostingDetailRepository;
     private final com.kltb.accounting.core.infrastructure.messaging.LocalMessageService localMessageService;
     private final ManualVoucherApplyRepository manualVoucherApplyRepository;
+    private final FreezeProperties freezeProperties;
 
     /**
      * 提交记账流水（含入口幂等锁控制）
@@ -149,14 +152,14 @@ public class JournalingApplicationService {
         // Phase 2: 凭证生成（Vouchering）
         VoucherGenerateRequest voucherReq = new VoucherGenerateRequest();
         voucherReq.setTraceNo(request.getTraceNo());
-        voucherReq.setBookkeeperName("SYSTEM");
+        voucherReq.setBookkeeperName(Constants.SYSTEM_OPERATOR);
         VoucherGenerateResponse voucherResp = voucheringApplicationService.generateVoucher(voucherReq);
 
         // Phase 4: 过账执行（Posting）
         if (voucherResp != null && StrUtil.isNotBlank(voucherResp.getVoucherNo())) {
             PostingExecuteRequest postReq = new PostingExecuteRequest();
             postReq.setVoucherNo(voucherResp.getVoucherNo());
-            postReq.setOperatorName("SYSTEM");
+            postReq.setOperatorName(Constants.SYSTEM_OPERATOR);
             PostingExecuteResponse postResp = postingApplicationService.executePosting(postReq);
 
             // 若凭证状态已过账，联动更新流水为 SUCCESS
@@ -277,8 +280,11 @@ public class JournalingApplicationService {
                 request.getAmount(), request.getTradeTime(), request.getSummary(),
                 request.getDetails(), accountingDate);
 
-        // 执行多账户资金冻结（统一预冻结有效时长 1800 秒）
-        LocalDateTime expireTime = LocalDateTime.now().plusSeconds(1800);
+        // 执行多账户资金冻结（统一预冻结有效时长配置化，默认 1800 秒）
+        long expireSeconds = (freezeProperties != null && freezeProperties.getDefaultExpireSeconds() > 0)
+                ? freezeProperties.getDefaultExpireSeconds()
+                : 1800L;
+        LocalDateTime expireTime = LocalDateTime.now().plusSeconds(expireSeconds);
         List<AccountFreezeDetailPO> freezeDetails = new ArrayList<>();
         for (AccountingRuleDetailPO payoutRuleDetail : payoutRuleDetails) {
             String fundsType = payoutRuleDetail.getFundsType();
@@ -373,7 +379,7 @@ public class JournalingApplicationService {
             if (freezeDetail.getStatus() == FreezeStatusEnum.FROZEN) {
                 freezeDomainService.unfreezeFund(freezeDetail.getVoucherNo(), freezeDetail.getOrigFreezeAmount(), request.getReason());
                 AccountFreezeDetailPO updated = freezeDetailRepository.selectByVoucherNo(freezeDetail.getVoucherNo());
-                unfrozenDetails.add(updated != null ? updated : freezeDetail);
+                unfrozenDetails.add(ObjectUtil.defaultIfNull(updated, freezeDetail));
             } else {
                 unfrozenDetails.add(freezeDetail);
             }
@@ -481,34 +487,34 @@ public class JournalingApplicationService {
 
         if (manualApply != null) {
             record.setBusinessCode("MANUAL");
-            record.setTradingCode(voucher != null && StrUtil.isNotBlank(voucher.getTradingCode()) ? voucher.getTradingCode() : "MANUAL_ENTRY");
-            record.setPayChannel(voucher != null && StrUtil.isNotBlank(voucher.getPayChannel()) ? voucher.getPayChannel() : "INTERNAL");
-            record.setTradeType(manualApply.getTradeType() != null ? manualApply.getTradeType() : (voucher != null ? voucher.getTradeType() : TradeTypeEnum.NORMAL));
-            record.setAmount(manualApply.getTotalDebitAmount() != null ? manualApply.getTotalDebitAmount() : (txn != null ? txn.getAmount() : BigDecimal.ZERO));
-            record.setAccountingDate(manualApply.getAccountingDate() != null ? manualApply.getAccountingDate() : (txn != null ? txn.getAccountingDate() : LocalDate.now()));
-            record.setSummary(StrUtil.isNotBlank(manualApply.getSummary()) ? manualApply.getSummary() : "手工记账审批入账");
-            record.setTradeTime(manualApply.getBookkeepingTime() != null ? manualApply.getBookkeepingTime() : manualApply.getCreateTime());
+            record.setTradingCode(voucher != null ? StrUtil.blankToDefault(voucher.getTradingCode(), "MANUAL_ENTRY") : "MANUAL_ENTRY");
+            record.setPayChannel(voucher != null ? StrUtil.blankToDefault(voucher.getPayChannel(), "INTERNAL") : "INTERNAL");
+            record.setTradeType(ObjectUtil.defaultIfNull(manualApply.getTradeType(), voucher != null ? voucher.getTradeType() : TradeTypeEnum.NORMAL));
+            record.setAmount(ObjectUtil.defaultIfNull(manualApply.getTotalDebitAmount(), txn != null ? ObjectUtil.defaultIfNull(txn.getAmount(), BigDecimal.ZERO) : BigDecimal.ZERO));
+            record.setAccountingDate(ObjectUtil.defaultIfNull(manualApply.getAccountingDate(), txn != null ? ObjectUtil.defaultIfNull(txn.getAccountingDate(), LocalDate.now()) : LocalDate.now()));
+            record.setSummary(StrUtil.blankToDefault(manualApply.getSummary(), "手工记账审批入账"));
+            record.setTradeTime(ObjectUtil.defaultIfNull(manualApply.getBookkeepingTime(), manualApply.getCreateTime()));
             record.setCreateTime(manualApply.getCreateTime());
         } else if (voucher != null) {
-            record.setBusinessCode(StrUtil.isNotBlank(voucher.getBusinessCode()) ? voucher.getBusinessCode() : "SYSTEM");
+            record.setBusinessCode(StrUtil.blankToDefault(voucher.getBusinessCode(), Constants.SYSTEM_OPERATOR));
             record.setTradingCode(voucher.getTradingCode());
             record.setPayChannel(voucher.getPayChannel());
-            record.setTradeType(voucher.getTradeType() != null ? voucher.getTradeType() : TradeTypeEnum.NORMAL);
-            record.setAmount(voucher.getAmount() != null ? voucher.getAmount() : (txn != null ? txn.getAmount() : BigDecimal.ZERO));
-            record.setAccountingDate(voucher.getAccountingDate() != null ? voucher.getAccountingDate() : (txn != null ? txn.getAccountingDate() : LocalDate.now()));
-            record.setSummary(StrUtil.isNotBlank(voucher.getSummary()) ? voucher.getSummary() : "系统自动或手工凭证事务");
-            record.setTradeTime(voucher.getTradeTime() != null ? voucher.getTradeTime() : (txn != null ? txn.getCreateTime() : LocalDateTime.now()));
-            record.setCreateTime(voucher.getCreateTime() != null ? voucher.getCreateTime() : LocalDateTime.now());
+            record.setTradeType(ObjectUtil.defaultIfNull(voucher.getTradeType(), TradeTypeEnum.NORMAL));
+            record.setAmount(ObjectUtil.defaultIfNull(voucher.getAmount(), txn != null ? ObjectUtil.defaultIfNull(txn.getAmount(), BigDecimal.ZERO) : BigDecimal.ZERO));
+            record.setAccountingDate(ObjectUtil.defaultIfNull(voucher.getAccountingDate(), txn != null ? ObjectUtil.defaultIfNull(txn.getAccountingDate(), LocalDate.now()) : LocalDate.now()));
+            record.setSummary(StrUtil.blankToDefault(voucher.getSummary(), "系统自动或手工凭证事务"));
+            record.setTradeTime(ObjectUtil.defaultIfNull(voucher.getTradeTime(), txn != null ? ObjectUtil.defaultIfNull(txn.getCreateTime(), LocalDateTime.now()) : LocalDateTime.now()));
+            record.setCreateTime(ObjectUtil.defaultIfNull(voucher.getCreateTime(), LocalDateTime.now()));
         } else if (txn != null) {
-            record.setBusinessCode("SYSTEM");
+            record.setBusinessCode(Constants.SYSTEM_OPERATOR);
             record.setTradingCode("TRANSACTION");
             record.setPayChannel("INTERNAL");
             record.setTradeType(TradeTypeEnum.NORMAL);
-            record.setAmount(txn.getAmount() != null ? txn.getAmount() : BigDecimal.ZERO);
-            record.setAccountingDate(txn.getAccountingDate() != null ? txn.getAccountingDate() : LocalDate.now());
+            record.setAmount(ObjectUtil.defaultIfNull(txn.getAmount(), BigDecimal.ZERO));
+            record.setAccountingDate(ObjectUtil.defaultIfNull(txn.getAccountingDate(), LocalDate.now()));
             record.setSummary("账务事务记录");
-            record.setTradeTime(txn.getCreateTime() != null ? txn.getCreateTime() : LocalDateTime.now());
-            record.setCreateTime(txn.getCreateTime() != null ? txn.getCreateTime() : LocalDateTime.now());
+            record.setTradeTime(ObjectUtil.defaultIfNull(txn.getCreateTime(), LocalDateTime.now()));
+            record.setCreateTime(ObjectUtil.defaultIfNull(txn.getCreateTime(), LocalDateTime.now()));
         }
 
         if (txn != null && txn.getStatus() == TransactionStatusEnum.SUCCESS) {
@@ -538,7 +544,7 @@ public class JournalingApplicationService {
             throw new ServiceException(ResultCode.PARAM_ERROR, "仅允许对失败流水发起重试，当前状态: " + record.getStatus());
         }
 
-        String lockKey = RedisKeyConstants.Lock.Idempotent.trace(traceNo, record.getTraceSeq() != null ? record.getTraceSeq() : 1);
+        String lockKey = RedisKeyConstants.Lock.Idempotent.trace(traceNo, ObjectUtil.defaultIfNull(record.getTraceSeq(), 1));
         return distributedLockTemplate.execute(lockKey, 3, -1, () -> {
             businessRecordRepository.updateStatusByTraceNo(traceNo, BusinessRecordStatusEnum.PROCESSING);
 
@@ -547,7 +553,7 @@ public class JournalingApplicationService {
             if (voucher == null) {
                 VoucherGenerateRequest vReq = new VoucherGenerateRequest();
                 vReq.setTraceNo(traceNo);
-                vReq.setBookkeeperName("SYSTEM");
+                vReq.setBookkeeperName(Constants.SYSTEM_OPERATOR);
                 VoucherGenerateResponse vResp = voucheringApplicationService.generateVoucher(vReq);
                 if (vResp != null) {
                     voucher = accountingVoucherRepository.selectByVoucherNoSimple(vResp.getVoucherNo());
@@ -557,7 +563,7 @@ public class JournalingApplicationService {
             if (voucher != null) {
                 PostingExecuteRequest postReq = new PostingExecuteRequest();
                 postReq.setVoucherNo(voucher.getVoucherNo());
-                postReq.setOperatorName("SYSTEM");
+                postReq.setOperatorName(Constants.SYSTEM_OPERATOR);
                 PostingExecuteResponse postResp = postingApplicationService.executePosting(postReq);
                 if (postResp != null && postResp.getVoucherStatus() != null
                         && postResp.getVoucherStatus() == VoucherStatusEnum.POSTED.getCode()) {
@@ -578,7 +584,7 @@ public class JournalingApplicationService {
             throw new ServiceException(ResultCode.JOURNAL_NOT_FOUND, "未找到流水记录: " + traceNo);
         }
 
-        String lockKey = RedisKeyConstants.Lock.Idempotent.trace(traceNo, record.getTraceSeq() != null ? record.getTraceSeq() : 1);
+        String lockKey = RedisKeyConstants.Lock.Idempotent.trace(traceNo, ObjectUtil.defaultIfNull(record.getTraceSeq(), 1));
         return distributedLockTemplate.execute(lockKey, 3, -1, () -> {
             List<AccountingVoucherPO> vouchers = accountingVoucherRepository.selectByTraceNo(traceNo);
             AccountingVoucherPO voucher = (vouchers != null && !vouchers.isEmpty()) ? vouchers.get(0) : null;
@@ -587,7 +593,7 @@ public class JournalingApplicationService {
 
             if (voucher != null) {
                 rollbackDomainService.executeRollbackForAsyncFailure(
-                        voucher.getVoucherNo(), txnNo, StrUtil.isNotBlank(reason) ? reason : "手动申请流水回滚");
+                        voucher.getVoucherNo(), txnNo, StrUtil.blankToDefault(reason, "手动申请流水回滚"));
             } else if (txnNo != null) {
                 rollbackDomainService.markTransactionFailed(txnNo, null, traceNo, reason);
             }

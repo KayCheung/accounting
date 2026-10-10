@@ -117,6 +117,9 @@ server:
 # ==================== ONS Producer 配置 ====================
 # ==================== 业务异步线程池（支持 Nacos 动态刷新） ====================
 accounting:
+  freeze:
+    # 统一预冻结默认有效时长（秒），支持 Nacos 动态配置刷新
+    default-expire-seconds: ${ACCOUNTING_FREEZE_DEFAULT_EXPIRE_SECONDS:1800}
   thread-pool:
     business-async:
       core-pool-size: ${BIZ_THREAD_POOL_CORE:4}

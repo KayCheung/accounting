@@ -862,6 +862,28 @@
     - **测试与构建验证**：
       - 后端单元测试全部通过（`JournalingApplicationServiceTest` 15用例、`RuleApplicationServiceTest` 7用例、`JournalingControllerTest` 10用例全部通过）；
       - 前端 `vue-tsc && vite build` 生产打包编译 0 错误通过。
+  → 完成内容（Step 23.9 系统操作人统一收拢、空值默认处理规范化与预冻结时长 Nacos 配置化）：
+    - **系统级操作人/记账人收拢收归至通用常量（Constants.SYSTEM_OPERATOR）**：
+      - 全项目扫描消除字面量 `"system"` 与 `"SYSTEM"` 魔法值，统一收拢为 `Constants.SYSTEM_OPERATOR`；
+      - 涉及：API 契约层默认值（`PostingExecuteRequest.operatorName`、`VoucherGenerateRequest.bookkeeperName`）、各应用层更新/创建人赋值（`BufferRuleApplicationService`、`RuleApplicationService`、`SubjectApplicationService`、`TemplateApplicationService`）、记账流水分录与过账调度（`JournalingApplicationService`、`PostingEngineDomainService`、`PeriodEndTransferDomainService`）及相关单元测试；
+    - **空值与默认值处理代码规范化（Hutool 工具类对齐）**：
+      - 消除三元判空嵌套冗余，规范使用 `ObjectUtil.defaultIfNull` 与 `StrUtil.blankToDefault`；
+      - 涉及：`JournalingApplicationService.buildSyntheticRecord`、`retryJournal`、`rollbackJournal`、`PostingEngineDomainService` 等多处核心逻辑；
+    - **资金预冻结有效时长配置化与 Nacos 动态注入（FreezeProperties）**：
+      - 新增 `@ConfigurationProperties(prefix = "accounting.freeze")` 配置属性类 `FreezeProperties`（默认 1800 秒），支持从 Nacos 动态热更新拉取；
+      - `application.yml` 统一配置 `accounting.freeze.default-expire-seconds: ${ACCOUNTING_FREEZE_DEFAULT_EXPIRE_SECONDS:1800}`；
+      - `JournalingApplicationService.doFreeze` 接入 `FreezeProperties`，动态计算预冻结到期时间 `expireTime`；
+    - **测试验证**：
+      - 全工程 Maven 单元测试（314 个测试）100% 编译并通过。
+  → 完成内容（Step 23.10 多租户插件忽略无 tenant_id 基础设施消息表与 SQL 语法错误修复 BUG261010-003）：
+    - **多租户插件基础设施表白名单忽略（MybatisPlusConfig.tenantLineHandler.ignoreTable）**：
+      - 修复因 `t_local_message`（本地消息事务表）与 `t_message_receipt`（消息消费回执表）底层 DDL 未设计 `tenant_id` 字段，在执行消息补偿、记账全景穿透等查询时被 MyBatis-Plus `TenantLineInnerInterceptor` 强行追加 `AND tenant_id = -1` 导致 `SQLSyntaxErrorException: Unknown column 'tenant_id' in 'where clause'` 的缺陷；
+      - 重写 `ignoreTable(String tableName)` 过滤器，建立 `INFRA_IGNORE_TABLES` 白名单，去除表名外围反引号、大小写规范化及 schema 前缀清洗后做白名单精准忽略；
+    - **Mapper 级别注解双重防护（@InterceptorIgnore）**：
+      - 在 `LocalMessageMapper` 与 `MessageReceiptMapper` 类级别增加 `@InterceptorIgnore(tenantLine = "true")`，实现全局插件与 Mapper 局部配置双保险；
+    - **单元测试验证**：
+      - 新增 `MybatisPlusTenantConfigTest`，完整验证白名单基础设施表与业务多租户表的隔离与放行行为；
+      - 全工程 Maven 单元测试（318 个用例）100% 编译并通过。
 - [x] **Step 23** · 业务功能页面开发全量交付完毕（100% 完成）
 
 

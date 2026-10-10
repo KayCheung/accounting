@@ -450,7 +450,7 @@ public class PeriodEndTransferDomainService {
                 voucher.setStatus(VoucherStatusEnum.PENDING);
                 voucher.setAccountingDate(accountingDate);
                 voucher.setSummary(renderSummary(rule.getSummaryTemplate(), accountingDate));
-                voucher.setBookkeeperName("SYSTEM");
+                voucher.setBookkeeperName(Constants.SYSTEM_OPERATOR);
                 voucher.setTenantId(TenantContext.get());
                 voucherRepository.insert(voucher);
 

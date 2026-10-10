@@ -1,5 +1,6 @@
 package com.kltb.accounting.api.request;
 
+import com.kltb.accounting.api.constant.Constants;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
@@ -15,5 +16,5 @@ public class PostingExecuteRequest {
     private String voucherNo;
 
     @Size(max = 32, message = "操作人姓名长度不能超过32")
-    private String operatorName = "SYSTEM";
+    private String operatorName = Constants.SYSTEM_OPERATOR;
 }

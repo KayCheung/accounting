@@ -2,6 +2,7 @@ package com.kltb.accounting.core.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.kltb.accounting.api.constant.Constants;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.api.request.SubjectCreateRequest;
 import com.kltb.accounting.api.request.SubjectQueryRequest;
@@ -69,8 +70,8 @@ public class SubjectApplicationService {
                         parent.setLeaf(false);
                         parent.setAllowPost(false);
                         parent.setAllowOpenAccount(false);
-                        parent.setUpdateId("system");
-                        parent.setUpdateName("system");
+                        parent.setUpdateId(Constants.SYSTEM_OPERATOR);
+                        parent.setUpdateName(Constants.SYSTEM_OPERATOR);
                         subjectRepository.updateSubjectById(parent);
                     }
                 }
@@ -177,8 +178,8 @@ public class SubjectApplicationService {
 
                 // 3. 更新状态为停用
                 po.setStatus(AvailableStatusEnum.DISABLED);
-                po.setUpdateId("system");
-                po.setUpdateName("system");
+                po.setUpdateId(Constants.SYSTEM_OPERATOR);
+                po.setUpdateName(Constants.SYSTEM_OPERATOR);
                 subjectRepository.updateSubjectById(po);
                 return null;
             } catch (ServiceException e) {

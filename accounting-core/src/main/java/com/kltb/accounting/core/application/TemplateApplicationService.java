@@ -2,6 +2,7 @@ package com.kltb.accounting.core.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.kltb.accounting.api.constant.Constants;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.api.request.TemplateCreateRequest;
 import com.kltb.accounting.api.request.TemplateGroupSaveRequest;
@@ -118,14 +119,14 @@ public class TemplateApplicationService {
                         existing.setAutoOpen(request.getAutoOpen());
                         existing.setStatus(finalStatus);
                         existing.setAccountType(item.getAccountType());
-                        existing.setCurrency(StrUtil.isNotBlank(item.getCurrency()) ? item.getCurrency() : "CNY");
+                        existing.setCurrency(StrUtil.blankToDefault(item.getCurrency(), Constants.DEFAULT_CURRENCY));
                         if (item.getBalanceDirection() != null) {
                             existing.setBalanceDirection(item.getBalanceDirection() == 1 ? BalanceDirectionEnum.DEBIT : BalanceDirectionEnum.CREDIT);
                         }
                         existing.setAcctNoRule(item.getAcctNoRule());
                         existing.setAcctNameRule(item.getAcctNameRule());
-                        existing.setUpdateId("system");
-                        existing.setUpdateName("system");
+                        existing.setUpdateId(Constants.SYSTEM_OPERATOR);
+                        existing.setUpdateName(Constants.SYSTEM_OPERATOR);
                         subjectRepository.updateTemplateById(existing);
                     } else {
                         AccountTemplatePO po = new AccountTemplatePO();
@@ -136,15 +137,15 @@ public class TemplateApplicationService {
                         po.setStatus(finalStatus);
                         po.setSubjectCode(item.getSubjectCode());
                         po.setAccountType(item.getAccountType());
-                        po.setCurrency(StrUtil.isNotBlank(item.getCurrency()) ? item.getCurrency() : "CNY");
+                        po.setCurrency(StrUtil.blankToDefault(item.getCurrency(), Constants.DEFAULT_CURRENCY));
                         po.setBalanceDirection(item.getBalanceDirection() != null && item.getBalanceDirection() == 1
                                 ? BalanceDirectionEnum.DEBIT : BalanceDirectionEnum.CREDIT);
                         po.setAcctNoRule(item.getAcctNoRule());
                         po.setAcctNameRule(item.getAcctNameRule());
-                        po.setCreateId("system");
-                        po.setCreateName("system");
-                        po.setUpdateId("system");
-                        po.setUpdateName("system");
+                        po.setCreateId(Constants.SYSTEM_OPERATOR);
+                        po.setCreateName(Constants.SYSTEM_OPERATOR);
+                        po.setUpdateId(Constants.SYSTEM_OPERATOR);
+                        po.setUpdateName(Constants.SYSTEM_OPERATOR);
                         subjectRepository.insertTemplate(po);
                     }
                 }
@@ -207,8 +208,8 @@ public class TemplateApplicationService {
                 }
 
                 template.setStatus(TemplateStatusEnum.DISABLED);
-                template.setUpdateId("system");
-                template.setUpdateName("system");
+                template.setUpdateId(Constants.SYSTEM_OPERATOR);
+                template.setUpdateName(Constants.SYSTEM_OPERATOR);
                 subjectRepository.updateTemplateById(template);
                 return null;
             } catch (ServiceException e) {

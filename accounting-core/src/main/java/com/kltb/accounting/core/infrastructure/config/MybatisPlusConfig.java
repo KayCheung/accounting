@@ -16,6 +16,8 @@ import net.sf.jsqlparser.expression.LongValue;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.util.Set;
+
 /**
  * MyBatis-Plus 基础设施配置
  * <p>
@@ -32,6 +34,11 @@ import org.springframework.context.annotation.Configuration;
 @Slf4j
 @Configuration
 public class MybatisPlusConfig {
+
+    private static final Set<String> IGNORE_TENANT_TABLES = Set.of(
+            "t_local_message",
+            "t_message_receipt"
+    );
 
     @Bean
     public TenantLineHandler tenantLineHandler() {
@@ -53,6 +60,21 @@ public class MybatisPlusConfig {
 
                 // 返回租户 ID 对应的 SQL 表达式（LongValue 适配数值类型，StringValue 适配字符串类型）
                 return new LongValue(tenantId);
+            }
+
+            /**
+             * 忽略表名单（底层基础设施表无 tenant_id 列，必须忽略，防止 SQL 注入 tenant_id 报错）
+             */
+            @Override
+            public boolean ignoreTable(String tableName) {
+                if (tableName == null) {
+                    return false;
+                }
+                String rawName = tableName.replace("`", "").trim();
+                String cleanName = rawName.contains(".")
+                        ? rawName.substring(rawName.lastIndexOf('.') + 1)
+                        : rawName;
+                return IGNORE_TENANT_TABLES.stream().anyMatch(t -> t.equalsIgnoreCase(cleanName));
             }
         };
     }

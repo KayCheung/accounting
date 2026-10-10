@@ -1,5 +1,7 @@
 package com.kltb.accounting.core.domain.service;
 
+import cn.hutool.core.util.ObjectUtil;
+import com.kltb.accounting.api.constant.Constants;
 import com.kltb.accounting.api.request.PostingExecuteRequest;
 import com.kltb.accounting.api.response.PostingExecuteResponse;
 import com.kltb.accounting.core.application.service.PostingApplicationService;
@@ -58,13 +60,13 @@ public class PostingEngineDomainService {
             try {
                 PostingExecuteRequest request = new PostingExecuteRequest();
                 request.setVoucherNo(voucher.getVoucherNo());
-                request.setOperatorName("SYSTEM");
+                request.setOperatorName(Constants.SYSTEM_OPERATOR);
                 postingApplicationService.executePosting(request);
                 successCount++;
                 log.info("[BATCH-POSTING] 过账成功: voucherNo={}", voucher.getVoucherNo());
             } catch (Exception e) {
                 failedCount++;
-                String failReason = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                String failReason = ObjectUtil.defaultIfNull(e.getMessage(), e.getClass().getSimpleName());
                 failedList.add(new FailedVoucherInfo(voucher.getVoucherNo(), failReason));
                 log.warn("[BATCH-POSTING] 过账失败: voucherNo={}, reason={}",
                     voucher.getVoucherNo(), failReason);
@@ -96,7 +98,7 @@ public class PostingEngineDomainService {
     public PostingExecuteResult postSingleVoucher(String voucherNo) {
         PostingExecuteRequest request = new PostingExecuteRequest();
         request.setVoucherNo(voucherNo);
-        request.setOperatorName("SYSTEM");
+        request.setOperatorName(Constants.SYSTEM_OPERATOR);
         PostingExecuteResponse response = postingApplicationService.executePosting(request);
         return new PostingExecuteResult(
             response.getVoucherNo(),

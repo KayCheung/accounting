@@ -2,6 +2,7 @@ package com.kltb.accounting.core.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.kltb.accounting.api.constant.Constants;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.api.request.BufferRuleCreateRequest;
 import com.kltb.accounting.api.request.BufferRuleQueryRequest;
@@ -136,8 +137,8 @@ public class BufferRuleApplicationService {
 
                 // 无联动校验（缓冲规则停用不影响已入缓冲的数据）
                 po.setStatus(RuleStatusEnum.DISABLED);
-                po.setUpdateId("system");
-                po.setUpdateName("system");
+                po.setUpdateId(Constants.SYSTEM_OPERATOR);
+                po.setUpdateName(Constants.SYSTEM_OPERATOR);
                 bufferPostingRuleRepository.updateById(po);
                 return null;
             } catch (ServiceException e) {
@@ -177,8 +178,8 @@ public class BufferRuleApplicationService {
 
                 // 3. 状态置为启用
                 po.setStatus(RuleStatusEnum.ENABLED);
-                po.setUpdateId("system");
-                po.setUpdateName("system");
+                po.setUpdateId(Constants.SYSTEM_OPERATOR);
+                po.setUpdateName(Constants.SYSTEM_OPERATOR);
                 bufferPostingRuleRepository.updateById(po);
                 return null;
             } catch (ServiceException e) {

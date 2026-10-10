@@ -1,5 +1,6 @@
 package com.kltb.accounting.core.domain.service;
 
+import com.kltb.accounting.api.constant.Constants;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.*;
 import com.kltb.accounting.core.infrastructure.account.RedisSequenceGenerator;
@@ -70,7 +71,7 @@ class ReversalDomainServiceTest {
     @DisplayName("红冲: 原凭证不存在 -> 抛出 REVERSAL_ORIGINAL_NOT_FOUND")
     void executeReversal_origNotFound_shouldThrow() {
         when(accountingVoucherRepository.selectByVoucherNoSimple("VOU001")).thenReturn(null);
-        assertThatThrownBy(() -> reversalDomainService.executeReversal("VOU001", "SYSTEM", "test"))
+        assertThatThrownBy(() -> reversalDomainService.executeReversal("VOU001", Constants.SYSTEM_OPERATOR, "test"))
                 .isInstanceOf(AccountException.class)
                 .satisfies(ex -> {
                     AccountException e = (AccountException) ex;
@@ -86,7 +87,7 @@ class ReversalDomainServiceTest {
         when(accountingVoucherRepository.selectReversalByOrig("VOU001")).thenReturn(List.of());
         doAnswer(invocation -> ((Supplier<?>) invocation.getArgument(3)).get())
                 .when(distributedLockTemplate).execute(anyString(), anyLong(), anyLong(), any());
-        assertThatThrownBy(() -> reversalDomainService.executeReversal("VOU001", "SYSTEM", "test"))
+        assertThatThrownBy(() -> reversalDomainService.executeReversal("VOU001", Constants.SYSTEM_OPERATOR, "test"))
                 .isInstanceOf(AccountException.class)
                 .satisfies(ex -> {
                     AccountException e = (AccountException) ex;
@@ -104,7 +105,7 @@ class ReversalDomainServiceTest {
         when(accountingVoucherRepository.selectReversalByOrig("VOU001")).thenReturn(List.of());
         doAnswer(invocation -> ((Supplier<?>) invocation.getArgument(3)).get())
                 .when(distributedLockTemplate).execute(anyString(), anyLong(), anyLong(), any());
-        assertThatThrownBy(() -> reversalDomainService.executeReversal("VOU001", "SYSTEM", "test"))
+        assertThatThrownBy(() -> reversalDomainService.executeReversal("VOU001", Constants.SYSTEM_OPERATOR, "test"))
                 .isInstanceOf(AccountException.class)
                 .satisfies(ex -> {
                     AccountException e = (AccountException) ex;
@@ -124,7 +125,7 @@ class ReversalDomainServiceTest {
         when(accountingVoucherRepository.selectReversalByOrig("VOU001")).thenReturn(List.of(reversal));
         doAnswer(invocation -> ((Supplier<?>) invocation.getArgument(3)).get())
                 .when(distributedLockTemplate).execute(anyString(), anyLong(), anyLong(), any());
-        assertThatThrownBy(() -> reversalDomainService.executeReversal("VOU001", "SYSTEM", "test"))
+        assertThatThrownBy(() -> reversalDomainService.executeReversal("VOU001", Constants.SYSTEM_OPERATOR, "test"))
                 .isInstanceOf(AccountException.class)
                 .satisfies(ex -> {
                     AccountException e = (AccountException) ex;
@@ -251,7 +252,7 @@ class ReversalDomainServiceTest {
         voucher.setSummary("test");
         voucher.setTraceNo("TRC001");
         voucher.setTraceSeq(0);
-        voucher.setBookkeeperName("SYSTEM");
+        voucher.setBookkeeperName(Constants.SYSTEM_OPERATOR);
         voucher.setPostingType(PostingTypeEnum.AUTOMATIC);
         return voucher;
     }
