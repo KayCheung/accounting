@@ -787,6 +787,18 @@
     - **构建与测试验证**：
       - 后端 `FinancialReportDomainServiceTest` 单元测试 100% 通过；
       - 前端 `vue-tsc` 与 `vite build` 生产构建 100% 成功。
+  → 完成内容（Step 23.5.2 无交易日日切总分核对失败阻断与存量日余额滚动结转缺陷修复 BUG261010-001）：
+    - **无交易日日切日余额滚动结转（EodDomainService.calculateDailyBalances）**：
+      - 修复当会计日无任何交易时，原逻辑仅按凭证分录汇总导致日余额列表为空、当日 `t_account_balance` 缺失的缺陷；
+      - 注入 `AccountRepository.selectAllActiveAccounts()`，实现全量存量有效账户视图结转：无交易账户借贷发生额置零，期初与期末余额继承前一日日余额（或账户当前余额）；
+      - 批量预加载前一日日余额映射，消除 N+1 查询；`AccountBalanceRepository` 增加 `selectLatestBalanceBeforeDate` 支持跨天/跳日历史回溯容错；
+    - **总分核对口径对齐（AccountMapper.sumBalancesBySubject）**：
+      - 修复分户汇总 SQL `WHERE status = 1` 漏统冻结账户的问题，调整为 `WHERE status != 3 AND is_delete = 0`，与非注销有效账户口径严格一致；
+    - **总分核对与报表联动保障**：
+      - 解决无交易日切在 Step 5 `GL_RECONCILIATION` 阶段报“总分核对失败”阻断的问题；
+      - 联动修复无交易日快照未生成、资产负债表与科目总账按日查询余额归零的问题（BUG261010-002 根因）；
+    - **单元测试覆盖**：
+      - 新增 `EodDomainServiceTest` 4 个核心测试，全量 279 个后端单元与集成测试 100% 通过。
 - [x] **Step 23** · 业务功能页面开发全量交付完毕（100% 完成）
 
 

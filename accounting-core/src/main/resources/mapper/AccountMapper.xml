@@ -95,7 +95,7 @@
                SUM(balance) AS total_balance,
                COUNT(*) AS account_count
         FROM t_account
-        WHERE status = 1
+        WHERE status != 3
           AND is_delete = 0
         GROUP BY subject_code
     </select>

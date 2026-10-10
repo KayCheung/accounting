@@ -48,6 +48,22 @@ public class AccountBalanceRepository {
     }
 
     /**
+     * 查询指定会计日期前最近的一笔账户日余额记录（跨天/容错）
+     *
+     * @param accountNo      账户编号
+     * @param accountingDate 会计日期
+     * @return 最近一笔日余额PO，若无则返回null
+     */
+    public AccountBalancePO selectLatestBalanceBeforeDate(String accountNo, LocalDate accountingDate) {
+        return accountBalanceMapper.selectOne(new LambdaQueryWrapper<AccountBalancePO>()
+                .eq(AccountBalancePO::getAccountNo, accountNo)
+                .lt(AccountBalancePO::getAccountingDate, accountingDate)
+                .eq(AccountBalancePO::getIsDelete, 0)
+                .orderByDesc(AccountBalancePO::getAccountingDate)
+                .last("LIMIT 1"));
+    }
+
+    /**
      * 按会计日期区间查询日余额记录
      */
     public List<AccountBalancePO> selectByDateRange(LocalDate startDate, LocalDate endDate) {
