@@ -901,9 +901,10 @@
       - 凭证穿透：逐笔流水点击凭证字号无缝唤起全景凭证档案抽屉（借贷分录、辅助分摊、附件）；
       - 路由与菜单：在 `router/index.ts` 注册路由，并在 `Sidebar.vue` 报表中心菜单中加入「辅助核算账簿」入口；
     - **记账规则配置业务方接入示例与调试支持（Step 23.10）**：
-      - 代码生成引擎：新增 `accounting-ui/src/views/config/rule/utils/exampleCodeGenerator.ts`，基于选定规则动态提取 `businessCode`、`tradingCode`、`payChannel`、`requirePreFreeze` 及分录 `fundsType`，一键生成 cURL、JSON、Java (HttpClient)、JavaScript (Fetch)、Go (net/http)、Python (requests) 6 种调用代码与格式化报文；
+      - 代码生成引擎：新增 `accounting-ui/src/views/config/rule/utils/exampleCodeGenerator.ts`，基于选定规则动态提取业务键、预冻结配置及分录款项类型，严格对齐 `YYYY-MM-DD HH:mm:ss` 标准交易时间规范，生成 cURL、JSON、Java、JS、Go、Python 6 种调用代码与报文；
+      - SpEL 动态分录与多语言注释：自动提取规则各分录 SpEL 计算表达式，生成代码级提示注释与测算看板，并全景列出 `details` 所有明细字段规范；
       - 预冻结全流程联动：针对 `requirePreFreeze=1` 规则提供第一步预冻结（`/freeze`）、第二步核销入账（`/submit`）及异常撤销（`/unfreeze`）的双步成套代码与业务指引；
-      - 页面交互集成：创建 `RuleExampleDialog.vue`（支持 Host 与金额自定义调试重算、一键复制代码、字段规范参数字典），并在规则列表操作菜单及详情档案抽屉中全量集成入口；
+      - 页面交互集成：创建 `RuleExampleDialog.vue`（支持 Host 与金额自定义调试重算、一键复制代码、SpEL 预览测算看板、字段规范参数字典），并在规则列表操作菜单及详情档案抽屉中全量集成入口；
       - 构建验证：`vue-tsc --noEmit` 0 错误，`npm run build` 构建 100% 成功。
 - [x] **Step 23** · 业务功能页面开发全量交付完毕（100% 完成）
 

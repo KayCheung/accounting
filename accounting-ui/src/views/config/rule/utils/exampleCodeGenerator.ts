@@ -18,6 +18,14 @@ export interface GeneratedCodeSet {
   python: string
 }
 
+export interface SpelScriptEntryInfo {
+  rowNum: number
+  debitCredit: number
+  subjectCode: string
+  fundsType: string
+  extendScript: string
+}
+
 export interface GeneratedRuleExample {
   rule: RuleResponse
   isPreFreeze: boolean
@@ -30,10 +38,11 @@ export interface GeneratedRuleExample {
   submitCodes: GeneratedCodeSet
   freezeCodes: GeneratedCodeSet
   unfreezeCodes: GeneratedCodeSet
+  spelEntries: SpelScriptEntryInfo[]
 }
 
 /**
- * 格式化当前日期时间为 YYYY-MM-DDTHH:mm:ss
+ * 格式化当前日期时间为 YYYY-MM-DD HH:mm:ss（对齐系统标准规范）
  */
 export function getFormattedTradeTime(): string {
   const now = new Date()
@@ -44,7 +53,7 @@ export function getFormattedTradeTime(): string {
   const hh = pad(now.getHours())
   const min = pad(now.getMinutes())
   const ss = pad(now.getSeconds())
-  return `${yyyy}-${mm}-${dd}T${hh}:${min}:${ss}`
+  return `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`
 }
 
 /**
@@ -60,6 +69,38 @@ export function getSampleTraceNo(prefix = 'TR'): string {
   const min = pad(now.getMinutes())
   const ss = pad(now.getSeconds())
   return `${prefix}${yyyy}${mm}${dd}${hh}${min}${ss}001`
+}
+
+/**
+ * 提取规则中所有配置了 SpEL 计算表达式的分录
+ */
+export function extractSpelEntries(rule: RuleResponse): SpelScriptEntryInfo[] {
+  if (!rule.entries || rule.entries.length === 0) return []
+  return rule.entries
+    .filter((e) => e.extendScript && e.extendScript.trim().length > 0)
+    .map((e) => ({
+      rowNum: e.rowNum,
+      debitCredit: e.debitCredit,
+      subjectCode: e.subjectCode,
+      fundsType: e.fundsType,
+      extendScript: e.extendScript!.trim()
+    }))
+}
+
+/**
+ * 构建 SpEL 提示注释文本
+ */
+function buildSpelNote(spelEntries: SpelScriptEntryInfo[], commentPrefix = '//'): string {
+  if (spelEntries.length === 0) return ''
+  const lines = [
+    `${commentPrefix} [SpEL 脚本提示] 当前规则配置了分录金额计算脚本：`,
+    ...spelEntries.map(
+      (s) =>
+        `${commentPrefix}   - 行 ${s.rowNum} [${s.debitCredit === 1 ? '借' : '贷'}方·科目 ${s.subjectCode}·款项 ${s.fundsType}]: ${s.extendScript}`
+    ),
+    `${commentPrefix} 系统在生成凭证分录时，将以传入的 details[].amount 原始金额代入上述表达式进行运算。`
+  ]
+  return lines.join('\n') + '\n'
 }
 
 /**
@@ -118,12 +159,16 @@ export function generateCodeSet(
   url: string,
   method: 'POST' | 'GET',
   payload: Record<string, any>,
-  actionDesc: string
+  actionDesc: string,
+  spelEntries: SpelScriptEntryInfo[] = []
 ): GeneratedCodeSet {
   const jsonString = JSON.stringify(payload, null, 2)
+  const spelBash = buildSpelNote(spelEntries, '#')
+  const spelJava = buildSpelNote(spelEntries, '//')
+  const spelPy = buildSpelNote(spelEntries, '#')
 
   // 1. cURL
-  const curl = `# ${actionDesc}\ncurl -X ${method} "${url}" \\\n  -H "Content-Type: application/json" \\\n  -d '${jsonString}'`
+  const curl = `${spelBash}# ${actionDesc}\ncurl -X ${method} "${url}" \\\n  -H "Content-Type: application/json" \\\n  -d '${jsonString}'`
 
   // 2. JSON
   const json = jsonString
@@ -131,7 +176,7 @@ export function generateCodeSet(
   // 3. Java (HttpClient 原生标准库，无三方依赖)
   const java = `// 文件：AccountingClient.java
 // 依赖：Java 11+ 原生 java.net.http.HttpClient（无需引入额外三方库）
-package com.example.accounting.client;
+${spelJava}package com.example.accounting.client;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -182,7 +227,7 @@ ${jsonString.replace(/^/gm, '                ')}
  * ${actionDesc}
  * 运行环境：Node.js 18+ 或 现代浏览器 fetch API
  */
-async function callAccountingApi() {
+${spelJava}async function callAccountingApi() {
   const apiUrl = '${url}'
   const payload = ${jsonString}
 
@@ -214,7 +259,7 @@ callAccountingApi()`
   // 5. Go (net/http 标准库)
   const go = `// main.go
 // 运行命令：go run main.go
-package main
+${spelJava}package main
 
 import (
 	"bytes"
@@ -228,7 +273,7 @@ import (
 func main() {
 	apiURL := "${url}"
 
-	// 请求载荷 JSON
+	// 请求载荷 JSON (tradeTime 格式规范：YYYY-MM-DD HH:mm:ss)
 	jsonPayload := []byte(\`${jsonString}\`)
 
 	req, err := http.NewRequest("${method}", apiURL, bytes.NewBuffer(jsonPayload))
@@ -263,12 +308,12 @@ func main() {
   // 6. Python (requests 库)
   const python = `# -*- coding: utf-8 -*-
 # 依赖：pip install requests
-import requests
+${spelPy}import requests
 import json
 
 API_URL = "${url}"
 
-# 请求体数据
+# 请求体数据 (tradeTime 格式规范：YYYY-MM-DD HH:mm:ss)
 payload = ${jsonString}
 
 headers = {
@@ -311,6 +356,7 @@ export function generateRuleExample(rule: RuleResponse, config: ExampleConfig): 
   const sampleFreezeNo = config.origFreezeNo || 'FR2026101000123'
 
   const details = buildSampleDetails(rule, totalAmount)
+  const spelEntries = extractSpelEntries(rule)
 
   // 1. 记账流水提交 Payload (/accounting/journal/submit)
   const submitPayload: Record<string, any> = {
@@ -354,21 +400,24 @@ export function generateRuleExample(rule: RuleResponse, config: ExampleConfig): 
     submitUrl,
     'POST',
     submitPayload,
-    isPreFreeze ? '第2步：预冻结核销记账入账' : '直接记账流水提交'
+    isPreFreeze ? '第2步：预冻结核销记账入账' : '直接记账流水提交',
+    spelEntries
   )
 
   const freezeCodes = generateCodeSet(
     freezeUrl,
     'POST',
     freezePayload,
-    '第1步：业务预冻结出金资金'
+    '第1步：业务预冻结出金资金',
+    spelEntries
   )
 
   const unfreezeCodes = generateCodeSet(
     unfreezeUrl,
     'POST',
     unfreezePayload,
-    '异常撤销：全额解冻预冻结资金'
+    '异常撤销：全额解冻预冻结资金',
+    []
   )
 
   return {
@@ -382,6 +431,7 @@ export function generateRuleExample(rule: RuleResponse, config: ExampleConfig): 
     unfreezePayload,
     submitCodes,
     freezeCodes,
-    unfreezeCodes
+    unfreezeCodes,
+    spelEntries
   }
 }

@@ -81,6 +81,55 @@
         </el-form>
       </div>
 
+      <!-- SpEL 动态计算脚本解析看板（当规则分录配置了 SpEL 表达式时突出展示） -->
+      <div v-if="currentSpelEntries.length > 0" class="spel-banner-card">
+        <div class="spel-header">
+          <div class="spel-title">
+            <el-icon class="mr-1 text-warning"><MagicStick /></el-icon>
+            <span>本规则分录已配置 SpEL 动态金额计算表达式</span>
+            <el-tag size="small" type="warning" class="ml-2">共 {{ currentSpelEntries.length }} 处动态脚本</el-tag>
+          </div>
+          <span class="spel-tip">
+            业务方传入 details[].amount 原始金额后，凭证生成时系统将代入 SpEL 运算生成最终分录金额。
+          </span>
+        </div>
+
+        <el-table :data="currentSpelEntries" border size="small" class="mt-2 spel-table">
+          <el-table-column prop="rowNum" label="行号" width="55" align="center" />
+          <el-table-column prop="debitCredit" label="借贷" width="75" align="center">
+            <template #default="{ row }">
+              <el-tag size="small" :type="row.debitCredit === 1 ? 'primary' : 'warning'">
+                {{ row.debitCredit === 1 ? '借方' : '贷方' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="subjectCode" label="分录科目" width="140" />
+          <el-table-column prop="fundsType" label="款项类型" width="130" />
+          <el-table-column prop="extendScript" label="SpEL 表达式" min-width="190">
+            <template #default="{ row }">
+              <span class="spel-code">{{ row.extendScript }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="示例金额测算分录额" width="160" align="right">
+            <template #default="{ row }">
+              <span class="spel-result-amount">
+                ¥ {{ calculatePreviewAmount(row.extendScript, customAmount) }}
+              </span>
+            </template>
+          </el-table-column>
+        </el-table>
+
+        <div class="spel-context-note mt-2">
+          <el-alert
+            type="info"
+            :closable="false"
+            show-icon
+            title="SpEL 上下文与扩展字段说明："
+            description="当前 SpEL 脚本绑定对象 #root 为流水明细 (BusinessDetailPO)，可用属性包括 #root.amount、#root.customerId、#root.customerType 等。目前核心入参未包含通用拓展参数 (extraAttrs)，若业务场景需要传入自定义扩展字段（如授信方、合作方、渠道来源）并驱动辅助核算项匹配，属于下一步架构扩展建议方向。"
+          />
+        </div>
+      </div>
+
       <!-- 接口步骤切换（预冻结模式包含多个步骤） -->
       <div v-if="rule.requirePreFreeze === 1" class="step-nav-bar">
         <el-radio-group v-model="activeStep" size="default">
@@ -131,12 +180,12 @@
         </div>
       </div>
 
-      <!-- 核心入参规范与字典对照 -->
+      <!-- 核心入参规范与字段对照表 -->
       <div class="params-spec-card mt-3">
         <el-collapse v-model="activeCollapse">
           <el-collapse-item title="查看本规则关键入参字段规范说明 (Field Specification)" name="spec">
             <el-table :data="paramSpecData" border size="small" class="spec-table">
-              <el-table-column prop="field" label="字段名称" width="160">
+              <el-table-column prop="field" label="字段名称" width="180">
                 <template #default="{ row }">
                   <span class="spec-field">{{ row.field }}</span>
                 </template>
@@ -153,12 +202,12 @@
                   </span>
                 </template>
               </el-table-column>
-              <el-table-column prop="ruleValue" label="本规则对应值" width="160">
+              <el-table-column prop="ruleValue" label="本规则对应值" width="170">
                 <template #default="{ row }">
                   <span class="spec-val">{{ row.ruleValue }}</span>
                 </template>
               </el-table-column>
-              <el-table-column prop="desc" label="业务约束与说明" min-width="260" />
+              <el-table-column prop="desc" label="业务约束与说明" min-width="280" />
             </el-table>
           </el-collapse-item>
         </el-collapse>
@@ -178,7 +227,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { RefreshRight, CopyDocument, Check } from '@element-plus/icons-vue'
+import { RefreshRight, CopyDocument, Check, MagicStick } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { RuleResponse } from '@/api/rule'
 import {
@@ -221,6 +270,11 @@ const copied = ref(false)
 
 // 当前生成的成套示例
 const generatedExample = ref<GeneratedRuleExample | null>(null)
+
+// 提取 SpEL 分录
+const currentSpelEntries = computed(() => {
+  return generatedExample.value?.spelEntries || []
+})
 
 // 刷新示例代码
 function refreshExamples() {
@@ -319,7 +373,25 @@ async function handleCopyCurrentCode() {
   }
 }
 
-// 参数规范表格数据
+// 模拟简易 SpEL 计算分录预览金额
+function calculatePreviewAmount(script: string, totalAmount: number): string {
+  if (!script || !script.trim()) return totalAmount.toFixed(2)
+  try {
+    const clean = script.replace(/#root\.amount/g, String(totalAmount)).trim()
+    if (/^[\d\s+\-*/.()]+$/.test(clean)) {
+      // eslint-disable-next-line no-eval
+      const res = Function(`"use strict"; return (${clean})`)()
+      if (typeof res === 'number' && !isNaN(res)) {
+        return res.toFixed(2)
+      }
+    }
+  } catch {
+    // fallback
+  }
+  return '按表达式动态计算'
+}
+
+// 参数规范表格数据（全量列出主单与 details 内部所有字段）
 const paramSpecData = computed(() => {
   if (!props.rule) return []
   const r = props.rule
@@ -381,7 +453,14 @@ const paramSpecData = computed(() => {
       type: 'String',
       required: true,
       ruleValue: currentTradeTime.value,
-      desc: '交易发生时间，格式规范：YYYY-MM-DDTHH:mm:ss。'
+      desc: '交易发生时间，格式规范：YYYY-MM-DD HH:mm:ss（如 2026-10-10 15:30:00）。'
+    },
+    {
+      field: 'summary',
+      type: 'String',
+      required: false,
+      ruleValue: r.ruleName || '业务记账',
+      desc: '交易摘要说明，长度≤64。若为空系统默认填充规则名称。'
     },
     {
       field: 'origFreezeNo',
@@ -398,14 +477,42 @@ const paramSpecData = computed(() => {
       type: 'Array',
       required: true,
       ruleValue: `包含 ${uniqueFundsTypes.join(', ')}`,
-      desc: '交易明细列表。包含 customerId、customerType、itemCode、fundsType 与 amount。'
+      desc: '交易款项明细数组（非空，至少包含 1 行，支持不同款项拆分）。'
+    },
+    {
+      field: 'details[].customerId',
+      type: 'String',
+      required: true,
+      ruleValue: 'CUST_10001',
+      desc: '交易关联的客户/商户/机构唯一编码，长度≤64。系统根据此 ID 及科目配置进行分户寻账。'
+    },
+    {
+      field: 'details[].customerType',
+      type: 'Integer',
+      required: true,
+      ruleValue: '1',
+      desc: '客户主体类型：1-个人，2-企业，3-平台。'
     },
     {
       field: 'details[].fundsType',
       type: 'String',
       required: true,
       ruleValue: uniqueFundsTypes.join(' / '),
-      desc: '款项类型。必须与当前记账规则分录明细中配置的款项类型完全匹配，否则将抛出分录匹配异常。'
+      desc: '交易款项类型编码。必须与当前记账规则分录明细中配置的款项类型严格一致，否则将抛出分录匹配异常。'
+    },
+    {
+      field: 'details[].itemCode',
+      type: 'String',
+      required: true,
+      ruleValue: 'ITEM_001',
+      desc: '款项明细细项编码，长度≤32。同笔流水内区分不同明细，是防重唯一索引 uk_trace_no 的组成字段。'
+    },
+    {
+      field: 'details[].amount',
+      type: 'BigDecimal',
+      required: true,
+      ruleValue: customAmount.value.toFixed(2),
+      desc: '该细项发生金额（必须大于0）。所有 details[].amount 之和必须严格等于主单总金额 amount。'
     }
   ]
 })
@@ -451,6 +558,55 @@ function fundsTypeTypes(arr: string[]): string[] {
   .flow-alert {
     border-radius: 4px;
     font-size: 13px;
+  }
+}
+
+.spel-banner-card {
+  background: #fdf6ec;
+  border: 1px solid #faecd8;
+  padding: 12px 16px;
+  border-radius: 6px;
+
+  .spel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+
+    .spel-title {
+      font-size: 13px;
+      font-weight: bold;
+      color: #b88230;
+      display: flex;
+      align-items: center;
+    }
+
+    .spel-tip {
+      font-size: 12px;
+      color: #909399;
+    }
+  }
+
+  .spel-table {
+    margin-top: 8px;
+    background: #ffffff;
+  }
+
+  .spel-code {
+    font-family: monospace;
+    font-weight: bold;
+    color: #e6a23c;
+    background: #fff8e6;
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid #f5dab1;
+  }
+
+  .spel-result-amount {
+    font-family: monospace;
+    font-weight: bold;
+    color: #409eff;
   }
 }
 
