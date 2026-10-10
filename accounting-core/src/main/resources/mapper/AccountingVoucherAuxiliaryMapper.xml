@@ -14,4 +14,183 @@
              #{item.accountingDate}, #{item.tenantId})
         </foreach>
     </insert>
+
+    <!-- 查询指定核算类别下有凭证记录的去重核算项目及其统计 -->
+    <select id="selectDistinctAuxItems" resultType="com.kltb.accounting.core.infrastructure.persistence.bo.AuxiliaryItemStatBO">
+        SELECT
+            a.aux_code AS auxCode,
+            a.aux_name AS auxName,
+            COUNT(1) AS recordCount,
+            COALESCE(SUM(a.amount), 0) AS totalAmount
+        FROM t_accounting_voucher_auxiliary a
+        WHERE a.aux_type = #{auxType}
+          AND a.is_delete = 0
+          <if test="startDate != null">
+              AND a.accounting_date &gt;= #{startDate}
+          </if>
+          <if test="endDate != null">
+              AND a.accounting_date &lt;= #{endDate}
+          </if>
+        GROUP BY a.aux_code, a.aux_name
+        ORDER BY totalAmount DESC
+    </select>
+
+    <!-- 查询辅助核算账簿统计 KPI 概览指标 -->
+    <select id="selectAuxiliarySummary" resultType="com.kltb.accounting.core.infrastructure.persistence.bo.AuxiliarySummaryBO">
+        SELECT
+            COALESCE(SUM(a.amount), 0) AS totalAmount,
+            COALESCE(SUM(CASE WHEN e.debit_credit = 1 OR (e.debit_credit IS NULL AND a.change_direction = 1) THEN a.amount ELSE 0 END), 0) AS debitAmount,
+            COALESCE(SUM(CASE WHEN e.debit_credit = 2 OR (e.debit_credit IS NULL AND a.change_direction = 2) THEN a.amount ELSE 0 END), 0) AS creditAmount,
+            COUNT(DISTINCT a.aux_code) AS itemCount,
+            COUNT(DISTINCT a.subject_code) AS subjectCount,
+            COUNT(DISTINCT a.voucher_no) AS voucherCount
+        FROM t_accounting_voucher_auxiliary a
+        LEFT JOIN t_accounting_voucher_entry e ON a.entry_id = e.entry_id AND e.is_delete = 0
+        LEFT JOIN t_account_subject s ON a.subject_code = s.subject_code AND s.is_delete = 0
+        WHERE a.aux_type = #{auxType}
+          AND a.is_delete = 0
+          <if test="auxCode != null and auxCode != '' and auxCode != 'ALL'">
+              AND a.aux_code = #{auxCode}
+          </if>
+          <if test="startDate != null">
+              AND a.accounting_date &gt;= #{startDate}
+          </if>
+          <if test="endDate != null">
+              AND a.accounting_date &lt;= #{endDate}
+          </if>
+          <if test="subjectCode != null and subjectCode != ''">
+              AND (a.subject_code = #{subjectCode} OR a.subject_code LIKE CONCAT(#{subjectCode}, '%'))
+          </if>
+          <if test="subjectCategory != null">
+              AND s.subject_category = #{subjectCategory}
+          </if>
+          <if test="keyword != null and keyword != ''">
+              AND (a.aux_name LIKE CONCAT('%', #{keyword}, '%')
+                   OR a.aux_code LIKE CONCAT('%', #{keyword}, '%')
+                   OR a.voucher_no LIKE CONCAT('%', #{keyword}, '%')
+                   OR e.summary LIKE CONCAT('%', #{keyword}, '%')
+                   OR s.subject_name LIKE CONCAT('%', #{keyword}, '%'))
+          </if>
+    </select>
+
+    <!-- 查询辅助核算交叉对比矩阵单元格金额 -->
+    <select id="selectMatrixCellAmounts" resultType="com.kltb.accounting.core.infrastructure.persistence.bo.AuxiliaryMatrixCellBO">
+        SELECT
+            a.subject_code AS subjectCode,
+            a.aux_code AS auxCode,
+            COALESCE(SUM(a.amount), 0) AS amount
+        FROM t_accounting_voucher_auxiliary a
+        LEFT JOIN t_account_subject s ON a.subject_code = s.subject_code AND s.is_delete = 0
+        LEFT JOIN t_accounting_voucher_entry e ON a.entry_id = e.entry_id AND e.is_delete = 0
+        WHERE a.aux_type = #{auxType}
+          AND a.is_delete = 0
+          <if test="startDate != null">
+              AND a.accounting_date &gt;= #{startDate}
+          </if>
+          <if test="endDate != null">
+              AND a.accounting_date &lt;= #{endDate}
+          </if>
+          <if test="subjectCode != null and subjectCode != ''">
+              AND (a.subject_code = #{subjectCode} OR a.subject_code LIKE CONCAT(#{subjectCode}, '%'))
+          </if>
+          <if test="subjectCategory != null">
+              AND s.subject_category = #{subjectCategory}
+          </if>
+          <if test="keyword != null and keyword != ''">
+              AND (a.aux_name LIKE CONCAT('%', #{keyword}, '%')
+                   OR a.aux_code LIKE CONCAT('%', #{keyword}, '%')
+                   OR a.voucher_no LIKE CONCAT('%', #{keyword}, '%')
+                   OR e.summary LIKE CONCAT('%', #{keyword}, '%')
+                   OR s.subject_name LIKE CONCAT('%', #{keyword}, '%'))
+          </if>
+        GROUP BY a.subject_code, a.aux_code
+        ORDER BY a.subject_code ASC
+    </select>
+
+    <!-- 查询辅助核算科目分布明细 -->
+    <select id="selectSubjectBreakdown" resultType="com.kltb.accounting.core.infrastructure.persistence.bo.AuxiliarySubjectBreakdownBO">
+        SELECT
+            a.subject_code AS subjectCode,
+            COALESCE(SUM(CASE WHEN e.debit_credit = 1 OR (e.debit_credit IS NULL AND a.change_direction = 1) THEN a.amount ELSE 0 END), 0) AS debitAmount,
+            COALESCE(SUM(CASE WHEN e.debit_credit = 2 OR (e.debit_credit IS NULL AND a.change_direction = 2) THEN a.amount ELSE 0 END), 0) AS creditAmount,
+            COALESCE(SUM(a.amount), 0) AS totalAmount,
+            COUNT(1) AS entryCount
+        FROM t_accounting_voucher_auxiliary a
+        LEFT JOIN t_account_subject s ON a.subject_code = s.subject_code AND s.is_delete = 0
+        LEFT JOIN t_accounting_voucher_entry e ON a.entry_id = e.entry_id AND e.is_delete = 0
+        WHERE a.aux_type = #{auxType}
+          AND a.is_delete = 0
+          <if test="auxCode != null and auxCode != '' and auxCode != 'ALL'">
+              AND a.aux_code = #{auxCode}
+          </if>
+          <if test="startDate != null">
+              AND a.accounting_date &gt;= #{startDate}
+          </if>
+          <if test="endDate != null">
+              AND a.accounting_date &lt;= #{endDate}
+          </if>
+          <if test="subjectCode != null and subjectCode != ''">
+              AND (a.subject_code = #{subjectCode} OR a.subject_code LIKE CONCAT(#{subjectCode}, '%'))
+          </if>
+          <if test="subjectCategory != null">
+              AND s.subject_category = #{subjectCategory}
+          </if>
+          <if test="keyword != null and keyword != ''">
+              AND (a.aux_name LIKE CONCAT('%', #{keyword}, '%')
+                   OR a.aux_code LIKE CONCAT('%', #{keyword}, '%')
+                   OR a.voucher_no LIKE CONCAT('%', #{keyword}, '%')
+                   OR e.summary LIKE CONCAT('%', #{keyword}, '%')
+                   OR s.subject_name LIKE CONCAT('%', #{keyword}, '%'))
+          </if>
+        GROUP BY a.subject_code
+        ORDER BY totalAmount DESC
+    </select>
+
+    <!-- 分页查询辅助核算凭证分录流水明细 -->
+    <select id="selectEntryRecords" resultType="com.kltb.accounting.core.infrastructure.persistence.bo.AuxiliaryEntryRecordBO">
+        SELECT
+            a.id AS id,
+            a.accounting_date AS accountingDate,
+            a.voucher_no AS voucherNo,
+            a.entry_id AS entryId,
+            COALESCE(e.summary, v.summary) AS summary,
+            a.aux_type AS auxType,
+            a.aux_code AS auxCode,
+            a.aux_name AS auxName,
+            a.subject_code AS subjectCode,
+            s.subject_name AS subjectName,
+            a.change_direction AS changeDirection,
+            e.debit_credit AS debitCredit,
+            a.amount AS amount
+        FROM t_accounting_voucher_auxiliary a
+        LEFT JOIN t_accounting_voucher_entry e ON a.entry_id = e.entry_id AND e.is_delete = 0
+        LEFT JOIN t_accounting_voucher v ON a.voucher_no = v.voucher_no AND v.is_delete = 0
+        LEFT JOIN t_account_subject s ON a.subject_code = s.subject_code AND s.is_delete = 0
+        WHERE a.aux_type = #{auxType}
+          AND a.is_delete = 0
+          <if test="auxCode != null and auxCode != '' and auxCode != 'ALL'">
+              AND a.aux_code = #{auxCode}
+          </if>
+          <if test="startDate != null">
+              AND a.accounting_date &gt;= #{startDate}
+          </if>
+          <if test="endDate != null">
+              AND a.accounting_date &lt;= #{endDate}
+          </if>
+          <if test="subjectCode != null and subjectCode != ''">
+              AND (a.subject_code = #{subjectCode} OR a.subject_code LIKE CONCAT(#{subjectCode}, '%'))
+          </if>
+          <if test="subjectCategory != null">
+              AND s.subject_category = #{subjectCategory}
+          </if>
+          <if test="keyword != null and keyword != ''">
+              AND (a.aux_name LIKE CONCAT('%', #{keyword}, '%')
+                   OR a.aux_code LIKE CONCAT('%', #{keyword}, '%')
+                   OR a.voucher_no LIKE CONCAT('%', #{keyword}, '%')
+                   OR e.summary LIKE CONCAT('%', #{keyword}, '%')
+                   OR s.subject_name LIKE CONCAT('%', #{keyword}, '%'))
+          </if>
+        ORDER BY a.accounting_date DESC, a.id DESC
+    </select>
+
 </mapper>

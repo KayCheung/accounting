@@ -230,6 +230,9 @@
               <el-button link type="primary" :icon="MoreFilled" class="more-btn" />
               <template #dropdown>
                 <el-dropdown-menu>
+                  <el-dropdown-item :icon="Tickets" @click="openExampleDialog(row)">
+                    调用示例
+                  </el-dropdown-item>
                   <el-dropdown-item :icon="View" @click="openDetailDrawer(row)">
                     详情档案
                   </el-dropdown-item>
@@ -847,11 +850,39 @@
     <!-- 规则详情抽屉（全景档案） -->
     <el-drawer
       v-model="drawerVisible"
-      title="记账规则全景档案"
-      size="720px"
+      size="750px"
       destroy-on-close
     >
+      <template #header>
+        <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; padding-right: 12px;">
+          <span style="font-weight: bold; font-size: 16px;">记账规则全景档案</span>
+          <el-button
+            v-if="detailRecord"
+            type="primary"
+            size="small"
+            :icon="Tickets"
+            @click="openExampleDialog(detailRecord)"
+          >
+            业务方接入示例
+          </el-button>
+        </div>
+      </template>
+
       <div v-if="detailRecord" class="rule-detail-container">
+        <!-- 业务方调用示例快捷引导卡片 -->
+        <div class="shortcut-example-card mb-3">
+          <div class="shortcut-left">
+            <span class="shortcut-title">
+              <el-icon class="mr-1"><Tickets /></el-icon>
+              业务方接口调用代码与报文参考
+            </span>
+            <span class="shortcut-desc">包含 cURL、JSON、Java、JS、Go、Python 6 种调用示例及预冻结链路指引</span>
+          </div>
+          <el-button type="primary" size="small" :icon="Tickets" @click="openExampleDialog(detailRecord)">
+            查看调用示例
+          </el-button>
+        </div>
+
         <!-- 规则基础信息看板 -->
         <el-descriptions title="规则核心属性" :column="2" border size="small">
           <el-descriptions-item label="规则ID">{{ detailRecord.id }}</el-descriptions-item>
@@ -931,6 +962,12 @@
         </div>
       </div>
     </el-drawer>
+
+    <!-- 业务方接入示例弹窗 -->
+    <RuleExampleDialog
+      v-model="exampleDialogVisible"
+      :rule="exampleRule"
+    />
   </div>
 </template>
 
@@ -949,9 +986,11 @@ import {
   VideoPlay,
   VideoPause,
   DocumentCopy,
-  FullScreen
+  FullScreen,
+  Tickets
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
+import RuleExampleDialog from './components/RuleExampleDialog.vue'
 import {
   getRulePage,
   getRuleById,
@@ -1008,6 +1047,10 @@ const searchForm = ref<RuleQueryRequest>({
 
 // ===== 所有规则（供前置规则下拉选择） =====
 const allRules = ref<RuleResponse[]>([])
+
+// ===== 业务方调用示例弹窗状态 =====
+const exampleDialogVisible = ref(false)
+const exampleRule = ref<RuleResponse | null>(null)
 
 // ===== 新建/编辑弹窗状态 =====
 const dialogVisible = ref(false)
@@ -1712,6 +1755,21 @@ const openDetailDrawer = async (row: RuleResponse) => {
   }
 }
 
+// 打开业务方调用示例弹窗
+const openExampleDialog = async (row: RuleResponse) => {
+  try {
+    if (!row.entries || row.entries.length === 0) {
+      const fullRule = await getRuleById(row.id)
+      exampleRule.value = fullRule
+    } else {
+      exampleRule.value = row
+    }
+  } catch {
+    exampleRule.value = row
+  }
+  exampleDialogVisible.value = true
+}
+
 onMounted(async () => {
   await loadDictsAndSubjects()
   loadData()
@@ -1967,5 +2025,34 @@ onMounted(async () => {
   font-size: 13px;
   line-height: 1.6;
   padding: 10px 12px;
+}
+
+.shortcut-example-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f0f7ff;
+  border: 1px dashed #409eff;
+  border-radius: 6px;
+  padding: 12px 16px;
+
+  .shortcut-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+
+    .shortcut-title {
+      font-size: 13px;
+      font-weight: bold;
+      color: #303133;
+      display: flex;
+      align-items: center;
+    }
+
+    .shortcut-desc {
+      font-size: 12px;
+      color: #909399;
+    }
+  }
 }
 </style>

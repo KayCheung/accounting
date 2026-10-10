@@ -67,6 +67,7 @@
           <el-menu-item index="/report/income-statement">利润表</el-menu-item>
           <el-menu-item index="/report/general-ledger">科目总账</el-menu-item>
           <el-menu-item index="/report/subsidiary-ledger">科目明细账</el-menu-item>
+          <el-menu-item index="/report/auxiliary-ledger">辅助核算账簿</el-menu-item>
         </el-sub-menu>
       </el-menu>
     </el-scrollbar>

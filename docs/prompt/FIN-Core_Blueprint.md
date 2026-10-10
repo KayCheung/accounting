@@ -884,6 +884,27 @@
     - **单元测试验证**：
       - 新增 `MybatisPlusTenantConfigTest`，完整验证白名单基础设施表与业务多租户表的隔离与放行行为；
       - 全工程 Maven 单元测试（318 个用例）100% 编译并通过。
+  → 完成内容（Step 23.11 辅助核算多维账簿 Auxiliary Ledger 全链路交付与报表中心协同）：
+    - **通用多维辅助核算契约与业务抽象（accounting-api）**：
+      - 新增 `AuxiliaryLedgerQueryRequest`（支持动态核算类别 `auxType`、具体项目 `auxCode`、起止日期、科目类别、关键字等检索）；
+      - 新增 `AuxiliarySummaryResponse`、`AuxiliaryMatrixResponse`（交叉透视对比）、`AuxiliarySubjectDetailResponse`、`AuxiliaryEntryRecordResponse`、`AuxiliaryItemResponse` 等 8 个标准 DTO；
+    - **数据持久层多维聚合与查询优化（accounting-core）**：
+      - Flyway 迁移脚本：新增 `V20__add_auxiliary_query_indexes.sql`，为 `t_accounting_voucher_auxiliary` 补充 `idx_aux_type_code` 与 `idx_aux_subject_code` 复合索引；
+      - 仓储与数据访问层：落地 `AccountingVoucherAuxiliaryRepository` 及 `AccountingVoucherAuxiliaryMapper` 5 个自定义聚合/交叉透视 SQL（去重核算项、KPI 汇总、交叉矩阵单元格金额、科目明细分布、凭证分录分页）；
+    - **应用服务与绝对值法则精准核算（AuxiliaryLedgerApplicationService）**：
+      - 动态适配字典 `auxiliary_type`（部门、项目、客户、供应商、员工等），绝无单一硬编码；
+      - 遵循绝对值法则与 `BigDecimal` 金额计算（`RoundingMode.HALF_UP`），自动计算行合计、列合计、全表总计与各核算项结构占比；
+      - 控制器暴露标准端点：`/accounting/report/auxiliary/{types, items, summary, matrix, subjects, entries}`；
+    - **前端多维账簿分析工作台落地（accounting-ui）**：
+      - API 封装：创建 `src/api/auxiliary-report.ts`；
+      - 页面开发：创建 `views/report/auxiliary-ledger/index.vue`（左侧动态核算项目树/列表 + 顶部多维检索栏 + 5 大 KPI 卡片 + Top 占比可视化进度条 + 3 大 Tab：各核算项汇总对比透视表、科目分布明细表、辅助凭证流水记录）；
+      - 凭证穿透：逐笔流水点击凭证字号无缝唤起全景凭证档案抽屉（借贷分录、辅助分摊、附件）；
+      - 路由与菜单：在 `router/index.ts` 注册路由，并在 `Sidebar.vue` 报表中心菜单中加入「辅助核算账簿」入口；
+    - **记账规则配置业务方接入示例与调试支持（Step 23.10）**：
+      - 代码生成引擎：新增 `accounting-ui/src/views/config/rule/utils/exampleCodeGenerator.ts`，基于选定规则动态提取 `businessCode`、`tradingCode`、`payChannel`、`requirePreFreeze` 及分录 `fundsType`，一键生成 cURL、JSON、Java (HttpClient)、JavaScript (Fetch)、Go (net/http)、Python (requests) 6 种调用代码与格式化报文；
+      - 预冻结全流程联动：针对 `requirePreFreeze=1` 规则提供第一步预冻结（`/freeze`）、第二步核销入账（`/submit`）及异常撤销（`/unfreeze`）的双步成套代码与业务指引；
+      - 页面交互集成：创建 `RuleExampleDialog.vue`（支持 Host 与金额自定义调试重算、一键复制代码、字段规范参数字典），并在规则列表操作菜单及详情档案抽屉中全量集成入口；
+      - 构建验证：`vue-tsc --noEmit` 0 错误，`npm run build` 构建 100% 成功。
 - [x] **Step 23** · 业务功能页面开发全量交付完毕（100% 完成）
 
 

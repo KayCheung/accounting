@@ -135,6 +135,12 @@ const routes: RouteRecordRaw[] = [
         name: 'SubsidiaryLedgerReport',
         component: () => import('@/views/report/subsidiary-ledger/index.vue'),
         meta: { title: '科目明细账' }
+      },
+      {
+        path: 'report/auxiliary-ledger',
+        name: 'AuxiliaryLedgerReport',
+        component: () => import('@/views/report/auxiliary-ledger/index.vue'),
+        meta: { title: '辅助核算账簿' }
       }
     ]
   },
