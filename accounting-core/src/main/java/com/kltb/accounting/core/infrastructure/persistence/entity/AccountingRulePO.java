@@ -61,6 +61,12 @@ public class AccountingRulePO extends BaseEntity {
     private Integer freezeDuration;
 
     /**
+     * 是否需先预冻结：0-否；1-是。
+     */
+    @TableField("require_pre_freeze")
+    private Integer requirePreFreeze;
+
+    /**
      * 前置入账规则ID。
      */
     @TableField("pre_rule_id")

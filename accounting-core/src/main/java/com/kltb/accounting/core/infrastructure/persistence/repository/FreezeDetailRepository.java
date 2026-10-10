@@ -75,6 +75,27 @@ public class FreezeDetailRepository {
     }
 
     /**
+     * 按系统跟踪号查询最新冻结记录
+     */
+    public AccountFreezeDetailPO selectByTraceNo(String traceNo) {
+        return accountFreezeDetailMapper.selectOne(new LambdaQueryWrapper<AccountFreezeDetailPO>()
+                .eq(AccountFreezeDetailPO::getTraceNo, traceNo)
+                .eq(AccountFreezeDetailPO::getIsDelete, 0)
+                .orderByDesc(AccountFreezeDetailPO::getId)
+                .last("LIMIT 1"));
+    }
+
+    /**
+     * 按系统跟踪号查询所有未删除冻结记录列表（支持多账户预冻结场景）
+     */
+    public List<AccountFreezeDetailPO> selectListByTraceNo(String traceNo) {
+        return accountFreezeDetailMapper.selectList(new LambdaQueryWrapper<AccountFreezeDetailPO>()
+                .eq(AccountFreezeDetailPO::getTraceNo, traceNo)
+                .eq(AccountFreezeDetailPO::getIsDelete, 0)
+                .orderByAsc(AccountFreezeDetailPO::getId));
+    }
+
+    /**
      * 查询已过期的冻结记录
      *
      * @param now 当前时间

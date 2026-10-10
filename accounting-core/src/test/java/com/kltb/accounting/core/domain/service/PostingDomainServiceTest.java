@@ -42,6 +42,10 @@ class PostingDomainServiceTest {
     @Mock private AccountDetailRepository accountDetailRepository;
     @Mock private SubAccountDetailRepository subAccountDetailRepository;
     @Mock private AccountingVoucherRepository accountingVoucherRepository;
+    @Mock private com.kltb.accounting.core.infrastructure.persistence.repository.BusinessRecordRepository businessRecordRepository;
+    @Mock private com.kltb.accounting.core.infrastructure.persistence.repository.FreezeDetailRepository freezeDetailRepository;
+    @Mock private com.kltb.accounting.core.infrastructure.persistence.repository.AccountingRuleRepository accountingRuleRepository;
+    @Mock private com.kltb.accounting.core.infrastructure.account.FreezeIdGenerator freezeIdGenerator;
 
     @InjectMocks private PostingDomainService postingDomainService;
 

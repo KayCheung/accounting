@@ -252,6 +252,19 @@ public class LocalMessageService {
         );
     }
 
+    /**
+     * 按业务键列表查询本地消息（用于分录异步消息状态回显）
+     */
+    public List<LocalMessagePO> selectByBusinessKeys(List<String> businessKeys) {
+        if (businessKeys == null || businessKeys.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return localMessageMapper.selectList(
+                new LambdaQueryWrapper<LocalMessagePO>()
+                        .in(LocalMessagePO::getBusinessKey, businessKeys)
+                        .eq(LocalMessagePO::getIsDelete, 0));
+    }
+
     private boolean isBlank(String str) {
         return str == null || str.trim().isEmpty();
     }

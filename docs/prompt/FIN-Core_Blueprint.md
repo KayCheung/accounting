@@ -797,8 +797,35 @@
     - **总分核对与报表联动保障**：
       - 解决无交易日切在 Step 5 `GL_RECONCILIATION` 阶段报“总分核对失败”阻断的问题；
       - 联动修复无交易日快照未生成、资产负债表与科目总账按日查询余额归零的问题（BUG261010-002 根因）；
-    - **单元测试覆盖**：
-      - 新增 `EodDomainServiceTest` 4 个核心测试，全量 279 个后端单元与集成测试 100% 通过。
+  → 完成内容（Step 23.6 记账核心全生命周期闭环与业务预冻结/解冻/规则冻结时长支撑）：
+    - **规则主表“需先预冻结”字段与双向守卫校验（Rule Pre-Freeze Requirement）**：
+      - Flyway 迁移脚本：新增 `V19__add_require_pre_freeze_to_accounting_rule.sql`，为 `t_accounting_rule` 增加 `require_pre_freeze TINYINT NOT NULL DEFAULT 0 COMMENT '是否需先预冻结：0-否；1-是'`；
+      - 实体扩展：`AccountingRulePO` 齐步对齐 `requirePreFreeze`；
+      - 双向守卫拦截：
+        1. 预冻结入口守卫：调用 `/accounting/journal/freeze` 时，强校验匹配规则必须启用 `requirePreFreeze == 1`，否则直接阻断；
+        2. 记账提交入口守卫：调用 `/accounting/journal/submit` 时，若规则启用 `requirePreFreeze == 1`，强校验必须传入原预冻结流水号 `origFreezeNo`，彻底杜绝跳过预冻结或部分冻结部分不冻结的资金漏洞；
+    - **多借多贷多出金方多账户预冻结与全额解冻（Multi-Account Pre-Freeze & Full Unfreeze）**：
+      - 契约接口：新增 `POST /accounting/journal/freeze` 与 `POST /accounting/journal/unfreeze`；
+      - API 契约（`accounting-api`）：新增 `JournalFreezeRequest`, `JournalFreezeResponse`, `JournalUnfreezeRequest`, `JournalUnfreezeResponse`，支持多账户冻结明细列表 `freezeItems` 与 `unfreezeItems`；
+      - 多出金方推导与批量冻结：自动识别所有出金方分录（`changeDirection = DECREASE`），匹配请求明细并定位对应出金账户，循环原子调用 `FreezeDomainService.freezeFund`（写入外部 `traceNo`），多账户分别生成 `t_account_freeze_detail` 记录并划转至 `FROZEN` 子账户；
+      - 全额解冻约束：根据原流水号 `origTraceNo` 扫描该笔预冻结项下的所有有效冻结记录（`selectListByTraceNo`），严格执行全额解冻撤销并防扣款校验；
+      - 交易类型枚举扩展：`TradeTypeEnum` 扩充 `PRE_FREEZE(5)` 与 `PRE_UNFREEZE(6)`；
+    - **预冻结记账（Orig Freeze No Settle）与规则入账冻结时长（Freeze Duration）**：
+      - 预冻结记账关联：`t_business_record` 扩充 `orig_freeze_no` 字段（Flyway `V18__add_orig_freeze_no.sql`），`BusinessRecordPO` 与 `JournalSubmitRequest` 齐步对齐；
+      - 过账扣款协同（`PostingDomainService`）：
+        - 若记账请求指定 `origFreezeNo`，出金方过账直接从 `FROZEN` 冻结子账户扣减（而非 `AVAILABLE`），并驱动更新 `AccountFreezeDetailPO` 累计扣款金额与状态（全额扣款自动结案）；
+        - 若记账规则配置了“冻结时长” `freezeDuration > 0`，入金方资金自动先入 `FROZEN` 冻结子账户，并持久化 `AccountFreezeDetailPO` 记录，由系统定时任务 `AutoUnfreezeJobHandler` 到期自动解冻转入可用子账户；
+    - **接口职责清晰解耦（B2B 业务查询 vs BFF 管理看板）**：
+      - 新增面向外部调用方的轻量查询 DTO `JournalQueryResponse`；
+      - `GET /accounting/journal/{traceNo}`：精简返回业务方关心的流水与事务状态、金额、会计日期及失败原因；
+      - `GET /accounting/journal/{traceNo}/overview`：专门面向管理后台运营全景看板，聚合返回多层次凭证、分录明细、MQ 消息重试、缓冲明细及可重试/可回滚运维标识；
+    - **代码异味治理与缺陷修复**：
+      - 彻底修复 `JournalingAssembler` 中 `Integer.valueOf(3).equals(record.getStatus())` 因对象类型不匹配永远返回 false 的严重隐患，全面转为强类型枚举比较，消除所有魔法值；
+      - 移除 `JournalingApplicationService` 中针对 Spring 构造注入 Bean 的冗余 `!= null` 判空，提升代码健壮性与可读性；
+      - **过账账户状态校验 N+1 循环查询性能治理**：在 `AccountRepository` 扩展 `selectByAccountNos(Collection<String> accountNos)` 批量查询接口，将 `PostingApplicationService.doExecutePosting` 前置校验改造为单次 SQL `IN (...)` 批量查询 + Map 映射校验，消除高频过账时的数据库网络往返延迟与连接池争抢；
+    - **测试验证与回归保障**：
+      - `JournalingApplicationServiceTest`（12 个用例）、`JournalingControllerTest`（8 个用例）与 `PostingApplicationServiceTest`（6 个用例）100% 通过；
+      - `accounting-core` 模块 305 个单元与集成测试全部通过，无回归。
 - [x] **Step 23** · 业务功能页面开发全量交付完毕（100% 完成）
 
 

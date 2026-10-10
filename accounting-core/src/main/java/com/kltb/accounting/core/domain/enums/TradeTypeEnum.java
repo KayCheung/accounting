@@ -16,7 +16,9 @@ public enum TradeTypeEnum {
     NORMAL(1, "正常"),
     ADJUSTMENT(2, "调账"),
     RED(3, "红"),
-    BLUE(4, "蓝");
+    BLUE(4, "蓝"),
+    PRE_FREEZE(5, "预冻结"),
+    PRE_UNFREEZE(6, "预冻结解冻");
 
     @EnumValue
     @JsonValue

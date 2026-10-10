@@ -55,6 +55,18 @@ public class BusinessRecordRepository {
     }
 
     /**
+     * 按 traceNo 更新原冻结单号与流水状态
+     */
+    public int updateOrigFreezeNoAndStatus(String traceNo, String origFreezeNo, BusinessRecordStatusEnum status) {
+        int affectedRows = businessRecordMapper.updateOrigFreezeNoAndStatus(traceNo, origFreezeNo, status.getCode());
+        if (affectedRows == 0) {
+            log.warn("[Journal] 更新流水冻结单号与状态失败，未找到匹配记录: traceNo={}, origFreezeNo={}, status={}",
+                    traceNo, origFreezeNo, status);
+        }
+        return affectedRows;
+    }
+
+    /**
      * 按会计日期和状态统计业务流水数量（Step 17 P0-4）
      */
     public int countByAccountingDateAndStatus(LocalDate accountingDate, Integer status) {

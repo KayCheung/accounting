@@ -48,6 +48,7 @@ class AsyncPostingDomainServiceTest {
     @Mock private MessageReceiptMapper messageReceiptMapper;
     @Mock private TransactionRepository transactionRepository;
     @Mock private RollbackDomainService rollbackDomainService;
+    @Mock private com.kltb.accounting.core.infrastructure.persistence.repository.BusinessRecordRepository businessRecordRepository;
 
     @InjectMocks private AsyncPostingDomainService asyncPostingDomainService;
 

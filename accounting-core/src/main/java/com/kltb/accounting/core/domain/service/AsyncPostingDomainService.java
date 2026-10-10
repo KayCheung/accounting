@@ -12,10 +12,7 @@ import com.kltb.accounting.core.infrastructure.persistence.entity.*;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountDetailMapper;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.MessageReceiptMapper;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.SubAccountDetailMapper;
-import com.kltb.accounting.core.infrastructure.persistence.repository.AccountRepository;
-import com.kltb.accounting.core.infrastructure.persistence.repository.AccountingVoucherRepository;
-import com.kltb.accounting.core.infrastructure.persistence.repository.SubAccountRepository;
-import com.kltb.accounting.core.infrastructure.persistence.repository.TransactionRepository;
+import com.kltb.accounting.core.infrastructure.persistence.repository.*;
 import com.kltb.accounting.core.shared.exception.AccountException;
 import com.kltb.accounting.core.shared.exception.ServiceException;
 import lombok.RequiredArgsConstructor;
@@ -52,6 +49,7 @@ public class AsyncPostingDomainService {
     private final MessageReceiptMapper messageReceiptMapper;
     private final TransactionRepository transactionRepository;
     private final RollbackDomainService rollbackDomainService;
+    private final BusinessRecordRepository businessRecordRepository;
 
     private static final String POSTING_TOPIC = "posting_topic";
     private static final String POSTING_TAG = "POSTING_ENTRY";
@@ -301,7 +299,13 @@ public class AsyncPostingDomainService {
                 }
             }
 
-            log.info("[ASYNC-POSTING] 所有非缓冲分录已过账，凭证/事务状态已联动更新: voucherNo={}", voucherNo);
+            // 更新流水状态为成功
+            if (voucher != null && StrUtil.isNotBlank(voucher.getTraceNo()) && businessRecordRepository != null) {
+                businessRecordRepository.updateStatusByTraceNo(
+                    voucher.getTraceNo(), BusinessRecordStatusEnum.SUCCESS);
+            }
+
+            log.info("[ASYNC-POSTING] 所有非缓冲分录已过账，凭证/事务/流水状态已联动更新: voucherNo={}", voucherNo);
         }
     }
 

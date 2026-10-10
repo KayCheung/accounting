@@ -33,6 +33,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -133,8 +134,13 @@ public class PostingApplicationService {
             .sorted()
             .collect(Collectors.toList());
 
+        // 批量一次性查询所有分户账户，避免在循环中逐个查询产生 N+1 次数据库开销
+        List<AccountPO> accounts = accountRepository.selectByAccountNos(accountNos);
+        Map<String, AccountPO> accountMap = accounts.stream()
+            .collect(Collectors.toMap(AccountPO::getAccountNo, a -> a, (k1, k2) -> k1));
+
         for (String accountNo : accountNos) {
-            AccountPO account = accountRepository.selectByAccountNo(accountNo);
+            AccountPO account = accountMap.get(accountNo);
             AccountValidator.validateExists(account, accountNo);
             AccountValidator.validatePostable(account);
         }

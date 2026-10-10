@@ -1,5 +1,7 @@
 package com.kltb.accounting.core.infrastructure.persistence.repository;
 
+import cn.hutool.core.util.StrUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.BufferStatusEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.BufferPostingDetailPO;
@@ -148,7 +150,20 @@ public class BufferPostingDetailRepository {
     /**
      * 插入缓冲明细
      */
-    public void insert(BufferPostingDetailPO po) {
-        bufferPostingDetailMapper.insert(po);
+     public void insert(BufferPostingDetailPO po) {
+         bufferPostingDetailMapper.insert(po);
+     }
+
+    /**
+     * 按系统跟踪号查询缓冲记账明细列表
+     */
+    public List<BufferPostingDetailPO> selectByTraceNo(String traceNo) {
+        if (StrUtil.isBlank(traceNo)) {
+            return Collections.emptyList();
+        }
+        return bufferPostingDetailMapper.selectList(
+                new LambdaQueryWrapper<BufferPostingDetailPO>()
+                        .eq(BufferPostingDetailPO::getTraceNo, traceNo)
+                        .eq(BufferPostingDetailPO::getIsDelete, 0));
     }
 }

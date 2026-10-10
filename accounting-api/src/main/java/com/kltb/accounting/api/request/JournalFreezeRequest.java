@@ -1,19 +1,21 @@
-// accounting-api/src/main/java/com/kltb/accounting/api/request/JournalSubmitRequest.java
+// accounting-api/src/main/java/com/kltb/accounting/api/request/JournalFreezeRequest.java
 package com.kltb.accounting.api.request;
-
-import lombok.Data;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
+import lombok.Data;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 记账流水提交请求 DTO
+ * 业务预冻结请求 DTO
+ * <p>
+ * 结构对齐 JournalSubmitRequest，业务方无需传入内部账号或科目，通过业务参数匹配规则并识别出金方执行冻结。
  */
 @Data
-public class JournalSubmitRequest {
+public class JournalFreezeRequest {
 
     @NotBlank(message = "traceNo不能为空")
     @Size(max = 64, message = "traceNo长度不能超过64")
@@ -34,9 +36,6 @@ public class JournalSubmitRequest {
     @Size(max = 32, message = "payChannel长度不能超过32")
     private String payChannel;
 
-    @NotNull(message = "tradeType不能为空")
-    private Integer tradeType;
-
     @NotNull(message = "amount不能为空")
     @DecimalMin(value = "0.000001", message = "amount必须大于0")
     private BigDecimal amount;
@@ -46,12 +45,6 @@ public class JournalSubmitRequest {
 
     @Size(max = 64, message = "summary长度不能超过64")
     private String summary;
-
-    /**
-     * 关联预冻结单号(freeze_id)
-     */
-    @Size(max = 64, message = "origFreezeNo长度不能超过64")
-    private String origFreezeNo;
 
     @NotEmpty(message = "details不能为空")
     @Valid

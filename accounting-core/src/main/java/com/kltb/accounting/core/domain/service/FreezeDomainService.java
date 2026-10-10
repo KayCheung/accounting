@@ -92,6 +92,23 @@ public class FreezeDomainService {
     public AccountFreezeDetailPO freezeFund(String accountNo, BigDecimal freezeAmount,
                                             String businessCode,
                                             LocalDateTime expireTime, String reason) {
+        return freezeFund(accountNo, freezeAmount, businessCode, null, expireTime, reason);
+    }
+
+    /**
+     * 资金冻结（可用余额 → 冻结余额，指定业务线编码与外部关联流水号）
+     *
+     * @param accountNo    账户编号
+     * @param freezeAmount 冻结金额
+     * @param businessCode 业务线编码（可选）
+     * @param traceNo      业务流水跟踪号（可选，用于关联预冻结流水）
+     * @param expireTime   过期时间（null 表示永不过期）
+     * @param reason       冻结原因
+     * @return 冻结记录 PO
+     */
+    public AccountFreezeDetailPO freezeFund(String accountNo, BigDecimal freezeAmount,
+                                            String businessCode, String traceNo,
+                                            LocalDateTime expireTime, String reason) {
         validateFreezeAmount(freezeAmount);
         validateExpireTime(expireTime);
 
@@ -164,7 +181,7 @@ public class FreezeDomainService {
                     freezeDetail.setTxnNo("");
                     freezeDetail.setBusinessCode(effectiveBusinessCode);
                     freezeDetail.setTradingCode(Constants.TRADING_CODE_FREEZE);
-                    freezeDetail.setTraceNo(freezeId);
+                    freezeDetail.setTraceNo(StringUtils.isNotBlank(traceNo) ? traceNo : freezeId);
                     freezeDetail.setTraceSeq(1);
                     freezeDetail.setFreezeAmount(freezeAmount);
                     freezeDetail.setOrigFreezeAmount(freezeAmount);

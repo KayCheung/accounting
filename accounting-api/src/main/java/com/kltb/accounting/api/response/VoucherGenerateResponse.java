@@ -2,6 +2,7 @@ package com.kltb.accounting.api.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -12,6 +13,7 @@ import java.util.List;
  * 凭证生成结果响应 DTO
  */
 @Data
+@NoArgsConstructor
 @AllArgsConstructor
 public class VoucherGenerateResponse {
 

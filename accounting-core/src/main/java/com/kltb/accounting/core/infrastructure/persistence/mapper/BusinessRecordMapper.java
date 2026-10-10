@@ -40,6 +40,14 @@ public interface BusinessRecordMapper extends BaseMapper<BusinessRecordPO> {
                                @Param("status") Integer status);
 
     /**
+     * 按 traceNo 更新原冻结单号与流水状态
+     */
+    @Update("UPDATE t_business_record SET orig_freeze_no = #{origFreezeNo}, status = #{status}, update_time = NOW() WHERE trace_no = #{traceNo} AND is_delete = 0")
+    int updateOrigFreezeNoAndStatus(@Param("traceNo") String traceNo,
+                                    @Param("origFreezeNo") String origFreezeNo,
+                                    @Param("status") Integer status);
+
+    /**
      * 按会计日期和状态统计业务流水数量（Step 17 P0-4）
      */
     default int countByAccountingDateAndStatus(LocalDate accountingDate, Integer status) {

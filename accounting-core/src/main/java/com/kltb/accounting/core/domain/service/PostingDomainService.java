@@ -8,17 +8,8 @@ import com.kltb.accounting.core.domain.enums.ChangeDirectionEnum;
 import com.kltb.accounting.core.domain.enums.VoucherEntryStatusEnum;
 import com.kltb.accounting.core.infrastructure.account.AccountBalanceCalculator;
 import com.kltb.accounting.core.infrastructure.account.AccountValidator;
-import com.kltb.accounting.core.infrastructure.persistence.entity.AccountDetailPO;
-import com.kltb.accounting.core.infrastructure.persistence.entity.AccountPO;
-import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherEntryPO;
-import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherPO;
-import com.kltb.accounting.core.infrastructure.persistence.entity.SubAccountDetailPO;
-import com.kltb.accounting.core.infrastructure.persistence.entity.SubAccountPO;
-import com.kltb.accounting.core.infrastructure.persistence.repository.AccountDetailRepository;
-import com.kltb.accounting.core.infrastructure.persistence.repository.AccountRepository;
-import com.kltb.accounting.core.infrastructure.persistence.repository.AccountingVoucherRepository;
-import com.kltb.accounting.core.infrastructure.persistence.repository.SubAccountDetailRepository;
-import com.kltb.accounting.core.infrastructure.persistence.repository.SubAccountRepository;
+import com.kltb.accounting.core.infrastructure.persistence.entity.*;
+import com.kltb.accounting.core.infrastructure.persistence.repository.*;
 import com.kltb.accounting.core.shared.exception.AccountException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -52,6 +43,10 @@ public class PostingDomainService {
     private final AccountDetailRepository accountDetailRepository;
     private final SubAccountDetailRepository subAccountDetailRepository;
     private final AccountingVoucherRepository accountingVoucherRepository;
+    private final BusinessRecordRepository businessRecordRepository;
+    private final FreezeDetailRepository freezeDetailRepository;
+    private final AccountingRuleRepository accountingRuleRepository;
+    private final com.kltb.accounting.core.infrastructure.account.FreezeIdGenerator freezeIdGenerator;
 
     /**
      * 实时过账：锁定账户 → 计算余额 → 更新余额 → 记录明细 → 更新分录状态
@@ -78,6 +73,25 @@ public class PostingDomainService {
         if (StrUtil.isBlank(voucher.getTxnNo())) {
             throw new AccountException(ResultCode.PARAM_ERROR,
                 "凭证事务号(txnNo)缺失，拒绝过账: voucherNo=" + voucher.getVoucherNo());
+        }
+
+        // 检查流水是否关联预冻结单
+        AccountFreezeDetailPO origFreezeRecord = null;
+        if (StrUtil.isNotBlank(voucher.getTraceNo()) && businessRecordRepository != null) {
+            BusinessRecordPO businessRecord = businessRecordRepository.selectByTraceNo(voucher.getTraceNo());
+            if (businessRecord != null && StrUtil.isNotBlank(businessRecord.getOrigFreezeNo()) && freezeDetailRepository != null) {
+                origFreezeRecord = freezeDetailRepository.selectByVoucherNo(businessRecord.getOrigFreezeNo());
+                if (origFreezeRecord == null) {
+                    origFreezeRecord = freezeDetailRepository.selectByTraceNo(businessRecord.getOrigFreezeNo());
+                }
+            }
+        }
+
+        // 检查记账规则是否配置了入金冻结时长（freeze_duration）
+        AccountingRulePO rule = null;
+        if (accountingRuleRepository != null && StrUtil.isNotBlank(voucher.getBusinessCode()) && StrUtil.isNotBlank(voucher.getTradingCode())) {
+            rule = accountingRuleRepository.selectByBusinessKey(
+                voucher.getBusinessCode(), voucher.getTradingCode(), voucher.getPayChannel());
         }
 
         // 按 account_no 分组去重（保持升序）
@@ -111,6 +125,19 @@ public class PostingDomainService {
 
         for (AccountingVoucherEntryPO entry : entries) {
             AccountPO account = accountMap.get(entry.getAccountNo());
+            List<SubAccountPO> subs = subAccountMap.get(entry.getAccountNo());
+
+            // 判断是否是预冻结核销出金（出金方扣减冻结账户）
+            boolean isPreFreezePayout = (origFreezeRecord != null
+                    && com.kltb.accounting.core.domain.enums.FreezeStatusEnum.FROZEN.equals(origFreezeRecord.getStatus())
+                    && entry.getAccountNo().equals(origFreezeRecord.getAccountNo())
+                    && ChangeDirectionEnum.DECREASE.equals(entry.getChangeDirection()));
+
+            // 判断是否是规则配置入金冻结（入金方入冻结账户）
+            boolean isRuleInflowFreeze = (rule != null
+                    && rule.getFreezeDuration() != null
+                    && rule.getFreezeDuration() > 0
+                    && ChangeDirectionEnum.INCREASE.equals(entry.getChangeDirection()));
 
             // 计算主账户余额
             BigDecimal oldBalance = account.getBalance();
@@ -124,10 +151,13 @@ public class PostingDomainService {
             account.setBalance(newBalance);
             accountRepository.updateById(account);
 
-            // 更新子账户（常规实时过账精准操作可用余额子账户）
-            List<SubAccountPO> subs = subAccountMap.get(entry.getAccountNo());
+            // 确定目标子账户类型（常规：AVAILABLE；预冻结核销或入金冻结：FROZEN）
+            BalanceTypeEnum targetBalanceType = (isPreFreezePayout || isRuleInflowFreeze)
+                    ? BalanceTypeEnum.FROZEN
+                    : BalanceTypeEnum.AVAILABLE;
+
             SubAccountPO subAccount = (subs != null)
-                ? subs.stream().filter(s -> BalanceTypeEnum.AVAILABLE.equals(s.getBalanceType())).findFirst().orElse(null)
+                ? subs.stream().filter(s -> targetBalanceType.equals(s.getBalanceType())).findFirst().orElse(null)
                 : null;
             BigDecimal subOldBalance = BigDecimal.ZERO;
             BigDecimal subNewBalance = BigDecimal.ZERO;
@@ -141,6 +171,45 @@ public class PostingDomainService {
                 );
                 subAccount.setBalance(subNewBalance);
                 subAccountRepository.updateById(subAccount);
+            }
+
+            // 若为预冻结出金，更新冻结记录的已扣减金额和剩余冻结金额
+            if (isPreFreezePayout && freezeDetailRepository != null) {
+                BigDecimal currentDeducted = origFreezeRecord.getDeductedAmount() != null
+                        ? origFreezeRecord.getDeductedAmount() : BigDecimal.ZERO;
+                BigDecimal newDeducted = currentDeducted.add(entry.getAmount());
+                BigDecimal remainingFreeze = origFreezeRecord.getFreezeAmount().subtract(entry.getAmount());
+                com.kltb.accounting.core.domain.enums.FreezeStatusEnum newStatus = remainingFreeze.compareTo(BigDecimal.ZERO) <= 0
+                        ? com.kltb.accounting.core.domain.enums.FreezeStatusEnum.UNFROZEN
+                        : com.kltb.accounting.core.domain.enums.FreezeStatusEnum.FROZEN;
+                freezeDetailRepository.updateAmountsAndStatus(
+                        origFreezeRecord.getVoucherNo(),
+                        remainingFreeze.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : remainingFreeze,
+                        origFreezeRecord.getUnfrozenAmount(),
+                        newDeducted,
+                        newStatus,
+                        origFreezeRecord.getVersion()
+                );
+            }
+
+            // 若为规则配置入金冻结，创建新的冻结记录（由 AutoUnfreezeJobHandler 到期自动解冻）
+            if (isRuleInflowFreeze && freezeDetailRepository != null && freezeIdGenerator != null) {
+                AccountFreezeDetailPO inflowFreeze = new AccountFreezeDetailPO();
+                String freezeId = freezeIdGenerator.generate();
+                inflowFreeze.setVoucherNo(freezeId);
+                inflowFreeze.setAccountNo(entry.getAccountNo());
+                inflowFreeze.setBusinessCode(voucher.getBusinessCode());
+                inflowFreeze.setTradingCode(voucher.getTradingCode());
+                inflowFreeze.setTraceNo(voucher.getTraceNo());
+                inflowFreeze.setFreezeAmount(entry.getAmount());
+                inflowFreeze.setOrigFreezeAmount(entry.getAmount());
+                inflowFreeze.setUnfrozenAmount(BigDecimal.ZERO);
+                inflowFreeze.setDeductedAmount(BigDecimal.ZERO);
+                inflowFreeze.setStatus(com.kltb.accounting.core.domain.enums.FreezeStatusEnum.FROZEN);
+                inflowFreeze.setTradeTime(LocalDateTime.now());
+                inflowFreeze.setExpireTime(LocalDateTime.now().plusSeconds(rule.getFreezeDuration()));
+                inflowFreeze.setSummary("规则配置入金冻结(" + rule.getFreezeDuration() + "秒)");
+                freezeDetailRepository.insert(inflowFreeze);
             }
 
             // 写入 t_account_detail（所有业务元数据100%严格继承自凭证）

@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -70,6 +71,29 @@ public class AccountRepository {
         return accountMapper.selectOne(new LambdaQueryWrapper<AccountPO>()
                 .eq(AccountPO::getAccountNo, accountNo)
                 .eq(AccountPO::getIsDelete, 0));
+    }
+
+    /**
+     * 按账户编号列表批量查询有效账户（不带锁）
+     *
+     * @param accountNos 账户编号列表
+     * @return 账户列表，无数据返回空列表
+     */
+    public List<AccountPO> selectByAccountNos(Collection<String> accountNos) {
+        if (accountNos == null || accountNos.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<String> validNos = accountNos.stream()
+                .filter(StrUtil::isNotBlank)
+                .distinct()
+                .collect(Collectors.toList());
+        if (validNos.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<AccountPO> result = accountMapper.selectList(new LambdaQueryWrapper<AccountPO>()
+                .in(AccountPO::getAccountNo, validNos)
+                .eq(AccountPO::getIsDelete, 0));
+        return result != null ? result : Collections.emptyList();
     }
 
     /**

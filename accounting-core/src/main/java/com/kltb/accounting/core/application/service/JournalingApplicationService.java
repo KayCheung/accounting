@@ -1,21 +1,18 @@
 // accounting-core/src/main/java/com/kltb/accounting/core/application/service/JournalingApplicationService.java
 package com.kltb.accounting.core.application.service;
 
+import cn.hutool.core.util.StrUtil;
 import com.kltb.accounting.api.constant.ResultCode;
-import com.kltb.accounting.api.request.JournalDetailRequest;
-import com.kltb.accounting.api.request.JournalSubmitRequest;
-import com.kltb.accounting.api.response.JournalSubmitResponse;
+import com.kltb.accounting.api.request.*;
+import com.kltb.accounting.api.response.*;
 import com.kltb.accounting.core.application.assembler.JournalingAssembler;
-import com.kltb.accounting.core.domain.enums.BusinessRecordStatusEnum;
-import com.kltb.accounting.core.domain.enums.CustomerTypeEnum;
-import com.kltb.accounting.core.domain.enums.TradeTypeEnum;
+import com.kltb.accounting.core.domain.enums.*;
 import com.kltb.accounting.core.domain.service.AccountPreCheckDomainService;
+import com.kltb.accounting.core.domain.service.FreezeDomainService;
 import com.kltb.accounting.core.domain.service.JournalSubmitResult;
 import com.kltb.accounting.core.domain.service.JournalingDomainService;
-import com.kltb.accounting.core.infrastructure.persistence.entity.BusinessRecordPO;
-import com.kltb.accounting.core.infrastructure.persistence.entity.TransactionPO;
-import com.kltb.accounting.core.infrastructure.persistence.repository.BusinessRecordRepository;
-import com.kltb.accounting.core.infrastructure.persistence.repository.TransactionRepository;
+import com.kltb.accounting.core.infrastructure.persistence.entity.*;
+import com.kltb.accounting.core.infrastructure.persistence.repository.*;
 import com.kltb.accounting.core.infrastructure.redis.DistributedLockTemplate;
 import com.kltb.accounting.core.infrastructure.redis.RedisKeyConstants;
 import com.kltb.accounting.core.shared.exception.AccountException;
@@ -27,22 +24,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
- * 记账流水入库应用服务
+ * 记账流水入库与业务交易应用服务
  * <p>
- * 负责：入口幂等锁控制、用例编排、参数校验（含明细金额合计校验）、FAILED 状态更新
- * <p>
- * 是否记账：是（通过 TransactionTemplate 在 JournalingDomainService 中管理事务）
- * 异常处理：
- * - 参数校验失败 → ParamException（由 @Valid 处理）
- * - 金额合计不等 → ServiceException(PARAM_ERROR)
- * - 幂等冲突 → ServiceException(IDEMPOTENT_CONFLICT)
- * - 预开户失败 → AccountException（拦截并更新流水 status=FAILED）
- * - 数据库唯一约束冲突 → DuplicateKeyException → 返回 IDEMPOTENT_CONFLICT（P0-2 修复）
+ * 负责：入口幂等锁控制、用例编排、业务预冻结/全额撤销解冻、流水及全链路总览查询、FAILED 状态更新
  */
 @Slf4j
 @Service
@@ -51,25 +41,25 @@ public class JournalingApplicationService {
 
     private final JournalingDomainService journalingDomainService;
     private final AccountPreCheckDomainService accountPreCheckDomainService;
+    private final FreezeDomainService freezeDomainService;
     private final BusinessRecordRepository businessRecordRepository;
     private final TransactionRepository transactionRepository;
+    private final AccountingVoucherRepository accountingVoucherRepository;
+    private final FreezeDetailRepository freezeDetailRepository;
+    private final AccountingRuleRepository accountingRuleRepository;
+    private final AccountRepository accountRepository;
+    private final SubjectRepository subjectRepository;
     private final DistributedLockTemplate distributedLockTemplate;
     private final JournalingAssembler assembler;
     private final TransactionTemplate transactionTemplate;
+    private final VoucheringApplicationService voucheringApplicationService;
+    private final PostingApplicationService postingApplicationService;
+    private final com.kltb.accounting.core.domain.service.RollbackDomainService rollbackDomainService;
+    private final BufferPostingDetailRepository bufferPostingDetailRepository;
+    private final com.kltb.accounting.core.infrastructure.messaging.LocalMessageService localMessageService;
 
     /**
      * 提交记账流水（含入口幂等锁控制）
-     * <p>
-     * 流程：
-     *   1. 参数校验（由 @Valid 完成）
-     *   2. 明细金额合计校验
-     *   3. 预校验 tradeType / customerType（P1-3/P1-6 修复：失败直接返回 400，不进入事务）
-     *   4. 获取幂等锁
-     *   5. 幂等检查：已存在 → 返回已有结果（M5 修复）
-     *   6. 流水持久化
-     *   7. 预开户检查
-     *   8. 返回结果
-     *   9. 开户失败/异常 → 更新流水 FAILED（P0-3/P1-4 修复：独立事务中更新状态）
      */
     public JournalSubmitResponse submitJournal(JournalSubmitRequest request) {
         // 1. 校验明细金额合计 = 总金额
@@ -81,40 +71,35 @@ public class JournalingApplicationService {
                     "流水明细金额合计(" + detailTotal + ")不等于总金额(" + request.getAmount() + ")");
         }
 
-        // 2. P1-6 修复：预校验 tradeType，无效值在进入事务前拦截，返回 400
+        // 2. 预校验 tradeType
         if (!TradeTypeEnum.isValid(request.getTradeType())) {
             throw new ServiceException(ResultCode.PARAM_ERROR,
                     "无效的tradeType: " + request.getTradeType());
         }
 
-        // 3. P1-3 修复：预校验 customerType，无效值在进入锁前拦截，返回 400
+        // 3. 预校验 customerType
         validateCustomerTypes(request.getDetails());
 
-        // 4. 幂等锁 Key（含 tenantId，由 DistributedLockTemplate 内部自动拼接）
+        // 4. 幂等锁 Key
         String lockKey = RedisKeyConstants.Lock.Idempotent.trace(request.getTraceNo(), request.getTraceSeq());
 
         try {
             return distributedLockTemplate.execute(
                     lockKey,
-                    0,     // wait 0s（立即失败，不等待）
-                    -1,    // lease -1（启用 watchdog 自动续期，防止开户流程超时释放锁，P1-2 修复）
+                    0,     // wait 0s
+                    -1,    // lease -1 (watchdog)
                     () -> doSubmit(request)
             );
         } catch (DuplicateKeyException e) {
-            // P0-2 修复：数据库唯一约束兜底，并发场景下 insert 触发唯一索引冲突
-            // 此时事务已回滚，查询已有结果返回
             log.warn("[Journal] 唯一约束冲突，返回幂等结果: traceNo={}", request.getTraceNo());
             BusinessRecordPO existing = journalingDomainService.checkIdempotent(
                     request.getTraceNo(), request.getTraceSeq());
             TransactionPO txn = transactionRepository.selectByTraceNo(request.getTraceNo());
             return assembler.toIdempotentResponse(existing, txn);
         } catch (AccountException e) {
-            // P0-3 修复：在独立事务中更新 FAILED 状态（而非在原分布式锁事务外直接调用）
-            // P1-5 修复：使用返回值判断更新是否成功
             markJournalFailed(request.getTraceNo(), e.getResultCode().getMessage());
             throw e;
         } catch (RuntimeException e) {
-            // P1-4 修复：非 AccountException 异常（如基础设施故障）也标记 FAILED
             log.error("[Journal] 流水入库异常，标记 FAILED: traceNo={} error={}",
                     request.getTraceNo(), e.getMessage(), e);
             markJournalFailed(request.getTraceNo(), "系统异常: " + e.getMessage());
@@ -123,60 +108,455 @@ public class JournalingApplicationService {
     }
 
     /**
-     * 锁内执行
+     * 锁内执行记账流水提交
      */
     private JournalSubmitResponse doSubmit(JournalSubmitRequest request) {
         // 幂等检查
         BusinessRecordPO existing = journalingDomainService.checkIdempotent(
                 request.getTraceNo(), request.getTraceSeq());
         if (existing != null) {
-            // M5 修复：查询已有事务并返回
             TransactionPO txn = transactionRepository.selectByTraceNo(request.getTraceNo());
             return assembler.toIdempotentResponse(existing, txn);
         }
 
         // 确定会计日期
-        var accountingDate = journalingDomainService.determineAccountingDate(request.getTradeTime());
+        LocalDate accountingDate = journalingDomainService.determineAccountingDate(request.getTradeTime());
 
-        // 流水持久化（record + detail + transaction）
+        // 匹配记账规则：若规则要求需先预冻结，强制校验 origFreezeNo 必传
+        AccountingRulePO rule = accountingRuleRepository.selectByBusinessKey(
+                request.getBusinessCode(), request.getTradingCode(), request.getPayChannel());
+        if (rule != null && Integer.valueOf(1).equals(rule.getRequirePreFreeze()) && StrUtil.isBlank(request.getOrigFreezeNo())) {
+            throw new AccountException(ResultCode.PARAM_ERROR,
+                    "该业务记账规则要求必须先完成资金预冻结，缺失原预冻结流水号(origFreezeNo)");
+        }
+
+        // 流水持久化（record + detail + transaction，支持 origFreezeNo）
         JournalSubmitResult result = journalingDomainService.persistJournal(
                 request.getTraceNo(), request.getTraceSeq(),
                 request.getBusinessCode(), request.getTradingCode(), request.getPayChannel(),
                 request.getTradeType(), request.getAmount(), request.getTradeTime(),
-                request.getSummary(), request.getDetails(), accountingDate);
+                request.getSummary(), request.getDetails(), accountingDate,
+                request.getOrigFreezeNo());
 
-        // 预开户检查 + 自动开户（P1-7 修复：传入 traceNo 生成唯一 requestNo）
+        // 预开户检查 + 自动开户
         Map<String, CustomerTypeEnum> customerMap = buildCustomerMap(request.getDetails());
         accountPreCheckDomainService.checkAndOpenAccounts(
                 request.getBusinessCode(), request.getTradingCode(), request.getPayChannel(),
                 customerMap, request.getTraceNo());
 
+        // Phase 2: 凭证生成（Vouchering）
+        VoucherGenerateRequest voucherReq = new VoucherGenerateRequest();
+        voucherReq.setTraceNo(request.getTraceNo());
+        voucherReq.setBookkeeperName("SYSTEM");
+        VoucherGenerateResponse voucherResp = voucheringApplicationService.generateVoucher(voucherReq);
+
+        // Phase 4: 过账执行（Posting）
+        if (voucherResp != null && StrUtil.isNotBlank(voucherResp.getVoucherNo())) {
+            PostingExecuteRequest postReq = new PostingExecuteRequest();
+            postReq.setVoucherNo(voucherResp.getVoucherNo());
+            postReq.setOperatorName("SYSTEM");
+            PostingExecuteResponse postResp = postingApplicationService.executePosting(postReq);
+
+            // 若凭证状态已过账，联动更新流水为 SUCCESS
+            if (postResp != null && postResp.getVoucherStatus() != null
+                    && postResp.getVoucherStatus() == VoucherStatusEnum.POSTED.getCode()) {
+                businessRecordRepository.updateStatusByTraceNo(request.getTraceNo(), BusinessRecordStatusEnum.SUCCESS);
+            }
+        }
+
         return assembler.toResponse(result);
     }
 
     /**
-     * 在独立事务中标记流水为 FAILED（P0-3 修复）
+     * 业务预冻结（含入口幂等锁控制）
      * <p>
-     * 分布式锁内的事务已回滚，此处使用独立 TransactionTemplate 确保 FAILED 状态更新成功提交。
-     *
-     * @param traceNo 系统跟踪号
-     * @param reason  失败原因
+     * 业务方仅传入业务要素（businessCode, tradingCode, payChannel, customerId, amount），
+     * 内部匹配记账规则，通过科目余额方向推导出金方并执行资金冻结。
+     */
+    public JournalFreezeResponse freezeJournal(JournalFreezeRequest request) {
+        // 1. 校验明细金额合计 = 总金额
+        BigDecimal detailTotal = request.getDetails().stream()
+                .map(JournalDetailRequest::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (request.getAmount().compareTo(detailTotal) != 0) {
+            throw new ServiceException(ResultCode.PARAM_ERROR,
+                    "预冻结明细金额合计(" + detailTotal + ")不等于总金额(" + request.getAmount() + ")");
+        }
+
+        // 2. 预校验 customerType
+        validateCustomerTypes(request.getDetails());
+
+        // 3. 幂等锁
+        String lockKey = RedisKeyConstants.Lock.Idempotent.trace(request.getTraceNo(), request.getTraceSeq());
+
+        try {
+            return distributedLockTemplate.execute(
+                    lockKey, 0, -1, () -> doFreeze(request)
+            );
+        } catch (DuplicateKeyException e) {
+            log.warn("[JournalFreeze] 唯一约束冲突，返回幂等结果: traceNo={}", request.getTraceNo());
+            BusinessRecordPO existing = journalingDomainService.checkIdempotent(request.getTraceNo(), request.getTraceSeq());
+            AccountFreezeDetailPO freezeDetail = null;
+            if (existing != null && StrUtil.isNotBlank(existing.getOrigFreezeNo())) {
+                freezeDetail = freezeDetailRepository.selectByVoucherNo(existing.getOrigFreezeNo());
+            }
+            return assembler.toFreezeResponse(existing, freezeDetail);
+        } catch (AccountException e) {
+            markJournalFailed(request.getTraceNo(), e.getResultCode().getMessage());
+            throw e;
+        } catch (RuntimeException e) {
+            log.error("[JournalFreeze] 预冻结异常: traceNo={} error={}", request.getTraceNo(), e.getMessage(), e);
+            markJournalFailed(request.getTraceNo(), "系统异常: " + e.getMessage());
+            throw e;
+        }
+    }
+
+    /**
+     * 锁内执行业务预冻结
+     */
+    private JournalFreezeResponse doFreeze(JournalFreezeRequest request) {
+        // 幂等检查
+        BusinessRecordPO existing = journalingDomainService.checkIdempotent(request.getTraceNo(), request.getTraceSeq());
+        if (existing != null) {
+            AccountFreezeDetailPO freezeDetail = null;
+            if (StrUtil.isNotBlank(existing.getOrigFreezeNo())) {
+                freezeDetail = freezeDetailRepository.selectByVoucherNo(existing.getOrigFreezeNo());
+            }
+            return assembler.toFreezeResponse(existing, freezeDetail);
+        }
+
+        // 确定会计日期
+        LocalDate accountingDate = journalingDomainService.determineAccountingDate(request.getTradeTime());
+
+        // 预开户检查 + 自动开户
+        Map<String, CustomerTypeEnum> customerMap = buildCustomerMap(request.getDetails());
+        accountPreCheckDomainService.checkAndOpenAccounts(
+                request.getBusinessCode(), request.getTradingCode(), request.getPayChannel(),
+                customerMap, request.getTraceNo());
+
+        // 匹配记账规则以识别出金方
+        AccountingRulePO rule = accountingRuleRepository.selectByBusinessKey(
+                request.getBusinessCode(), request.getTradingCode(), request.getPayChannel());
+        if (rule == null) {
+            throw new AccountException(ResultCode.RULE_NOT_FOUND,
+                    "记账规则不存在: " + request.getBusinessCode() + "/" + request.getTradingCode());
+        }
+        if (rule.getRequirePreFreeze() == null || rule.getRequirePreFreeze() != 1) {
+            throw new AccountException(ResultCode.PARAM_ERROR,
+                    "当前记账规则未启用预冻结要求: " + request.getBusinessCode() + "/" + request.getTradingCode());
+        }
+        List<AccountingRuleDetailPO> ruleDetails = accountingRuleRepository.selectDetailsWithAuxiliary(rule.getId());
+        if (ruleDetails == null || ruleDetails.isEmpty()) {
+            throw new AccountException(ResultCode.RULE_NOT_FOUND, "记账规则明细为空");
+        }
+
+        // 识别所有出金方分录（科目的借贷方向与分录借贷方向推导出减少资金方）
+        List<AccountingRuleDetailPO> payoutRuleDetails = new ArrayList<>();
+        for (AccountingRuleDetailPO detail : ruleDetails) {
+            AccountSubjectPO subject = subjectRepository.selectByCode(detail.getSubjectCode());
+            DebitCreditEnum subjectDir = (subject != null && subject.getDebitCredit() != null)
+                    ? subject.getDebitCredit() : DebitCreditEnum.CREDIT;
+            DebitCreditEnum entryDc = detail.getDebitCredit();
+            boolean isDecrease = (subjectDir == DebitCreditEnum.DEBIT)
+                    ? (entryDc == DebitCreditEnum.CREDIT)
+                    : (entryDc == DebitCreditEnum.DEBIT);
+            if (isDecrease) {
+                payoutRuleDetails.add(detail);
+            }
+        }
+        if (payoutRuleDetails.isEmpty()) {
+            payoutRuleDetails.add(ruleDetails.get(0));
+        }
+
+        // 流水持久化
+        BusinessRecordPO record = journalingDomainService.persistFreezeRecord(
+                request.getTraceNo(), request.getTraceSeq(),
+                request.getBusinessCode(), request.getTradingCode(), request.getPayChannel(),
+                request.getAmount(), request.getTradeTime(), request.getSummary(),
+                request.getDetails(), accountingDate);
+
+        // 执行多账户资金冻结（统一预冻结有效时长 1800 秒）
+        LocalDateTime expireTime = LocalDateTime.now().plusSeconds(1800);
+        List<AccountFreezeDetailPO> freezeDetails = new ArrayList<>();
+        for (AccountingRuleDetailPO payoutRuleDetail : payoutRuleDetails) {
+            String fundsType = payoutRuleDetail.getFundsType();
+            JournalDetailRequest matchedDetail = request.getDetails().stream()
+                    .filter(d -> fundsType.equals(d.getFundsType()))
+                    .findFirst()
+                    .orElse(null);
+            if (matchedDetail == null) {
+                matchedDetail = request.getDetails().get(0);
+            }
+
+            AccountPO account = accountRepository.selectByOwnerIdAndSubjectCode(
+                    matchedDetail.getCustomerId(), payoutRuleDetail.getSubjectCode());
+            if (account == null) {
+                throw new AccountException(ResultCode.ACCOUNT_NOT_FOUND,
+                        "出金方账户未找到: customerId=" + matchedDetail.getCustomerId() + ", subjectCode=" + payoutRuleDetail.getSubjectCode());
+            }
+
+            AccountFreezeDetailPO freezeDetail = freezeDomainService.freezeFund(
+                    account.getAccountNo(), matchedDetail.getAmount(), request.getBusinessCode(), request.getTraceNo(), expireTime, request.getSummary());
+            freezeDetails.add(freezeDetail);
+        }
+
+        // 更新流水关联 freezeId 并标记为成功（多账户以首笔单号作为主单号）
+        String primaryFreezeId = freezeDetails.get(0).getVoucherNo();
+        businessRecordRepository.updateOrigFreezeNoAndStatus(
+                request.getTraceNo(), primaryFreezeId, BusinessRecordStatusEnum.SUCCESS);
+        record.setOrigFreezeNo(primaryFreezeId);
+        record.setStatus(BusinessRecordStatusEnum.SUCCESS);
+
+        return assembler.toFreezeResponse(record, freezeDetails);
+    }
+
+    /**
+     * 业务预冻结全额解冻撤销（含入口幂等锁控制）
+     * <p>
+     * 约束：严格全额解冻，不允许部分解冻。
+     */
+    public JournalUnfreezeResponse unfreezeJournal(JournalUnfreezeRequest request) {
+        String lockKey = RedisKeyConstants.Lock.Idempotent.trace(request.getTraceNo(), request.getTraceSeq());
+
+        return distributedLockTemplate.execute(
+                lockKey, 0, -1, () -> doUnfreeze(request)
+        );
+    }
+
+    /**
+     * 锁内执行全额解冻撤销
+     */
+    private JournalUnfreezeResponse doUnfreeze(JournalUnfreezeRequest request) {
+        // 幂等检查：查看本次撤销流水是否已存在
+        BusinessRecordPO existing = journalingDomainService.checkIdempotent(request.getTraceNo(), request.getTraceSeq());
+        if (existing != null) {
+            List<AccountFreezeDetailPO> freezeDetails = freezeDetailRepository.selectListByTraceNo(request.getOrigTraceNo());
+            if (freezeDetails.isEmpty() && StrUtil.isNotBlank(existing.getOrigFreezeNo())) {
+                AccountFreezeDetailPO single = freezeDetailRepository.selectByVoucherNo(existing.getOrigFreezeNo());
+                if (single != null) freezeDetails = List.of(single);
+            }
+            return assembler.toUnfreezeResponse(request.getTraceNo(), request.getOrigTraceNo(), freezeDetails);
+        }
+
+        // 查询原预冻结流水
+        BusinessRecordPO origRecord = businessRecordRepository.selectByTraceNo(request.getOrigTraceNo());
+        if (origRecord == null) {
+            throw new ServiceException(ResultCode.JOURNAL_NOT_FOUND, "原预冻结流水不存在: " + request.getOrigTraceNo());
+        }
+        if (origRecord.getTradeType() != TradeTypeEnum.PRE_FREEZE) {
+            throw new ServiceException(ResultCode.PARAM_ERROR, "原流水非预冻结流水: " + request.getOrigTraceNo());
+        }
+
+        // 查询该笔预冻结流水下的所有冻结明细（支持多账户）
+        List<AccountFreezeDetailPO> freezeDetails = freezeDetailRepository.selectListByTraceNo(request.getOrigTraceNo());
+        if (freezeDetails.isEmpty() && StrUtil.isNotBlank(origRecord.getOrigFreezeNo())) {
+            AccountFreezeDetailPO single = freezeDetailRepository.selectByVoucherNo(origRecord.getOrigFreezeNo());
+            if (single != null) freezeDetails = List.of(single);
+        }
+        if (freezeDetails.isEmpty()) {
+            throw new AccountException(ResultCode.FREEZE_RECORD_NOT_FOUND, "未找到关联冻结记录: origTraceNo=" + request.getOrigTraceNo());
+        }
+
+        // 强校验未发生任何扣款（全额撤销约束）
+        for (AccountFreezeDetailPO freezeDetail : freezeDetails) {
+            if (freezeDetail.getDeductedAmount() != null && freezeDetail.getDeductedAmount().compareTo(BigDecimal.ZERO) > 0) {
+                throw new ServiceException(ResultCode.PARAM_ERROR,
+                        "原预冻结已有扣款(" + freezeDetail.getDeductedAmount() + ")，禁止全额撤销解冻: " + freezeDetail.getVoucherNo());
+            }
+        }
+
+        // 批量执行全额解冻
+        List<AccountFreezeDetailPO> unfrozenDetails = new ArrayList<>();
+        for (AccountFreezeDetailPO freezeDetail : freezeDetails) {
+            if (freezeDetail.getStatus() == FreezeStatusEnum.FROZEN) {
+                freezeDomainService.unfreezeFund(freezeDetail.getVoucherNo(), freezeDetail.getOrigFreezeAmount(), request.getReason());
+                AccountFreezeDetailPO updated = freezeDetailRepository.selectByVoucherNo(freezeDetail.getVoucherNo());
+                unfrozenDetails.add(updated != null ? updated : freezeDetail);
+            } else {
+                unfrozenDetails.add(freezeDetail);
+            }
+        }
+
+        // 记录撤销流水
+        LocalDate accountingDate = journalingDomainService.determineAccountingDate(LocalDateTime.now());
+        BigDecimal totalUnfreezeAmount = unfrozenDetails.stream()
+                .map(AccountFreezeDetailPO::getOrigFreezeAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        String primaryFreezeId = freezeDetails.get(0).getVoucherNo();
+        journalingDomainService.persistUnfreezeRecord(
+                request.getTraceNo(), request.getTraceSeq(), request.getOrigTraceNo(), primaryFreezeId,
+                origRecord.getBusinessCode(), origRecord.getTradingCode(), origRecord.getPayChannel(),
+                totalUnfreezeAmount, LocalDateTime.now(), request.getReason(), accountingDate);
+
+        return assembler.toUnfreezeResponse(request.getTraceNo(), request.getOrigTraceNo(), unfrozenDetails);
+    }
+
+    /**
+     * 查询记账全流程总览
+     */
+    public JournalOverviewResponse getJournalOverview(String traceNo) {
+        BusinessRecordPO record = businessRecordRepository.selectByTraceNo(traceNo);
+        if (record == null) {
+            return null;
+        }
+
+        TransactionPO txn = transactionRepository.selectByTraceNo(traceNo);
+        List<AccountingVoucherPO> vouchers = accountingVoucherRepository.selectByTraceNo(traceNo);
+        Map<String, List<AccountingVoucherEntryPO>> entryMap = new HashMap<>();
+        if (vouchers != null && !vouchers.isEmpty()) {
+            List<String> voucherNos = vouchers.stream().map(AccountingVoucherPO::getVoucherNo).toList();
+            List<AccountingVoucherEntryPO> allEntries = accountingVoucherRepository.selectEntriesByVoucherNos(voucherNos);
+            if (allEntries != null) {
+                entryMap = allEntries.stream()
+                        .collect(Collectors.groupingBy(AccountingVoucherEntryPO::getVoucherNo));
+            }
+        }
+
+        AccountFreezeDetailPO freezeDetail = null;
+        if (StrUtil.isNotBlank(record.getOrigFreezeNo())) {
+            freezeDetail = freezeDetailRepository.selectByVoucherNo(record.getOrigFreezeNo());
+        }
+        if (freezeDetail == null) {
+            freezeDetail = freezeDetailRepository.selectByTraceNo(traceNo);
+        }
+
+        List<BufferPostingDetailPO> bufferDetails = (bufferPostingDetailRepository != null)
+                ? bufferPostingDetailRepository.selectByTraceNo(traceNo)
+                : Collections.emptyList();
+
+        List<LocalMessagePO> localMessages = Collections.emptyList();
+        if (localMessageService != null && !entryMap.isEmpty()) {
+            List<String> entryIds = entryMap.values().stream()
+                    .flatMap(List::stream)
+                    .map(AccountingVoucherEntryPO::getEntryId)
+                    .filter(Objects::nonNull)
+                    .toList();
+            if (!entryIds.isEmpty()) {
+                localMessages = localMessageService.selectByBusinessKeys(entryIds);
+            }
+        }
+
+        return assembler.toOverviewResponse(record, txn, vouchers, entryMap, freezeDetail, bufferDetails, localMessages);
+    }
+
+    /**
+     * 重试记账（针对 FAILED 状态的流水重新触发生成凭证与过账）
+     */
+    public JournalOverviewResponse retryJournal(String traceNo) {
+        BusinessRecordPO record = businessRecordRepository.selectByTraceNo(traceNo);
+        if (record == null) {
+            throw new ServiceException(ResultCode.JOURNAL_NOT_FOUND, "未找到流水记录: " + traceNo);
+        }
+        if (record.getStatus() != BusinessRecordStatusEnum.FAILED) {
+            throw new ServiceException(ResultCode.PARAM_ERROR, "仅允许对失败流水发起重试，当前状态: " + record.getStatus());
+        }
+
+        String lockKey = RedisKeyConstants.Lock.Idempotent.trace(traceNo, record.getTraceSeq() != null ? record.getTraceSeq() : 1);
+        return distributedLockTemplate.execute(lockKey, 3, -1, () -> {
+            businessRecordRepository.updateStatusByTraceNo(traceNo, BusinessRecordStatusEnum.PROCESSING);
+
+            List<AccountingVoucherPO> vouchers = accountingVoucherRepository.selectByTraceNo(traceNo);
+            AccountingVoucherPO voucher = (vouchers != null && !vouchers.isEmpty()) ? vouchers.get(0) : null;
+            if (voucher == null) {
+                VoucherGenerateRequest vReq = new VoucherGenerateRequest();
+                vReq.setTraceNo(traceNo);
+                vReq.setBookkeeperName("SYSTEM");
+                VoucherGenerateResponse vResp = voucheringApplicationService.generateVoucher(vReq);
+                if (vResp != null) {
+                    voucher = accountingVoucherRepository.selectByVoucherNoSimple(vResp.getVoucherNo());
+                }
+            }
+
+            if (voucher != null) {
+                PostingExecuteRequest postReq = new PostingExecuteRequest();
+                postReq.setVoucherNo(voucher.getVoucherNo());
+                postReq.setOperatorName("SYSTEM");
+                PostingExecuteResponse postResp = postingApplicationService.executePosting(postReq);
+                if (postResp != null && postResp.getVoucherStatus() != null
+                        && postResp.getVoucherStatus() == VoucherStatusEnum.POSTED.getCode()) {
+                    businessRecordRepository.updateStatusByTraceNo(traceNo, BusinessRecordStatusEnum.SUCCESS);
+                }
+            }
+
+            return getJournalOverview(traceNo);
+        });
+    }
+
+    /**
+     * 回滚记账（对失败或需人工介入冲账的流水执行反向冲账与状态回滚）
+     */
+    public JournalOverviewResponse rollbackJournal(String traceNo, String reason) {
+        BusinessRecordPO record = businessRecordRepository.selectByTraceNo(traceNo);
+        if (record == null) {
+            throw new ServiceException(ResultCode.JOURNAL_NOT_FOUND, "未找到流水记录: " + traceNo);
+        }
+
+        String lockKey = RedisKeyConstants.Lock.Idempotent.trace(traceNo, record.getTraceSeq() != null ? record.getTraceSeq() : 1);
+        return distributedLockTemplate.execute(lockKey, 3, -1, () -> {
+            List<AccountingVoucherPO> vouchers = accountingVoucherRepository.selectByTraceNo(traceNo);
+            AccountingVoucherPO voucher = (vouchers != null && !vouchers.isEmpty()) ? vouchers.get(0) : null;
+            TransactionPO txn = transactionRepository.selectByTraceNo(traceNo);
+            String txnNo = txn != null ? txn.getTxnNo() : (voucher != null ? voucher.getTxnNo() : null);
+
+            if (voucher != null) {
+                rollbackDomainService.executeRollbackForAsyncFailure(
+                        voucher.getVoucherNo(), txnNo, StrUtil.isNotBlank(reason) ? reason : "手动申请流水回滚");
+            } else if (txnNo != null) {
+                rollbackDomainService.markTransactionFailed(txnNo, null, traceNo, reason);
+            }
+
+            businessRecordRepository.updateStatusByTraceNo(traceNo, BusinessRecordStatusEnum.FAILED);
+            return getJournalOverview(traceNo);
+        });
+    }
+
+    /**
+     * 查询记账流水精简信息（面向业务调用方）
+     */
+    public JournalQueryResponse getJournal(String traceNo) {
+        BusinessRecordPO record = businessRecordRepository.selectByTraceNo(traceNo);
+        if (record == null) {
+            return null;
+        }
+        TransactionPO txn = transactionRepository.selectByTraceNo(traceNo);
+        return assembler.toQueryResponse(record, txn);
+    }
+
+    /**
+     * 查询关联事务状态
+     */
+    public TransactionStatusResponse getTransactionStatus(String traceNo) {
+        TransactionPO txn = transactionRepository.selectByTraceNo(traceNo);
+        if (txn == null) {
+            return null;
+        }
+        List<AccountingVoucherPO> vouchers = accountingVoucherRepository.selectByTraceNo(traceNo);
+        AccountingVoucherPO voucher = (vouchers != null && !vouchers.isEmpty()) ? vouchers.get(0) : null;
+        return assembler.toTransactionStatusResponse(txn, voucher);
+    }
+
+    /**
+     * 在独立事务中标记流水为 FAILED
      */
     private void markJournalFailed(String traceNo, String reason) {
         try {
-            Integer affectedRows = transactionTemplate.execute(status ->
-                    businessRecordRepository.updateStatusByTraceNo(traceNo, BusinessRecordStatusEnum.FAILED));
-            if (affectedRows == null || affectedRows == 0) {
-                log.warn("[Journal] 标记 FAILED 失败，未找到匹配记录: traceNo={}, reason={}", traceNo, reason);
-            }
+            transactionTemplate.execute(status -> {
+                businessRecordRepository.updateStatusByTraceNo(traceNo, BusinessRecordStatusEnum.FAILED);
+                TransactionPO txn = transactionRepository.selectByTraceNo(traceNo);
+                List<AccountingVoucherPO> vouchers = accountingVoucherRepository.selectByTraceNo(traceNo);
+                String voucherNo = (vouchers != null && !vouchers.isEmpty()) ? vouchers.get(0).getVoucherNo() : null;
+                if (txn != null && rollbackDomainService != null) {
+                    rollbackDomainService.markTransactionFailed(txn.getTxnNo(), voucherNo, traceNo, reason);
+                }
+                return null;
+            });
         } catch (Exception ex) {
-            // 极端情况：独立事务也失败，记录日志但不阻断原异常抛出
             log.error("[Journal] 标记 FAILED 异常: traceNo={}, reason={}", traceNo, reason, ex);
         }
     }
 
     /**
-     * 构建 customerId → CustomerTypeEnum 映射（M3 修复：构建时绑定）
+     * 构建 customerId → CustomerTypeEnum 映射
      */
     private Map<String, CustomerTypeEnum> buildCustomerMap(List<JournalDetailRequest> details) {
         Map<String, CustomerTypeEnum> map = new HashMap<>();
@@ -188,7 +568,7 @@ public class JournalingApplicationService {
     }
 
     /**
-     * P1-3 修复：预校验所有 customerType 值，在进入分布式锁前拦截非法值，返回 400 而非 500
+     * 预校验所有 customerType 值
      */
     private void validateCustomerTypes(List<JournalDetailRequest> details) {
         for (JournalDetailRequest detail : details) {

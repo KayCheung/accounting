@@ -89,6 +89,19 @@ public class JournalingDomainService {
             String tradingCode, String payChannel, Integer tradeType,
             BigDecimal amount, LocalDateTime tradeTime, String summary,
             List<JournalDetailRequest> details, LocalDate accountingDate) {
+        return persistJournal(traceNo, traceSeq, businessCode, tradingCode, payChannel,
+                tradeType, amount, tradeTime, summary, details, accountingDate, null);
+    }
+
+    /**
+     * 在事务中写入流水 + 明细 + 创建事务记录（支持关联预冻结单号）
+     */
+    public JournalSubmitResult persistJournal(
+            String traceNo, Integer traceSeq, String businessCode,
+            String tradingCode, String payChannel, Integer tradeType,
+            BigDecimal amount, LocalDateTime tradeTime, String summary,
+            List<JournalDetailRequest> details, LocalDate accountingDate,
+            String origFreezeNo) {
 
         // P1-1 修复：使用 TransactionTemplate.execute() 返回值直接返回 txnNo，消除 String[] 闭包反模式
         return transactionTemplate.execute(status -> {
@@ -103,6 +116,7 @@ public class JournalingDomainService {
             record.setTradeType(TradeTypeEnum.fromCode(tradeType));
             record.setAmount(amount).setTradeTime(tradeTime);
             record.setAccountingDate(accountingDate).setSummary(summary);
+            record.setOrigFreezeNo(origFreezeNo);
             record.setStatus(BusinessRecordStatusEnum.PROCESSING);
             businessRecordRepository.save(record);
 
@@ -128,6 +142,66 @@ public class JournalingDomainService {
             transactionRepository.save(transaction);
 
             return new JournalSubmitResult(traceNo, accountingDate, txnNo);
+        });
+    }
+
+    /**
+     * 写入预冻结流水记录
+     */
+    public BusinessRecordPO persistFreezeRecord(
+            String traceNo, Integer traceSeq, String businessCode,
+            String tradingCode, String payChannel,
+            BigDecimal amount, LocalDateTime tradeTime, String summary,
+            List<JournalDetailRequest> details, LocalDate accountingDate) {
+
+        return transactionTemplate.execute(status -> {
+            BusinessRecordPO record = new BusinessRecordPO();
+            record.setTraceNo(traceNo).setTraceSeq(traceSeq);
+            record.setBusinessCode(businessCode).setTradingCode(tradingCode);
+            record.setPayChannel(payChannel);
+            record.setTradeType(TradeTypeEnum.PRE_FREEZE);
+            record.setAmount(amount).setTradeTime(tradeTime);
+            record.setAccountingDate(accountingDate).setSummary(summary);
+            record.setStatus(BusinessRecordStatusEnum.PROCESSING);
+            businessRecordRepository.save(record);
+
+            for (JournalDetailRequest detail : details) {
+                BusinessDetailPO detailPO = new BusinessDetailPO();
+                detailPO.setTraceNo(traceNo).setTraceSeq(traceSeq);
+                detailPO.setCustomerId(detail.getCustomerId());
+                detailPO.setCustomerType(CustomerTypeEnum.fromValue(detail.getCustomerType()));
+                detailPO.setFundsType(detail.getFundsType());
+                detailPO.setItemCode(detail.getItemCode());
+                detailPO.setAmount(detail.getAmount());
+                businessDetailRepository.save(detailPO);
+            }
+
+            return record;
+        });
+    }
+
+    /**
+     * 写入预冻结解冻流水记录
+     */
+    public BusinessRecordPO persistUnfreezeRecord(
+            String traceNo, Integer traceSeq, String origTraceNo, String origFreezeNo,
+            String businessCode, String tradingCode, String payChannel,
+            BigDecimal amount, LocalDateTime tradeTime, String summary,
+            LocalDate accountingDate) {
+
+        return transactionTemplate.execute(status -> {
+            BusinessRecordPO record = new BusinessRecordPO();
+            record.setTraceNo(traceNo).setTraceSeq(traceSeq);
+            record.setBusinessCode(businessCode).setTradingCode(tradingCode);
+            record.setPayChannel(payChannel);
+            record.setTradeType(TradeTypeEnum.PRE_UNFREEZE);
+            record.setAmount(amount).setTradeTime(tradeTime);
+            record.setAccountingDate(accountingDate).setSummary(summary);
+            record.setOrigFreezeNo(origFreezeNo);
+            record.setStatus(BusinessRecordStatusEnum.SUCCESS);
+            businessRecordRepository.save(record);
+
+            return record;
         });
     }
 }
