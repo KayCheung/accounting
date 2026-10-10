@@ -7,6 +7,7 @@ import com.kltb.accounting.core.domain.enums.BusinessRecordStatusEnum;
 import com.kltb.accounting.core.domain.enums.CustomerTypeEnum;
 import com.kltb.accounting.core.domain.enums.TradeTypeEnum;
 import com.kltb.accounting.core.domain.enums.TransactionStatusEnum;
+import com.kltb.accounting.core.domain.model.JournalCreateCommand;
 import com.kltb.accounting.core.infrastructure.account.TransactionNoGenerator;
 import com.kltb.accounting.core.infrastructure.persistence.entity.BusinessDetailPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.BusinessRecordPO;
@@ -89,7 +90,7 @@ public class JournalingDomainService {
     /**
      * 在事务中写入流水 + 明细 + 创建事务记录（推荐使用领域命令对象）
      */
-    public JournalSubmitResult persistJournal(com.kltb.accounting.core.domain.model.JournalCreateCommand command) {
+    public JournalSubmitResult persistJournal(JournalCreateCommand command) {
         if (command == null) {
             throw new IllegalArgumentException("command 不能为空");
         }
@@ -143,62 +144,6 @@ public class JournalingDomainService {
     }
 
     /**
-     * @deprecated 请使用 {@link #persistJournal(com.kltb.accounting.core.domain.model.JournalCreateCommand)}
-     */
-    @Deprecated
-    public JournalSubmitResult persistJournal(
-            String traceNo, Integer traceSeq, String businessCode,
-            String tradingCode, String payChannel, Integer tradeType,
-            BigDecimal amount, LocalDateTime tradeTime, String summary,
-            List<JournalDetailRequest> details, LocalDate accountingDate) {
-        return persistJournal(traceNo, traceSeq, businessCode, tradingCode, payChannel,
-                tradeType, amount, tradeTime, summary, details, accountingDate, null, null);
-    }
-
-    /**
-     * @deprecated 请使用 {@link #persistJournal(com.kltb.accounting.core.domain.model.JournalCreateCommand)}
-     */
-    @Deprecated
-    public JournalSubmitResult persistJournal(
-            String traceNo, Integer traceSeq, String businessCode,
-            String tradingCode, String payChannel, Integer tradeType,
-            BigDecimal amount, LocalDateTime tradeTime, String summary,
-            List<JournalDetailRequest> details, LocalDate accountingDate,
-            String origFreezeNo) {
-        return persistJournal(traceNo, traceSeq, businessCode, tradingCode, payChannel,
-                tradeType, amount, tradeTime, summary, details, accountingDate, origFreezeNo, null);
-    }
-
-    /**
-     * @deprecated 请使用 {@link #persistJournal(com.kltb.accounting.core.domain.model.JournalCreateCommand)}
-     */
-    @Deprecated
-    public JournalSubmitResult persistJournal(
-            String traceNo, Integer traceSeq, String businessCode,
-            String tradingCode, String payChannel, Integer tradeType,
-            BigDecimal amount, LocalDateTime tradeTime, String summary,
-            List<JournalDetailRequest> details, LocalDate accountingDate,
-            String origFreezeNo, Map<String, Object> extraAttrs) {
-
-        com.kltb.accounting.core.domain.model.JournalCreateCommand command = com.kltb.accounting.core.domain.model.JournalCreateCommand.builder()
-                .traceNo(traceNo)
-                .traceSeq(traceSeq)
-                .businessCode(businessCode)
-                .tradingCode(tradingCode)
-                .payChannel(payChannel)
-                .tradeType(tradeType)
-                .amount(amount)
-                .tradeTime(tradeTime)
-                .summary(summary)
-                .details(details)
-                .accountingDate(accountingDate)
-                .origFreezeNo(origFreezeNo)
-                .extraAttrs(extraAttrs)
-                .build();
-        return persistJournal(command);
-    }
-
-    /**
      * 写入预冻结流水记录（推荐使用领域命令对象）
      */
     public BusinessRecordPO persistFreezeRecord(com.kltb.accounting.core.domain.model.FreezeRecordCommand command) {
@@ -237,46 +182,6 @@ public class JournalingDomainService {
 
             return record;
         });
-    }
-
-    /**
-     * @deprecated 请使用 {@link #persistFreezeRecord(com.kltb.accounting.core.domain.model.FreezeRecordCommand)}
-     */
-    @Deprecated
-    public BusinessRecordPO persistFreezeRecord(
-            String traceNo, Integer traceSeq, String businessCode,
-            String tradingCode, String payChannel,
-            BigDecimal amount, LocalDateTime tradeTime, String summary,
-            List<JournalDetailRequest> details, LocalDate accountingDate) {
-        return persistFreezeRecord(traceNo, traceSeq, businessCode, tradingCode, payChannel,
-                amount, tradeTime, summary, details, accountingDate, null);
-    }
-
-    /**
-     * @deprecated 请使用 {@link #persistFreezeRecord(com.kltb.accounting.core.domain.model.FreezeRecordCommand)}
-     */
-    @Deprecated
-    public BusinessRecordPO persistFreezeRecord(
-            String traceNo, Integer traceSeq, String businessCode,
-            String tradingCode, String payChannel,
-            BigDecimal amount, LocalDateTime tradeTime, String summary,
-            List<JournalDetailRequest> details, LocalDate accountingDate,
-            Map<String, Object> extraAttrs) {
-
-        com.kltb.accounting.core.domain.model.FreezeRecordCommand command = com.kltb.accounting.core.domain.model.FreezeRecordCommand.builder()
-                .traceNo(traceNo)
-                .traceSeq(traceSeq)
-                .businessCode(businessCode)
-                .tradingCode(tradingCode)
-                .payChannel(payChannel)
-                .amount(amount)
-                .tradeTime(tradeTime)
-                .summary(summary)
-                .details(details)
-                .accountingDate(accountingDate)
-                .extraAttrs(extraAttrs)
-                .build();
-        return persistFreezeRecord(command);
     }
 
     /**

@@ -12,9 +12,11 @@ import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
 import com.kltb.accounting.core.domain.enums.PostingTypeEnum;
 import com.kltb.accounting.core.domain.enums.TradeTypeEnum;
 import com.kltb.accounting.core.domain.enums.VoucherStatusEnum;
+import com.kltb.accounting.core.domain.service.AuxiliaryDomainService;
 import com.kltb.accounting.core.domain.service.BufferPostingDomainService;
 import com.kltb.accounting.core.domain.service.VoucheringDomainService;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
+import com.kltb.accounting.core.infrastructure.persistence.repository.AccountRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountingVoucherRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.DictionaryRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.SubjectRepository;
@@ -35,9 +37,16 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import com.kltb.accounting.api.request.VoucherGenerateRequest;
+import com.kltb.accounting.api.response.VoucherGenerateResponse;
+import com.kltb.accounting.core.domain.enums.BusinessRecordStatusEnum;
+import org.springframework.transaction.support.TransactionCallback;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -47,10 +56,16 @@ class VoucheringApplicationServiceTest {
     private VoucheringDomainService voucheringDomainService;
 
     @Mock
+    private AuxiliaryDomainService auxiliaryDomainService;
+
+    @Mock
     private BufferPostingDomainService bufferPostingDomainService;
 
     @Mock
     private AccountingVoucherRepository accountingVoucherRepository;
+
+    @Mock
+    private AccountRepository accountRepository;
 
     @Mock
     private TransactionRepository transactionRepository;
@@ -232,5 +247,140 @@ class VoucheringApplicationServiceTest {
         assertThat(detail).isNotNull();
         assertThat(detail.getCanReversal()).isFalse();
         assertThat(detail.getReversalVoucherNo()).isEqualTo("VOU202609200099_REV");
+    }
+
+    @Test
+    @DisplayName("generateVoucher: 携带 accountMapping 时直接命中内存字典解析账户编号，0 DB I/O")
+    void generateVoucher_withAccountMapping_shouldResolveDirectly() {
+        VoucherGenerateRequest req = new VoucherGenerateRequest();
+        req.setTraceNo("TRC001");
+        req.setAccountMapping(Map.of("CUST001:1001", "ACC-20261010-000001", "INNER:2001", "ACC-INNER-2001"));
+
+        BusinessRecordPO journal = new BusinessRecordPO();
+        journal.setTraceNo("TRC001");
+        journal.setStatus(BusinessRecordStatusEnum.PROCESSING);
+        journal.setBusinessCode("LOAN");
+        journal.setTradingCode("DISBURSE");
+        journal.setPayChannel("BANK");
+        journal.setAccountingDate(LocalDate.now());
+
+        BusinessDetailPO d1 = new BusinessDetailPO();
+        d1.setFundsType("PRINCIPAL");
+        d1.setCustomerId("CUST001");
+        d1.setAmount(new BigDecimal("100.00"));
+
+        VoucheringDomainService.JournalWithDetails jwd = new VoucheringDomainService.JournalWithDetails(
+                journal, List.of(d1));
+        when(voucheringDomainService.loadJournal("TRC001")).thenReturn(jwd);
+
+        AccountingRulePO rule = new AccountingRulePO();
+        rule.setId(1L);
+        AccountingRuleDetailPO rd1 = new AccountingRuleDetailPO();
+        rd1.setId(11L);
+        rd1.setRowNum(1);
+        rd1.setFundsType("PRINCIPAL");
+        rd1.setSubjectCode("1001");
+        rd1.setDebitCredit(DebitCreditEnum.DEBIT);
+        rd1.setCurrency("CNY");
+
+        VoucheringDomainService.AccountingRuleWithDetails rwd = new VoucheringDomainService.AccountingRuleWithDetails(
+                rule, List.of(rd1), Collections.emptyMap());
+        when(voucheringDomainService.matchRule("LOAN", "DISBURSE", "BANK")).thenReturn(rwd);
+
+        TransactionPO txn = new TransactionPO();
+        txn.setTxnNo("TXN001");
+        when(transactionRepository.selectByTraceNo("TRC001")).thenReturn(txn);
+
+        when(voucheringDomainService.calculateEntryAmount(eq(rd1), eq(d1), eq(journal)))
+                .thenReturn(new BigDecimal("100.00"));
+
+        when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> cb = invocation.getArgument(0);
+            return cb.doInTransaction(null);
+        });
+
+        when(voucheringDomainService.persistVoucher(any(), any(), any(), any())).thenReturn("VOU001");
+        when(accountingVoucherRepository.updateTxnNoByVoucherNo("VOU001", "TXN001")).thenReturn(1);
+
+        AccountingVoucherPO savedVoucher = new AccountingVoucherPO();
+        savedVoucher.setVoucherNo("VOU001");
+        savedVoucher.setAmount(new BigDecimal("100.00"));
+        when(accountingVoucherRepository.selectByTraceNo("TRC001")).thenReturn(List.of(savedVoucher));
+
+        VoucherGenerateResponse resp = service.generateVoucher(req);
+        assertThat(resp).isNotNull();
+        assertThat(resp.getVoucherNo()).isEqualTo("VOU001");
+        assertThat(resp.getEntries()).hasSize(1);
+        assertThat(resp.getEntries().get(0).getAccountNo()).isEqualTo("ACC-20261010-000001");
+
+        // 验证根本无需调用 accountRepository 二次查库！
+        verifyNoInteractions(accountRepository);
+    }
+
+    @Test
+    @DisplayName("generateVoucher: 无 accountMapping 时回源 accountRepository 精确匹配")
+    void generateVoucher_withoutAccountMapping_shouldFallbackToRepository() {
+        VoucherGenerateRequest req = new VoucherGenerateRequest();
+        req.setTraceNo("TRC002");
+
+        BusinessRecordPO journal = new BusinessRecordPO();
+        journal.setTraceNo("TRC002");
+        journal.setStatus(BusinessRecordStatusEnum.PROCESSING);
+        journal.setBusinessCode("LOAN");
+        journal.setTradingCode("DISBURSE");
+        journal.setPayChannel("BANK");
+        journal.setAccountingDate(LocalDate.now());
+
+        BusinessDetailPO d1 = new BusinessDetailPO();
+        d1.setFundsType("PRINCIPAL");
+        d1.setCustomerId("CUST002");
+        d1.setAmount(new BigDecimal("200.00"));
+
+        VoucheringDomainService.JournalWithDetails jwd = new VoucheringDomainService.JournalWithDetails(
+                journal, List.of(d1));
+        when(voucheringDomainService.loadJournal("TRC002")).thenReturn(jwd);
+
+        AccountingRulePO rule = new AccountingRulePO();
+        rule.setId(1L);
+        AccountingRuleDetailPO rd1 = new AccountingRuleDetailPO();
+        rd1.setId(11L);
+        rd1.setRowNum(1);
+        rd1.setFundsType("PRINCIPAL");
+        rd1.setSubjectCode("1001");
+        rd1.setDebitCredit(DebitCreditEnum.DEBIT);
+        rd1.setCurrency("CNY");
+
+        VoucheringDomainService.AccountingRuleWithDetails rwd = new VoucheringDomainService.AccountingRuleWithDetails(
+                rule, List.of(rd1), Collections.emptyMap());
+        when(voucheringDomainService.matchRule("LOAN", "DISBURSE", "BANK")).thenReturn(rwd);
+
+        TransactionPO txn = new TransactionPO();
+        txn.setTxnNo("TXN002");
+        when(transactionRepository.selectByTraceNo("TRC002")).thenReturn(txn);
+
+        when(voucheringDomainService.calculateEntryAmount(eq(rd1), eq(d1), eq(journal)))
+                .thenReturn(new BigDecimal("200.00"));
+
+        AccountPO mockAccount = new AccountPO();
+        mockAccount.setAccountNo("ACC-FROM-DB-002");
+        when(accountRepository.selectByOwnerIdAndSubjectCode("CUST002", "1001")).thenReturn(mockAccount);
+
+        when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> cb = invocation.getArgument(0);
+            return cb.doInTransaction(null);
+        });
+
+        when(voucheringDomainService.persistVoucher(any(), any(), any(), any())).thenReturn("VOU002");
+        when(accountingVoucherRepository.updateTxnNoByVoucherNo("VOU002", "TXN002")).thenReturn(1);
+
+        AccountingVoucherPO savedVoucher = new AccountingVoucherPO();
+        savedVoucher.setVoucherNo("VOU002");
+        savedVoucher.setAmount(new BigDecimal("200.00"));
+        when(accountingVoucherRepository.selectByTraceNo("TRC002")).thenReturn(List.of(savedVoucher));
+
+        VoucherGenerateResponse resp = service.generateVoucher(req);
+        assertThat(resp).isNotNull();
+        assertThat(resp.getEntries().get(0).getAccountNo()).isEqualTo("ACC-FROM-DB-002");
+        verify(accountRepository).selectByOwnerIdAndSubjectCode("CUST002", "1001");
     }
 }

@@ -17,4 +17,11 @@ public class VoucherGenerateRequest {
 
     @Size(max = 32, message = "bookkeeperName 长度不能超过 32")
     private String bookkeeperName = Constants.SYSTEM_OPERATOR;
+
+    /**
+     * 可选：账户映射字典（Key: ownerId:subjectCode，Value: 真实的 accountNo）
+     * 记账主流程中由前置开户预检（AccountPreCheckDomainService）零成本内存透传，避免凭证生成二次查库
+     */
+    private java.util.Map<String, String> accountMapping;
 }
+

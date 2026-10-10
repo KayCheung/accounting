@@ -45,7 +45,16 @@ class BufferPostingDomainServiceTest {
     private com.kltb.accounting.core.infrastructure.spel.RuleScriptExecutor ruleScriptExecutor;
 
     @InjectMocks
+    private AuxiliaryDomainService auxiliaryDomainService;
+
     private BufferPostingDomainService bufferPostingDomainService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void setUp() {
+        bufferPostingDomainService = new BufferPostingDomainService(
+                bufferPostingRuleMapper, bufferPostingDetailMapper, auxiliaryDomainService);
+    }
+
 
     // ==================== matchBufferRule 测试 ====================
 

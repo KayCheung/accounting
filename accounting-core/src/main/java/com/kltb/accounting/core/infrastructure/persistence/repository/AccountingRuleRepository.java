@@ -10,6 +10,7 @@ import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountingRule
 import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountingRuleDetailMapper;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountingRuleMapper;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.BufferPostingDetailMapper;
+import com.kltb.accounting.core.infrastructure.redis.AccountingRuleCacheService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
@@ -30,7 +31,7 @@ public class AccountingRuleRepository {
     private final AccountingRuleDetailMapper ruleDetailMapper;
     private final AccountingRuleAuxiliaryMapper ruleAuxiliaryMapper;
     private final BufferPostingDetailMapper bufferPostingDetailMapper;
-    private final com.kltb.accounting.core.infrastructure.redis.AccountingRuleCacheService accountingRuleCacheService;
+    private final AccountingRuleCacheService accountingRuleCacheService;
 
     /**
      * 按业务键查询记账规则（优先走 L1/L2 二级缓存）

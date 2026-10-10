@@ -917,6 +917,15 @@
       - **领域命令对象封装（消除方法长参数）**：新建 `JournalCreateCommand` 与 `FreezeRecordCommand` 领域值对象/命令对象，彻底替换 `JournalingDomainService.persistJournal`（13 个参数）与 `persistFreezeRecord`（11 个参数）的长参数反模式，原多参数重载标记 `@Deprecated`，符合 Clean Code 原则；
       - **凭证状态枚举比较安全修复**：针对 `JournalingApplicationService` 中 `postResp.getVoucherStatus() == VoucherStatusEnum.POSTED.getCode()` 包装类直接 `==` 比较的反模式，在 `VoucherStatusEnum` 中补充语义化防御方法 `matches(Integer)` 与 `isPosted(Integer)`，彻底消除潜在 NPE 与 Integer 引用比较陷阱；
       - **记账规则二级高可用缓存（Caffeine L1 + Redis L2）**：排查并治理 `AccountingRuleRepository.selectByBusinessKey` 在记账流程中无缓存且单次请求重复查库 3 次的性能瓶颈。新增 `AccountingRuleCacheService`，构建 L1 本地缓存（Caffeine，容量 1000，TTL 5min）+ L2 分布式缓存（Redisson，TTL 1h），具备防穿透空值哨兵、主动写失效（`insertRule`/`updateRuleById`）以及 Redis 宕机自动降级 DB 的高可用机制；同时在记账与冻结编排流程中复用上下文匹配规则，将同流程查询次数压降至 0 DB I/O。
+    - **凭证分录真实账户编号映射与零成本透传性能治理（Step 23.14）**：
+      - **问题根因排查**：历史实现中 `VoucheringApplicationService.resolveAccountNo` 直接使用 `detail.getCustomerId()` 作为占位符，导致生成的凭证分录 `entry.accountNo` 记录为外部客户号而非真实内部开立的资金账户号；
+      - **零成本内存字典透传架构（0 DB I/O）**：针对二次查库会造成 N+1 数据库开销并拖慢主记账链路的性能风险，重构 `AccountPreCheckDomainService.preCheckAndOpenAccounts` 返回包含 `accountMapping` 内存字典（Key: `ownerId:subjectCode`，Value: 真实的 `accountNo`）的 `AccountPreCheckResult`；在 `JournalingApplicationService.doSubmit` 中直接透传至 `VoucherGenerateRequest`；
+      - **多级高性能账户解析策略（L0 内存字典 -> L1 仓储精确匹配 -> L2 内部账户/科目兜底）**：凭证生成器优先读取 L0 内存字典（O(1) 访问，0 次数据库往返）；在外部独立调用未传入映射时无缝降级走仓储回源；同时 `doFreeze` 流程复用该映射，彻底消除冗余数据库 I/O；
+      - **单测断言性能闭环**：在 `VoucheringApplicationServiceTest` 中使用 `verifyNoInteractions(accountRepository)` 严格验证透传命中场景下零次 DB 交互；
+    - **辅助核算领域服务独立抽离与 DDD 限界上下文重构（Step 23.14）**：
+      - **领域职责重构与解耦**：彻底纠正此前辅助核算分摊算法与明细持久化错误混入 `BufferPostingDomainService` 的单一职责违背（SRP）问题；新建专职领域服务 `AuxiliaryDomainService`，全权掌管辅助核算固定金额、SpEL 脚本动态计算、比例分摊补差与明细批量入库；
+      - **缓冲记账服务轻量化**：`BufferPostingDomainService` 重新纯化为专注于缓冲规则匹配、并发分片计算与缓冲持久化，旧方法保持向下兼容委托并标记 `@Deprecated`；
+      - **测试覆盖**：新增 `AuxiliaryDomainServiceTest`（5 个用例），更新全量单测，全工程 341 个测试用例 100% 通过。
 - [x] **Step 23** · 业务功能页面开发全量交付完毕（100% 完成）
 
 

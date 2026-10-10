@@ -31,6 +31,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -111,6 +112,13 @@ class JournalingApplicationServiceTest {
                     java.util.function.Supplier<?> action = invocation.getArgument(3);
                     return action.get();
                 });
+
+        lenient().when(accountPreCheckDomainService.preCheckAndOpenAccounts(any(AccountingRulePO.class), any(), any()))
+                .thenReturn(new com.kltb.accounting.core.domain.model.AccountPreCheckResult(
+                        List.of("ACC001"), Map.of("CUST001:1001", "ACC001", "USER100:200101", "ACCT2001010001")));
+        lenient().when(accountPreCheckDomainService.preCheckAndOpenAccounts(anyString(), anyString(), anyString(), any(), any()))
+                .thenReturn(new com.kltb.accounting.core.domain.model.AccountPreCheckResult(
+                        List.of("ACC001"), Map.of("CUST001:1001", "ACC001", "USER100:200101", "ACCT2001010001")));
     }
 
     @Test
@@ -194,7 +202,7 @@ class JournalingApplicationServiceTest {
         AccountPO account = new AccountPO();
         account.setAccountNo("ACCT2001010001");
         account.setBalance(new BigDecimal("500.00"));
-        when(accountRepository.selectByOwnerIdAndSubjectCode("USER100", "200101")).thenReturn(account);
+        lenient().when(accountRepository.selectByOwnerIdAndSubjectCode("USER100", "200101")).thenReturn(account);
 
         BusinessRecordPO recordPO = new BusinessRecordPO();
         recordPO.setTraceNo("FRZ_TRACE_001");

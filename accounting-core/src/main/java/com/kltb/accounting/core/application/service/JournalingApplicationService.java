@@ -9,6 +9,7 @@ import com.kltb.accounting.api.request.*;
 import com.kltb.accounting.api.response.*;
 import com.kltb.accounting.core.application.assembler.JournalingAssembler;
 import com.kltb.accounting.core.domain.enums.*;
+import com.kltb.accounting.core.domain.model.AccountPreCheckResult;
 import com.kltb.accounting.core.domain.model.FreezeRecordCommand;
 import com.kltb.accounting.core.domain.model.JournalCreateCommand;
 import com.kltb.accounting.core.domain.service.AccountPreCheckDomainService;
@@ -157,18 +158,20 @@ public class JournalingApplicationService {
 
         // 预开户检查 + 自动开户（直接复用流程已匹配规则，彻底避免重复查询）
         Map<String, CustomerTypeEnum> customerMap = buildCustomerMap(request.getDetails());
+        AccountPreCheckResult preCheckResult;
         if (rule != null) {
-            accountPreCheckDomainService.checkAndOpenAccounts(rule, customerMap, request.getTraceNo());
+            preCheckResult = accountPreCheckDomainService.preCheckAndOpenAccounts(rule, customerMap, request.getTraceNo());
         } else {
-            accountPreCheckDomainService.checkAndOpenAccounts(
+            preCheckResult = accountPreCheckDomainService.preCheckAndOpenAccounts(
                     request.getBusinessCode(), request.getTradingCode(), request.getPayChannel(),
                     customerMap, request.getTraceNo());
         }
 
-        // Phase 2: 凭证生成（Vouchering）
+        // Phase 2: 凭证生成（Vouchering，透传账户内存字典，0 DB I/O）
         VoucherGenerateRequest voucherReq = new VoucherGenerateRequest();
         voucherReq.setTraceNo(request.getTraceNo());
         voucherReq.setBookkeeperName(Constants.SYSTEM_OPERATOR);
+        voucherReq.setAccountMapping(preCheckResult != null ? preCheckResult.getAccountMapping() : Collections.emptyMap());
         VoucherGenerateResponse voucherResp = voucheringApplicationService.generateVoucher(voucherReq);
 
         // Phase 4: 过账执行（Posting）
@@ -262,7 +265,7 @@ public class JournalingApplicationService {
 
         // 预开户检查 + 自动开户（直接复用规则，避免重复查库）
         Map<String, CustomerTypeEnum> customerMap = buildCustomerMap(request.getDetails());
-        accountPreCheckDomainService.checkAndOpenAccounts(rule, customerMap, request.getTraceNo());
+        AccountPreCheckResult preCheckResult = accountPreCheckDomainService.preCheckAndOpenAccounts(rule, customerMap, request.getTraceNo());
         List<AccountingRuleDetailPO> ruleDetails = accountingRuleRepository.selectDetailsWithAuxiliary(rule.getId());
         if (ruleDetails == null || ruleDetails.isEmpty()) {
             throw new AccountException(ResultCode.RULE_NOT_FOUND, "记账规则明细为空");
@@ -318,15 +321,22 @@ public class JournalingApplicationService {
                 matchedDetail = request.getDetails().get(0);
             }
 
-            AccountPO account = accountRepository.selectByOwnerIdAndSubjectCode(
-                    matchedDetail.getCustomerId(), payoutRuleDetail.getSubjectCode());
-            if (account == null) {
-                throw new AccountException(ResultCode.ACCOUNT_NOT_FOUND,
-                        "出金方账户未找到: customerId=" + matchedDetail.getCustomerId() + ", subjectCode=" + payoutRuleDetail.getSubjectCode());
+            // 优先从内存字典获取真实账户号，未命中再回源 DB，彻底消除二次查库
+            String accountNo = preCheckResult != null
+                    ? preCheckResult.resolveAccountNo(matchedDetail.getCustomerId(), payoutRuleDetail.getSubjectCode())
+                    : null;
+            if (accountNo == null) {
+                AccountPO account = accountRepository.selectByOwnerIdAndSubjectCode(
+                        matchedDetail.getCustomerId(), payoutRuleDetail.getSubjectCode());
+                if (account == null) {
+                    throw new AccountException(ResultCode.ACCOUNT_NOT_FOUND,
+                            "出金方账户未找到: customerId=" + matchedDetail.getCustomerId() + ", subjectCode=" + payoutRuleDetail.getSubjectCode());
+                }
+                accountNo = account.getAccountNo();
             }
 
             AccountFreezeDetailPO freezeDetail = freezeDomainService.freezeFund(
-                    account.getAccountNo(), matchedDetail.getAmount(), request.getBusinessCode(), request.getTraceNo(), expireTime, request.getSummary());
+                    accountNo, matchedDetail.getAmount(), request.getBusinessCode(), request.getTraceNo(), expireTime, request.getSummary());
             freezeDetails.add(freezeDetail);
         }
 
