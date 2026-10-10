@@ -6,7 +6,18 @@ import request from '@/utils/request'
  */
 export interface BalanceSheetQueryParams {
   accountingDate: string
+  compareDate?: string
   compareYearStart?: boolean
+}
+
+/**
+ * 资产负债表科目明细项
+ */
+export interface BalanceSheetSubjectDetail {
+  subjectCode: string
+  subjectName: string
+  endAmount: number
+  beginAmount: number
 }
 
 /**
@@ -19,6 +30,7 @@ export interface BalanceSheetItem {
   subjectCodes?: string
   endAmount: number
   beginAmount: number
+  detailSubjects?: BalanceSheetSubjectDetail[]
 }
 
 /**
@@ -43,9 +55,24 @@ export interface BalanceSheetResponse {
  * 利润表查询参数
  */
 export interface IncomeStatementQueryParams {
-  year: number
-  month: number
+  year?: number
+  month?: number
   compareType?: number // 1-上年同期, 2-上月环比, 0-不对比
+  startDate?: string
+  endDate?: string
+  compareStartDate?: string
+  compareEndDate?: string
+}
+
+/**
+ * 利润表科目明细项
+ */
+export interface IncomeStatementSubjectDetail {
+  subjectCode: string
+  subjectName: string
+  currentAmount: number
+  yearTotalAmount: number
+  compareAmount: number
 }
 
 /**
@@ -59,6 +86,7 @@ export interface IncomeStatementItem {
   yearTotalAmount: number
   compareAmount: number
   growthRate: number
+  detailSubjects?: IncomeStatementSubjectDetail[]
 }
 
 /**
@@ -213,3 +241,11 @@ export function getSubsidiaryLedger(params: SubsidiaryLedgerQueryParams): Promis
 export function generateReports(accountingDate?: string): Promise<void> {
   return request.post<void>('/report/generate', null, { params: { accountingDate } })
 }
+
+/**
+ * 获取现有科目级次列表
+ */
+export function getSubjectLevels(): Promise<number[]> {
+  return request.get<number[]>('/report/subject-levels')
+}
+

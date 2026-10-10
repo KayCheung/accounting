@@ -24,6 +24,7 @@ import java.time.LocalDate;
 public class FinancialReportApplicationService {
 
     private final FinancialReportDomainService reportDomainService;
+    private final com.kltb.accounting.core.infrastructure.persistence.repository.SubjectRepository subjectRepository;
 
     /**
      * 查询资产负债表
@@ -86,5 +87,12 @@ public class FinancialReportApplicationService {
                 isResp.getPeriodDesc(), isResp.getKpi().getRevenueMonth(), isResp.getKpi().getNetProfitMonth());
 
         log.info("[REPORT-JOB] 定期生成并预热财务报表完毕: date={}", accountingDate);
+    }
+
+    /**
+     * 获取系统实际配置的所有科目级次列表
+     */
+    public java.util.List<Integer> getSubjectLevels() {
+        return subjectRepository.selectDistinctLevels();
     }
 }

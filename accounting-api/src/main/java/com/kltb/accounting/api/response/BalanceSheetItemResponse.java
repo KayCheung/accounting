@@ -33,4 +33,7 @@ public class BalanceSheetItemResponse implements Serializable {
 
     @Schema(description = "年初余额", example = "12941750.00")
     private BigDecimal beginAmount;
+
+    @Schema(description = "归集到底层具体科目明细清单")
+    private java.util.List<BalanceSheetSubjectDetailResponse> detailSubjects;
 }

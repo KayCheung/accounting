@@ -39,9 +39,12 @@
         <el-form-item label="科目级次">
           <el-select v-model="queryForm.subjectLevel" placeholder="所有级次" clearable style="width: 120px;">
             <el-option label="所有级次" :value="undefined" />
-            <el-option label="一级科目" :value="1" />
-            <el-option label="二级科目" :value="2" />
-            <el-option label="三级科目" :value="3" />
+            <el-option
+              v-for="lvl in subjectLevels"
+              :key="lvl"
+              :label="`${lvl}级科目`"
+              :value="lvl"
+            />
           </el-select>
         </el-form-item>
 
@@ -189,6 +192,7 @@ import {
 import { ElMessage } from 'element-plus'
 import {
   getGeneralLedger,
+  getSubjectLevels,
   type GeneralLedgerResponse
 } from '@/api/report'
 
@@ -199,6 +203,7 @@ const startStr = `${year}-01-01`
 const endStr = `${year}-${String(month).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
 const dateRange = ref<[string, string]>([startStr, endStr])
+const subjectLevels = ref<number[]>([1, 2, 3])
 
 const queryForm = reactive({
   startDate: startStr,
@@ -272,7 +277,15 @@ function formatMoney(num?: number | null): string {
   })
 }
 
-onMounted(() => {
+onMounted(async () => {
+  try {
+    const levels = await getSubjectLevels()
+    if (levels && levels.length > 0) {
+      subjectLevels.value = levels
+    }
+  } catch {
+    // 降级容错保留默认 [1, 2, 3]
+  }
   fetchData()
 })
 </script>

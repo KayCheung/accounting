@@ -63,4 +63,10 @@ public class FinancialReportController {
         reportApplicationService.generateAndArchiveReports(targetDate);
         return ApiResponse.ok();
     }
+
+    @GetMapping("/subject-levels")
+    @Operation(summary = "获取当前系统所有的科目级次列表", description = "动态查询科目表中实际存在的所有科目级次，用于报表和总账级次动态筛选")
+    public ApiResponse<java.util.List<Integer>> getSubjectLevels() {
+        return ApiResponse.ok(reportApplicationService.getSubjectLevels());
+    }
 }

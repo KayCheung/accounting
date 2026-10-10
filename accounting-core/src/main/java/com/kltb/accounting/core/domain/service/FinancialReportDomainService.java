@@ -49,14 +49,16 @@ public class FinancialReportDomainService {
 
     public BalanceSheetResponse generateBalanceSheet(BalanceSheetQueryRequest request) {
         LocalDate accountingDate = request.getAccountingDate();
-        LocalDate compareDate = LocalDate.of(accountingDate.getYear(), 1, 1);
+        LocalDate compareDate = request.getCompareDate() != null
+                ? request.getCompareDate()
+                : LocalDate.of(accountingDate.getYear(), 1, 1);
 
         // 1. 获取所有科目定义并构建映射
         List<AccountSubjectPO> allSubjects = subjectRepository.selectAllSubjects();
         Map<String, AccountSubjectPO> subjectMap = allSubjects.stream()
                 .collect(Collectors.toMap(AccountSubjectPO::getSubjectCode, s -> s, (s1, s2) -> s1));
 
-        // 2. 取报告期当日日余额以及年初日余额
+        // 2. 取报告期当日日余额以及年初/对比日日余额
         List<AccountBalancePO> endBalances = accountBalanceRepository.selectByDate(accountingDate);
         List<AccountBalancePO> beginBalances = accountBalanceRepository.selectByDate(compareDate);
 
@@ -281,36 +283,52 @@ public class FinancialReportDomainService {
     // =========================================================================
 
     public IncomeStatementResponse generateIncomeStatement(IncomeStatementQueryRequest request) {
-        int year = request.getYear();
-        int month = request.getMonth();
+        LocalDate monthStart;
+        LocalDate monthEnd;
+        LocalDate yearStart;
+        String periodDesc;
+        Map<String, BigDecimal> compareNetMap;
 
-        LocalDate monthStart = LocalDate.of(year, month, 1);
-        LocalDate monthEnd = monthStart.with(TemporalAdjusters.lastDayOfMonth());
-        LocalDate yearStart = LocalDate.of(year, 1, 1);
+        if (request.getStartDate() != null && request.getEndDate() != null) {
+            // 自定义期间模式
+            monthStart = request.getStartDate();
+            monthEnd = request.getEndDate();
+            yearStart = LocalDate.of(monthStart.getYear(), 1, 1);
+            periodDesc = monthStart + " ~ " + monthEnd;
 
-        // 1. 获取本月与本年日余额发生额列表
+            LocalDate cmpStart = request.getCompareStartDate() != null ? request.getCompareStartDate() : monthStart.minusYears(1);
+            LocalDate cmpEnd = request.getCompareEndDate() != null ? request.getCompareEndDate() : monthEnd.minusYears(1);
+            List<AccountBalancePO> prevBalances = accountBalanceRepository.selectByDateRange(cmpStart, cmpEnd);
+            compareNetMap = aggregateNetAmounts(prevBalances);
+        } else {
+            // 标准月度模式
+            int year = request.getYear() != null ? request.getYear() : LocalDate.now().getYear();
+            int month = request.getMonth() != null ? request.getMonth() : LocalDate.now().getMonthValue();
+            monthStart = LocalDate.of(year, month, 1);
+            monthEnd = monthStart.with(TemporalAdjusters.lastDayOfMonth());
+            yearStart = LocalDate.of(year, 1, 1);
+            periodDesc = year + "年1-" + month + "月";
+
+            if (Integer.valueOf(2).equals(request.getCompareType())) {
+                LocalDate prevMonth = monthStart.minusMonths(1);
+                LocalDate prevMonthEnd = prevMonth.with(TemporalAdjusters.lastDayOfMonth());
+                List<AccountBalancePO> prevBalances = accountBalanceRepository.selectByDateRange(prevMonth, prevMonthEnd);
+                compareNetMap = aggregateNetAmounts(prevBalances);
+            } else {
+                LocalDate prevYearStart = monthStart.minusYears(1);
+                LocalDate prevYearEnd = monthEnd.minusYears(1);
+                List<AccountBalancePO> prevBalances = accountBalanceRepository.selectByDateRange(prevYearStart, prevYearEnd);
+                compareNetMap = aggregateNetAmounts(prevBalances);
+            }
+        }
+
+        // 1. 获取本期与本年日余额发生额列表
         List<AccountBalancePO> monthBalances = accountBalanceRepository.selectByDateRange(monthStart, monthEnd);
         List<AccountBalancePO> yearBalances = accountBalanceRepository.selectByDateRange(yearStart, monthEnd);
 
         // 计算各科目的净发生额（收入类贷方-借方，成本费用类借方-贷方）
         Map<String, BigDecimal> monthNetMap = aggregateNetAmounts(monthBalances);
         Map<String, BigDecimal> yearNetMap = aggregateNetAmounts(yearBalances);
-
-        // 对比期（上年同期或上月）
-        Map<String, BigDecimal> compareNetMap;
-        if (Integer.valueOf(2).equals(request.getCompareType())) {
-            // 上月
-            LocalDate prevMonth = monthStart.minusMonths(1);
-            LocalDate prevMonthEnd = prevMonth.with(TemporalAdjusters.lastDayOfMonth());
-            List<AccountBalancePO> prevBalances = accountBalanceRepository.selectByDateRange(prevMonth, prevMonthEnd);
-            compareNetMap = aggregateNetAmounts(prevBalances);
-        } else {
-            // 上年同期
-            LocalDate prevYearStart = monthStart.minusYears(1);
-            LocalDate prevYearEnd = monthEnd.minusYears(1);
-            List<AccountBalancePO> prevBalances = accountBalanceRepository.selectByDateRange(prevYearStart, prevYearEnd);
-            compareNetMap = aggregateNetAmounts(prevBalances);
-        }
 
         List<IncomeStatementItemResponse> items = new ArrayList<>();
 
@@ -421,7 +439,7 @@ public class FinancialReportDomainService {
                 .build();
 
         return IncomeStatementResponse.builder()
-                .periodDesc(year + "年1-" + month + "月")
+                .periodDesc(periodDesc)
                 .accountingDate(monthEnd)
                 .currency("CNY")
                 .unitName("智能账务核心企业")

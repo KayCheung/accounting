@@ -11,18 +11,29 @@
             placeholder="选择报告期截止日"
             value-format="YYYY-MM-DD"
             :clearable="false"
+            style="width: 160px;"
+            @change="handleSearch"
+          />
+        </el-form-item>
+
+        <el-form-item label="对比基准日期">
+          <el-date-picker
+            v-model="queryForm.compareDate"
+            type="date"
+            placeholder="对比时点(默认年初)"
+            value-format="YYYY-MM-DD"
+            clearable
             style="width: 170px;"
             @change="handleSearch"
           />
         </el-form-item>
 
-        <el-form-item label="对比年初">
-          <el-switch
-            v-model="queryForm.compareYearStart"
-            active-text="对比"
-            inactive-text="不对比"
-            @change="handleSearch"
-          />
+        <el-form-item label="快捷对比">
+          <el-button-group>
+            <el-button size="small" @click="setComparePreset('year-start')">年初数</el-button>
+            <el-button size="small" @click="setComparePreset('month-end')">上月月末</el-button>
+            <el-button size="small" @click="setComparePreset('last-year')">上年同期</el-button>
+          </el-button-group>
         </el-form-item>
 
         <el-form-item>
@@ -87,27 +98,80 @@
                 <th style="width: 45%;">资 产</th>
                 <th style="width: 10%; text-align: center;">行次</th>
                 <th style="width: 22.5%; text-align: right;">期末余额</th>
-                <th style="width: 22.5%; text-align: right;">年初余额</th>
+                <th style="width: 22.5%; text-align: right;">
+                  {{ reportData?.compareDate ? `对比余额 (${reportData.compareDate})` : '年初余额' }}
+                </th>
               </tr>
             </thead>
             <tbody>
-              <tr
+              <template
                 v-for="item in reportData?.assetItems || []"
                 :key="'asset_' + item.rowNo"
-                :class="getRowClass(item)"
               >
-                <td class="col-name" :style="{ paddingLeft: item.itemLevel === 2 ? '24px' : '8px' }">
-                  <span :class="{ 'is-bold': item.itemLevel !== 2 }">{{ item.itemName }}</span>
-                  <span v-if="item.subjectCodes" class="sub-hint">({{ item.subjectCodes }})</span>
-                </td>
-                <td class="col-row-no">{{ item.rowNo }}</td>
-                <td class="col-amount mono">
-                  {{ item.itemLevel === 1 ? '' : formatMoney(item.endAmount) }}
-                </td>
-                <td class="col-amount mono">
-                  {{ item.itemLevel === 1 ? '' : formatMoney(item.beginAmount) }}
-                </td>
-              </tr>
+                <tr :class="getRowClass(item)">
+                  <td class="col-name" :style="{ paddingLeft: item.itemLevel === 2 ? '24px' : '8px' }">
+                    <span
+                      v-if="item.detailSubjects && item.detailSubjects.length > 0"
+                      class="expand-icon"
+                      title="展开/折叠明细科目"
+                      @click="toggleExpand('asset', item.rowNo)"
+                    >
+                      <el-icon :class="{ 'is-rotated': isExpanded('asset', item.rowNo) }">
+                        <ArrowRight />
+                      </el-icon>
+                    </span>
+                    <span :class="{ 'is-bold': item.itemLevel !== 2 }">{{ item.itemName }}</span>
+                    <span v-if="item.subjectCodes" class="sub-hint">({{ item.subjectCodes }})</span>
+                    <el-tag
+                      v-if="item.detailSubjects && item.detailSubjects.length > 1"
+                      size="small"
+                      type="info"
+                      effect="light"
+                      class="subject-count-tag"
+                      @click="toggleExpand('asset', item.rowNo)"
+                    >
+                      {{ item.detailSubjects.length }}科目
+                    </el-tag>
+                  </td>
+                  <td class="col-row-no">{{ item.rowNo }}</td>
+                  <td class="col-amount mono">
+                    {{ item.itemLevel === 1 ? '' : formatMoney(item.endAmount) }}
+                  </td>
+                  <td class="col-amount mono">
+                    {{ item.itemLevel === 1 ? '' : formatMoney(item.beginAmount) }}
+                  </td>
+                </tr>
+
+                <!-- 明细展开行 -->
+                <tr
+                  v-if="isExpanded('asset', item.rowNo) && item.detailSubjects && item.detailSubjects.length > 0"
+                  class="row-detail-expanded"
+                >
+                  <td colspan="4" class="expanded-cell">
+                    <div class="sub-detail-wrapper">
+                      <div class="sub-detail-header">包含底层科目明细 ({{ item.itemName }})：</div>
+                      <table class="inner-detail-table">
+                        <thead>
+                          <tr>
+                            <th style="width: 25%;">科目编码</th>
+                            <th style="width: 35%;">科目名称</th>
+                            <th style="width: 20%; text-align: right;">期末余额</th>
+                            <th style="width: 20%; text-align: right;">对比/年初余额</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="sub in item.detailSubjects" :key="sub.subjectCode">
+                            <td class="mono sub-code">{{ sub.subjectCode }}</td>
+                            <td>{{ sub.subjectName }}</td>
+                            <td class="mono" style="text-align: right;">{{ formatMoney(sub.endAmount) }}</td>
+                            <td class="mono" style="text-align: right;">{{ formatMoney(sub.beginAmount) }}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </td>
+                </tr>
+              </template>
             </tbody>
           </table>
         </div>
@@ -123,27 +187,80 @@
                 <th style="width: 45%;">负债和所有者权益</th>
                 <th style="width: 10%; text-align: center;">行次</th>
                 <th style="width: 22.5%; text-align: right;">期末余额</th>
-                <th style="width: 22.5%; text-align: right;">年初余额</th>
+                <th style="width: 22.5%; text-align: right;">
+                  {{ reportData?.compareDate ? `对比余额 (${reportData.compareDate})` : '年初余额' }}
+                </th>
               </tr>
             </thead>
             <tbody>
-              <tr
+              <template
                 v-for="item in reportData?.liabilityAndEquityItems || []"
                 :key="'liab_' + item.rowNo"
-                :class="getRowClass(item)"
               >
-                <td class="col-name" :style="{ paddingLeft: item.itemLevel === 2 ? '24px' : '8px' }">
-                  <span :class="{ 'is-bold': item.itemLevel !== 2 }">{{ item.itemName }}</span>
-                  <span v-if="item.subjectCodes" class="sub-hint">({{ item.subjectCodes }})</span>
-                </td>
-                <td class="col-row-no">{{ item.rowNo }}</td>
-                <td class="col-amount mono">
-                  {{ item.itemLevel === 1 ? '' : formatMoney(item.endAmount) }}
-                </td>
-                <td class="col-amount mono">
-                  {{ item.itemLevel === 1 ? '' : formatMoney(item.beginAmount) }}
-                </td>
-              </tr>
+                <tr :class="getRowClass(item)">
+                  <td class="col-name" :style="{ paddingLeft: item.itemLevel === 2 ? '24px' : '8px' }">
+                    <span
+                      v-if="item.detailSubjects && item.detailSubjects.length > 0"
+                      class="expand-icon"
+                      title="展开/折叠明细科目"
+                      @click="toggleExpand('liability', item.rowNo)"
+                    >
+                      <el-icon :class="{ 'is-rotated': isExpanded('liability', item.rowNo) }">
+                        <ArrowRight />
+                      </el-icon>
+                    </span>
+                    <span :class="{ 'is-bold': item.itemLevel !== 2 }">{{ item.itemName }}</span>
+                    <span v-if="item.subjectCodes" class="sub-hint">({{ item.subjectCodes }})</span>
+                    <el-tag
+                      v-if="item.detailSubjects && item.detailSubjects.length > 1"
+                      size="small"
+                      type="info"
+                      effect="light"
+                      class="subject-count-tag"
+                      @click="toggleExpand('liability', item.rowNo)"
+                    >
+                      {{ item.detailSubjects.length }}科目
+                    </el-tag>
+                  </td>
+                  <td class="col-row-no">{{ item.rowNo }}</td>
+                  <td class="col-amount mono">
+                    {{ item.itemLevel === 1 ? '' : formatMoney(item.endAmount) }}
+                  </td>
+                  <td class="col-amount mono">
+                    {{ item.itemLevel === 1 ? '' : formatMoney(item.beginAmount) }}
+                  </td>
+                </tr>
+
+                <!-- 明细展开行 -->
+                <tr
+                  v-if="isExpanded('liability', item.rowNo) && item.detailSubjects && item.detailSubjects.length > 0"
+                  class="row-detail-expanded"
+                >
+                  <td colspan="4" class="expanded-cell">
+                    <div class="sub-detail-wrapper">
+                      <div class="sub-detail-header">包含底层科目明细 ({{ item.itemName }})：</div>
+                      <table class="inner-detail-table">
+                        <thead>
+                          <tr>
+                            <th style="width: 25%;">科目编码</th>
+                            <th style="width: 35%;">科目名称</th>
+                            <th style="width: 20%; text-align: right;">期末余额</th>
+                            <th style="width: 20%; text-align: right;">对比/年初余额</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="sub in item.detailSubjects" :key="sub.subjectCode">
+                            <td class="mono sub-code">{{ sub.subjectCode }}</td>
+                            <td>{{ sub.subjectName }}</td>
+                            <td class="mono" style="text-align: right;">{{ formatMoney(sub.endAmount) }}</td>
+                            <td class="mono" style="text-align: right;">{{ formatMoney(sub.beginAmount) }}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </td>
+                </tr>
+              </template>
             </tbody>
           </table>
         </div>
@@ -160,7 +277,8 @@ import {
   Download,
   Printer,
   CircleCheckFilled,
-  WarningFilled
+  WarningFilled,
+  ArrowRight
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import {
@@ -175,17 +293,60 @@ const today = new Date().toISOString().split('T')[0]
 
 const queryForm = reactive({
   accountingDate: today,
+  compareDate: '',
   compareYearStart: true
 })
 
 const loading = ref(false)
 const reportData = ref<BalanceSheetResponse | null>(null)
 
+// 展开折叠状态管理
+const expandedAssetRows = ref<Set<number>>(new Set())
+const expandedLiabilityRows = ref<Set<number>>(new Set())
+
+function isExpanded(side: 'asset' | 'liability', rowNo: number): boolean {
+  return side === 'asset' ? expandedAssetRows.value.has(rowNo) : expandedLiabilityRows.value.has(rowNo)
+}
+
+function toggleExpand(side: 'asset' | 'liability', rowNo: number) {
+  const set = side === 'asset' ? expandedAssetRows.value : expandedLiabilityRows.value
+  if (set.has(rowNo)) {
+    set.delete(rowNo)
+  } else {
+    set.add(rowNo)
+  }
+}
+
+function setComparePreset(type: 'year-start' | 'month-end' | 'last-year') {
+  if (!queryForm.accountingDate) return
+  const parts = queryForm.accountingDate.split('-').map(Number)
+  const y = parts[0]
+  const m = parts[1]
+  const d = parts[2]
+
+  if (type === 'year-start') {
+    queryForm.compareDate = `${y}-01-01`
+  } else if (type === 'month-end') {
+    const prevMonthEnd = new Date(y, m - 1, 0)
+    const py = prevMonthEnd.getFullYear()
+    const pm = String(prevMonthEnd.getMonth() + 1).padStart(2, '0')
+    const pd = String(prevMonthEnd.getDate()).padStart(2, '0')
+    queryForm.compareDate = `${py}-${pm}-${pd}`
+  } else if (type === 'last-year') {
+    const ly = y - 1
+    const lm = String(m).padStart(2, '0')
+    const ld = String(d).padStart(2, '0')
+    queryForm.compareDate = `${ly}-${lm}-${ld}`
+  }
+  handleSearch()
+}
+
 async function fetchData() {
   loading.value = true
   try {
     const res = await getBalanceSheet({
       accountingDate: queryForm.accountingDate,
+      compareDate: queryForm.compareDate || undefined,
       compareYearStart: queryForm.compareYearStart
     })
     reportData.value = res
@@ -400,6 +561,81 @@ onMounted(() => {
     border-top: 1px solid #d9d9d9;
     border-bottom: 2px solid #595959;
     color: #1f2229;
+  }
+
+  .expand-icon {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    margin-right: 4px;
+    vertical-align: middle;
+    color: #409eff;
+
+    .el-icon {
+      transition: transform 0.2s ease-in-out;
+      font-size: 13px;
+
+      &.is-rotated {
+        transform: rotate(90deg);
+      }
+    }
+  }
+
+  .subject-count-tag {
+    cursor: pointer;
+    margin-left: 6px;
+    font-size: 11px;
+    padding: 0 4px;
+    height: 18px;
+    line-height: 16px;
+  }
+
+  .row-detail-expanded {
+    background-color: #fcfdfe;
+
+    td.expanded-cell {
+      padding: 6px 12px 12px 12px;
+      border-bottom: 1px dashed #dcdfe6;
+    }
+  }
+
+  .sub-detail-wrapper {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 8px 12px;
+
+    .sub-detail-header {
+      font-size: 12px;
+      font-weight: 600;
+      color: #3b82f6;
+      margin-bottom: 6px;
+    }
+
+    .inner-detail-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+
+      th {
+        background: #edf2f7;
+        color: #4a5568;
+        font-weight: 600;
+        padding: 5px 8px;
+        border: 1px solid #e2e8f0;
+      }
+
+      td {
+        padding: 5px 8px;
+        border: 1px solid #e2e8f0;
+        color: #2d3748;
+      }
+
+      .sub-code {
+        color: #3182ce;
+        font-weight: 500;
+      }
+    }
   }
 }
 

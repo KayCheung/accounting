@@ -36,4 +36,7 @@ public class IncomeStatementItemResponse implements Serializable {
 
     @Schema(description = "同比增长率（%）", example = "12.4")
     private BigDecimal growthRate;
+
+    @Schema(description = "归集到底层具体科目明细清单")
+    private java.util.List<IncomeStatementSubjectDetailResponse> detailSubjects;
 }

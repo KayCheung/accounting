@@ -277,4 +277,23 @@ public class SubjectRepository {
                 .orderByAsc(AccountSubjectPO::getSubjectCode));
         return list != null ? list : Collections.emptyList();
     }
+
+    /**
+     * 查询系统中实际存在的所有科目级次列表（去重升序，如 [1, 2, 3]）
+     */
+    public List<Integer> selectDistinctLevels() {
+        List<AccountSubjectPO> list = subjectMapper.selectList(new LambdaQueryWrapper<AccountSubjectPO>()
+                .select(AccountSubjectPO::getSubjectLevel)
+                .eq(AccountSubjectPO::getIsDelete, 0));
+        if (list == null || list.isEmpty()) {
+            return List.of(1);
+        }
+        return list.stream()
+                .map(AccountSubjectPO::getSubjectLevel)
+                .filter(Objects::nonNull)
+                .map(Integer::valueOf)
+                .distinct()
+                .sorted()
+                .toList();
+    }
 }
