@@ -1,24 +1,19 @@
 package com.kltb.accounting.core.domain.service;
 
-import cn.hutool.core.util.StrUtil;
-import com.kltb.accounting.api.constant.ResultCode;
-import com.kltb.accounting.core.domain.enums.*;
-import com.kltb.accounting.core.infrastructure.persistence.entity.*;
-import com.kltb.accounting.core.infrastructure.persistence.mapper.*;
-import com.kltb.accounting.core.infrastructure.spel.JournalSpelContext;
-import com.kltb.accounting.core.infrastructure.spel.RuleScriptExecutor;
-import com.kltb.accounting.core.shared.exception.AccountException;
+import com.kltb.accounting.core.domain.enums.BufferModeEnum;
+import com.kltb.accounting.core.domain.enums.BufferStatusEnum;
+import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
+import com.kltb.accounting.core.domain.enums.TradeTypeEnum;
+import com.kltb.accounting.core.infrastructure.persistence.entity.BufferPostingDetailPO;
+import com.kltb.accounting.core.infrastructure.persistence.entity.BufferPostingRulePO;
+import com.kltb.accounting.core.infrastructure.persistence.mapper.BufferPostingDetailMapper;
+import com.kltb.accounting.core.infrastructure.persistence.mapper.BufferPostingRuleMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * 缓冲规则匹配与明细持久化领域服务
@@ -33,37 +28,6 @@ public class BufferPostingDomainService {
     private final BufferPostingRuleMapper bufferPostingRuleMapper;
     private final BufferPostingDetailMapper bufferPostingDetailMapper;
     private final AuxiliaryDomainService auxiliaryDomainService;
-
-    /**
-     * @deprecated 请使用 {@link AuxiliaryDomainService#calculateAuxiliaryAllocation(VoucherEntryData, List)}
-     */
-    @Deprecated
-    public List<AuxiliaryItemData> calculateAuxiliaryAllocation(
-            VoucherEntryData entryData,
-            List<AccountingRuleAuxiliaryPO> auxiliaryConfigs) {
-        return auxiliaryDomainService.calculateAuxiliaryAllocation(entryData, auxiliaryConfigs);
-    }
-
-    /**
-     * @deprecated 请使用 {@link AuxiliaryDomainService#calculateAuxiliaryAllocation(VoucherEntryData, List, BusinessDetailPO, BusinessRecordPO)}
-     */
-    @Deprecated
-    public List<AuxiliaryItemData> calculateAuxiliaryAllocation(
-            VoucherEntryData entryData,
-            List<AccountingRuleAuxiliaryPO> auxiliaryConfigs,
-            BusinessDetailPO businessDetail,
-            BusinessRecordPO journal) {
-        return auxiliaryDomainService.calculateAuxiliaryAllocation(entryData, auxiliaryConfigs, businessDetail, journal);
-    }
-
-    /**
-     * @deprecated 请使用 {@link AuxiliaryDomainService#persistAuxiliaryItems(List)}
-     */
-    @Deprecated
-    public void persistAuxiliaryItems(List<AuxiliaryItemData> items) {
-        auxiliaryDomainService.persistAuxiliaryItems(items);
-    }
-
 
     /**
      * 缓冲规则匹配

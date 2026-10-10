@@ -1,13 +1,15 @@
 package com.kltb.accounting.core.domain.service;
 
-import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.AllocationMethodEnum;
 import com.kltb.accounting.core.domain.enums.BufferModeEnum;
 import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
 import com.kltb.accounting.core.domain.enums.RuleStatusEnum;
-import com.kltb.accounting.core.infrastructure.persistence.entity.*;
-import com.kltb.accounting.core.infrastructure.persistence.mapper.*;
-import com.kltb.accounting.core.shared.exception.AccountException;
+import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingRuleAuxiliaryPO;
+import com.kltb.accounting.core.infrastructure.persistence.entity.BufferPostingDetailPO;
+import com.kltb.accounting.core.infrastructure.persistence.entity.BufferPostingRulePO;
+import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountingVoucherAuxiliaryMapper;
+import com.kltb.accounting.core.infrastructure.persistence.mapper.BufferPostingDetailMapper;
+import com.kltb.accounting.core.infrastructure.persistence.mapper.BufferPostingRuleMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,7 +24,6 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -120,173 +121,6 @@ class BufferPostingDomainServiceTest {
         assertThat(result.getRuleName()).isEqualTo("SUBJECT_RULE");
     }
 
-    // ==================== calculateAuxiliaryAllocation 测试 ====================
-
-    @Test
-    @DisplayName("辅助核算分摊: 按比例分摊(2项) → 最后一条补差")
-    void calculateAuxiliaryAllocation_proportional_lastOneCompensates() {
-        VoucherEntryData entryData = buildEntryData("ENT001", "1001", 1,
-                new BigDecimal("100.00"));
-
-        // 60% + 40% = 100%
-        AccountingRuleAuxiliaryPO aux1 = buildAuxiliaryConfig(1L, "DEPT001",
-                AllocationMethodEnum.PERCENTAGE, new BigDecimal("60"));
-        AccountingRuleAuxiliaryPO aux2 = buildAuxiliaryConfig(2L, "DEPT002",
-                AllocationMethodEnum.PERCENTAGE, new BigDecimal("40"));
-
-        List<AuxiliaryItemData> result = bufferPostingDomainService.calculateAuxiliaryAllocation(
-                entryData, List.of(aux1, aux2));
-
-        assertThat(result).hasSize(2);
-
-        // 第一条按 60% 计算
-        BigDecimal aux1Amount = result.get(0).getAmount();
-        // 第二条补差
-        BigDecimal aux2Amount = result.get(1).getAmount();
-
-        // 合计应等于分录金额
-        assertThat(aux1Amount.add(aux2Amount)).isEqualByComparingTo(new BigDecimal("100.00"));
-    }
-
-    @Test
-    @DisplayName("辅助核算分摊: 按比例分摊(3项) → 前2条按比例、第3条补差")
-    void calculateAuxiliaryAllocation_proportional_threeItems() {
-        VoucherEntryData entryData = buildEntryData("ENT002", "1001", 1,
-                new BigDecimal("300.00"));
-
-        // 30% + 30% + 40% = 100%
-        AccountingRuleAuxiliaryPO aux1 = buildAuxiliaryConfig(1L, "DEPT001",
-                AllocationMethodEnum.PERCENTAGE, new BigDecimal("30"));
-        AccountingRuleAuxiliaryPO aux2 = buildAuxiliaryConfig(2L, "DEPT002",
-                AllocationMethodEnum.PERCENTAGE, new BigDecimal("30"));
-        AccountingRuleAuxiliaryPO aux3 = buildAuxiliaryConfig(3L, "DEPT003",
-                AllocationMethodEnum.PERCENTAGE, new BigDecimal("40"));
-
-        List<AuxiliaryItemData> result = bufferPostingDomainService.calculateAuxiliaryAllocation(
-                entryData, List.of(aux1, aux2, aux3));
-
-        assertThat(result).hasSize(3);
-
-        // 前两条按比例
-        assertThat(result.get(0).getAmount()).isEqualByComparingTo(new BigDecimal("90.00"));
-        assertThat(result.get(1).getAmount()).isEqualByComparingTo(new BigDecimal("90.00"));
-
-        // 合计应等于分录金额
-        BigDecimal total = result.stream()
-                .map(AuxiliaryItemData::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        assertThat(total).isEqualByComparingTo(new BigDecimal("300.00"));
-    }
-
-    @Test
-    @DisplayName("辅助核算分摊: 固定金额分摊 → 各分配固定值")
-    void calculateAuxiliaryAllocation_fixedAmount() {
-        VoucherEntryData entryData = buildEntryData("ENT003", "1001", 1,
-                new BigDecimal("100.00"));
-
-        AccountingRuleAuxiliaryPO aux1 = buildAuxiliaryConfig(1L, "DEPT001",
-                AllocationMethodEnum.FIXED_AMOUNT, new BigDecimal("30.00"));
-        AccountingRuleAuxiliaryPO aux2 = buildAuxiliaryConfig(2L, "DEPT002",
-                AllocationMethodEnum.FIXED_AMOUNT, new BigDecimal("70.00"));
-
-        List<AuxiliaryItemData> result = bufferPostingDomainService.calculateAuxiliaryAllocation(
-                entryData, List.of(aux1, aux2));
-
-        assertThat(result).hasSize(2);
-        assertThat(result.get(0).getAmount()).isEqualByComparingTo(new BigDecimal("30.00"));
-        assertThat(result.get(1).getAmount()).isEqualByComparingTo(new BigDecimal("70.00"));
-    }
-
-    @Test
-    @DisplayName("辅助核算分摊: 固定金额超过分录金额 → 抛出 AUXILIARY_AMOUNT_MISMATCH")
-    void calculateAuxiliaryAllocation_fixedAmountExceeds_shouldThrow() {
-        VoucherEntryData entryData = buildEntryData("ENT004", "1001", 1,
-                new BigDecimal("50.00"));
-
-        AccountingRuleAuxiliaryPO aux = buildAuxiliaryConfig(1L, "DEPT001",
-                AllocationMethodEnum.FIXED_AMOUNT, new BigDecimal("100.00"));
-
-        assertThatThrownBy(() -> bufferPostingDomainService.calculateAuxiliaryAllocation(
-                entryData, List.of(aux)))
-                .isInstanceOf(AccountException.class)
-                .satisfies(ex -> {
-                    AccountException e = (AccountException) ex;
-                    assertThat(e.getResultCode()).isEqualTo(ResultCode.AUXILIARY_AMOUNT_MISMATCH);
-                });
-    }
-
-    @Test
-    @DisplayName("辅助核算分摊: 固定金额为零 → 跳过该项")
-    void calculateAuxiliaryAllocation_fixedAmountZero_shouldSkip() {
-        VoucherEntryData entryData = buildEntryData("ENT005", "1001", 1,
-                new BigDecimal("100.00"));
-
-        AccountingRuleAuxiliaryPO auxValid = buildAuxiliaryConfig(1L, "DEPT001",
-                AllocationMethodEnum.FIXED_AMOUNT, BigDecimal.ZERO);
-        AccountingRuleAuxiliaryPO auxNull = buildAuxiliaryConfig(2L, "DEPT002",
-                AllocationMethodEnum.FIXED_AMOUNT, null);
-        AccountingRuleAuxiliaryPO auxNeg = buildAuxiliaryConfig(3L, "DEPT003",
-                AllocationMethodEnum.FIXED_AMOUNT, new BigDecimal("-10.00"));
-
-        List<AuxiliaryItemData> result = bufferPostingDomainService.calculateAuxiliaryAllocation(
-                entryData, List.of(auxValid, auxNull, auxNeg));
-
-        // 所有固定金额配置都应被跳过
-        assertThat(result).isEmpty();
-    }
-
-    @Test
-    @DisplayName("辅助核算分摊: 混合固定+比例 → 固定先扣、剩余按比例")
-    void calculateAuxiliaryAllocation_mixedFixedAndProportional() {
-        VoucherEntryData entryData = buildEntryData("ENT006", "1001", 1,
-                new BigDecimal("200.00"));
-
-        // 固定金额 50，剩余 150 按比例 100% 分摊
-        AccountingRuleAuxiliaryPO auxFixed = buildAuxiliaryConfig(1L, "DEPT001",
-                AllocationMethodEnum.FIXED_AMOUNT, new BigDecimal("50.00"));
-        AccountingRuleAuxiliaryPO auxProp = buildAuxiliaryConfig(2L, "DEPT002",
-                AllocationMethodEnum.PERCENTAGE, new BigDecimal("100"));
-
-        List<AuxiliaryItemData> result = bufferPostingDomainService.calculateAuxiliaryAllocation(
-                entryData, List.of(auxFixed, auxProp));
-
-        assertThat(result).hasSize(2);
-
-        BigDecimal total = result.stream()
-                .map(AuxiliaryItemData::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        assertThat(total).isEqualByComparingTo(new BigDecimal("200.00"));
-    }
-
-    @Test
-    @DisplayName("辅助核算分摊: 不分摊 → 返回空列表")
-    void calculateAuxiliaryAllocation_none_shouldReturnEmpty() {
-        VoucherEntryData entryData = buildEntryData("ENT007", "1001", 1,
-                new BigDecimal("100.00"));
-
-        AccountingRuleAuxiliaryPO aux = buildAuxiliaryConfig(1L, "DEPT001",
-                AllocationMethodEnum.NONE, BigDecimal.ZERO);
-
-        List<AuxiliaryItemData> result = bufferPostingDomainService.calculateAuxiliaryAllocation(
-                entryData, List.of(aux));
-
-        assertThat(result).isEmpty();
-    }
-
-    @Test
-    @DisplayName("辅助核算分摊: 配置列表为空 → 返回空列表")
-    void calculateAuxiliaryAllocation_emptyConfig_shouldReturnEmpty() {
-        VoucherEntryData entryData = buildEntryData("ENT008", "1001", 1,
-                new BigDecimal("100.00"));
-
-        List<AuxiliaryItemData> result = bufferPostingDomainService.calculateAuxiliaryAllocation(
-                entryData, Collections.emptyList());
-
-        assertThat(result).isEmpty();
-    }
-
-    // ==================== calculateSharding 测试 ====================
-
     @Test
     @DisplayName("计算分片值: 相同 accountNo → 返回相同哈希值")
     void calculateSharding_sameAccountNo_shouldReturnSameHash() {
@@ -320,39 +154,6 @@ class BufferPostingDomainServiceTest {
         Long result = bufferPostingDomainService.calculateSharding("");
         assertThat(result).isEqualTo(0L);
     }
-
-    // ==================== persistAuxiliaryItems 测试 ====================
-
-    @Test
-    @DisplayName("持久化辅助核算项: null 列表 → 不抛异常、不调用 insert")
-    void persistAuxiliaryItems_nullList_shouldDoNothing() {
-        bufferPostingDomainService.persistAuxiliaryItems(null);
-        verifyNoInteractions(voucherAuxiliaryMapper);
-    }
-
-    @Test
-    @DisplayName("持久化辅助核算项: 空列表 → 不抛异常、不调用 insert")
-    void persistAuxiliaryItems_emptyList_shouldDoNothing() {
-        bufferPostingDomainService.persistAuxiliaryItems(Collections.emptyList());
-        verifyNoInteractions(voucherAuxiliaryMapper);
-    }
-
-    @Test
-    @DisplayName("持久化辅助核算项: 有数据 → 逐条 insert")
-    void persistAuxiliaryItems_withItems_shouldInsertEach() {
-        AuxiliaryItemData item1 = new AuxiliaryItemData(
-                "ENT001", "VOU001", "1001", "DEPT", "DEPT001", "财务部",
-                1, new BigDecimal("60.00"), LocalDate.now());
-        AuxiliaryItemData item2 = new AuxiliaryItemData(
-                "ENT001", "VOU001", "1001", "DEPT", "DEPT002", "人事部",
-                1, new BigDecimal("40.00"), LocalDate.now());
-
-        bufferPostingDomainService.persistAuxiliaryItems(List.of(item1, item2));
-
-        verify(voucherAuxiliaryMapper, times(2)).insert(any(AccountingVoucherAuxiliaryPO.class));
-    }
-
-    // ==================== persistBufferPostingDetails 测试 ====================
 
     @Test
     @DisplayName("持久化缓冲记账明细: null 列表 → 不抛异常、不调用 insert")
@@ -418,40 +219,4 @@ class BufferPostingDomainServiceTest {
         return config;
     }
 
-    @Test
-    @DisplayName("辅助核算分摊: SpEL 表达式计算金额成功")
-    void calculateAuxiliaryAllocation_spelScript_shouldCalculateAmount() {
-        VoucherEntryData entry = buildEntryData("ENT001", "1001", 1, new BigDecimal("100.00"));
-
-        AccountingRuleAuxiliaryPO config1 = buildAuxiliaryConfig(1L, "DEPT01", AllocationMethodEnum.SPEL_SCRIPT, null);
-        config1.setExtendScript("#amount * 0.2");
-
-        AccountingRuleAuxiliaryPO config2 = buildAuxiliaryConfig(2L, "DEPT02", AllocationMethodEnum.PERCENTAGE, new BigDecimal("100"));
-
-        when(ruleScriptExecutor.execute(eq("#amount * 0.2"), any())).thenReturn(new BigDecimal("20.00"));
-
-        List<AuxiliaryItemData> items = bufferPostingDomainService.calculateAuxiliaryAllocation(
-                entry, List.of(config1, config2), null, null);
-
-        assertThat(items).hasSize(2);
-        assertThat(items.get(0).getAmount()).isEqualByComparingTo(new BigDecimal("20.00"));
-        assertThat(items.get(1).getAmount()).isEqualByComparingTo(new BigDecimal("80.00"));
-    }
-
-    @Test
-    @DisplayName("辅助核算分摊: 动态核算编码模板解析成功")
-    void calculateAuxiliaryAllocation_dynamicAuxCode_shouldResolveTemplate() {
-        VoucherEntryData entry = buildEntryData("ENT001", "1001", 1, new BigDecimal("100.00"));
-
-        AccountingRuleAuxiliaryPO config = buildAuxiliaryConfig(1L, "#{#extra['partnerCode']}", AllocationMethodEnum.FIXED_AMOUNT, new BigDecimal("100.00"));
-
-        when(ruleScriptExecutor.executeTemplate(eq("#{#extra['partnerCode']}"), any())).thenReturn("PARTNER_ICBC");
-
-        List<AuxiliaryItemData> items = bufferPostingDomainService.calculateAuxiliaryAllocation(
-                entry, List.of(config), null, null);
-
-        assertThat(items).hasSize(1);
-        assertThat(items.get(0).getAuxCode()).isEqualTo("PARTNER_ICBC");
-        assertThat(items.get(0).getAmount()).isEqualByComparingTo(new BigDecimal("100.00"));
-    }
 }
