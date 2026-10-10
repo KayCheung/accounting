@@ -1,7 +1,11 @@
-// accounting-core/src/main/java/com/kltb/accounting/core/infrastructure/persistence/repository/BusinessRecordRepository.java
 package com.kltb.accounting.core.infrastructure.persistence.repository;
 
+import cn.hutool.core.util.StrUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.kltb.accounting.api.request.JournalPageQueryRequest;
 import com.kltb.accounting.core.domain.enums.BusinessRecordStatusEnum;
+import com.kltb.accounting.core.domain.enums.TradeTypeEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.BusinessRecordPO;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.BusinessRecordMapper;
 import lombok.RequiredArgsConstructor;
@@ -71,5 +75,29 @@ public class BusinessRecordRepository {
      */
     public int countByAccountingDateAndStatus(LocalDate accountingDate, Integer status) {
         return businessRecordMapper.countByAccountingDateAndStatus(accountingDate, status);
+    }
+
+    /**
+     * 业务流水多条件分页查询
+     */
+    public Page<BusinessRecordPO> selectPage(JournalPageQueryRequest request) {
+        Page<BusinessRecordPO> page = new Page<>(
+                request.getPageNo() != null ? request.getPageNo() : 1,
+                request.getPageSize() != null ? request.getPageSize() : 20
+        );
+        TradeTypeEnum tradeTypeEnum = request.getTradeType() != null ? TradeTypeEnum.fromCode(request.getTradeType()) : null;
+        BusinessRecordStatusEnum statusEnum = request.getStatus() != null ? BusinessRecordStatusEnum.fromCode(request.getStatus()) : null;
+
+        LambdaQueryWrapper<BusinessRecordPO> wrapper = new LambdaQueryWrapper<BusinessRecordPO>()
+                .like(StrUtil.isNotBlank(request.getTraceNo()), BusinessRecordPO::getTraceNo, request.getTraceNo() != null ? request.getTraceNo().trim() : null)
+                .eq(StrUtil.isNotBlank(request.getBusinessCode()), BusinessRecordPO::getBusinessCode, request.getBusinessCode() != null ? request.getBusinessCode().trim() : null)
+                .eq(tradeTypeEnum != null, BusinessRecordPO::getTradeType, tradeTypeEnum)
+                .eq(statusEnum != null, BusinessRecordPO::getStatus, statusEnum)
+                .like(StrUtil.isNotBlank(request.getOrigFreezeNo()), BusinessRecordPO::getOrigFreezeNo, request.getOrigFreezeNo() != null ? request.getOrigFreezeNo().trim() : null)
+                .ge(request.getStartDate() != null, BusinessRecordPO::getAccountingDate, request.getStartDate())
+                .le(request.getEndDate() != null, BusinessRecordPO::getAccountingDate, request.getEndDate())
+                .eq(BusinessRecordPO::getIsDelete, 0)
+                .orderByDesc(BusinessRecordPO::getCreateTime);
+        return businessRecordMapper.selectPage(page, wrapper);
     }
 }

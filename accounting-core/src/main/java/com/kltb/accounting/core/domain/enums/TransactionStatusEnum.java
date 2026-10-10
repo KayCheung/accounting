@@ -26,4 +26,14 @@ public enum TransactionStatusEnum {
     private final Integer code;
 
     private final String desc;
+
+    public static TransactionStatusEnum fromCode(Integer code) {
+        if (code == null) return null;
+        for (TransactionStatusEnum value : values()) {
+            if (value.code.equals(code)) {
+                return value;
+            }
+        }
+        return null;
+    }
 }

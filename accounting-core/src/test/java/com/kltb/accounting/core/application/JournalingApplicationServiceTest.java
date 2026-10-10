@@ -88,6 +88,9 @@ class JournalingApplicationServiceTest {
     @Mock
     private com.kltb.accounting.core.infrastructure.messaging.LocalMessageService localMessageService;
 
+    @Mock
+    private ManualVoucherApplyRepository manualVoucherApplyRepository;
+
     @Spy
     private JournalingAssembler assembler = new JournalingAssembler();
 
@@ -398,6 +401,52 @@ class JournalingApplicationServiceTest {
     }
 
     @Test
+    @DisplayName("getJournalOverview: 手工记账流水不存在 BusinessRecordPO 时仍能基于事务和凭证聚合总览")
+    void getJournalOverview_manualVoucherWithoutBusinessRecord_shouldSynthesizeOverview() {
+        String applyNo = "MVA20261008000002";
+        when(businessRecordRepository.selectByTraceNo(applyNo)).thenReturn(null);
+
+        TransactionPO txn = new TransactionPO();
+        txn.setTxnNo("TXN_MVA_001");
+        txn.setTraceNo(applyNo);
+        txn.setStatus(TransactionStatusEnum.SUCCESS);
+        txn.setAmount(new BigDecimal("1000.00"));
+        txn.setAccountingDate(LocalDate.of(2026, 10, 8));
+        when(transactionRepository.selectByTraceNo(applyNo)).thenReturn(txn);
+
+        AccountingVoucherPO voucher = new AccountingVoucherPO();
+        voucher.setVoucherNo("VOU_MVA_001");
+        voucher.setTxnNo("TXN_MVA_001");
+        voucher.setTraceNo(applyNo);
+        voucher.setBusinessCode("MANUAL");
+        voucher.setTradingCode("TRANSFER");
+        voucher.setPayChannel("INTERNAL");
+        voucher.setStatus(VoucherStatusEnum.POSTED);
+        voucher.setAmount(new BigDecimal("1000.00"));
+        when(accountingVoucherRepository.selectByTraceNo(applyNo)).thenReturn(List.of(voucher));
+
+        ManualVoucherApplyPO apply = new ManualVoucherApplyPO();
+        apply.setApplyNo(applyNo);
+        apply.setTotalDebitAmount(new BigDecimal("1000.00"));
+        apply.setSummary("手工凭证补录");
+        apply.setApplyStatus(ManualVoucherApplyStatusEnum.BOOKED);
+        when(manualVoucherApplyRepository.selectByApplyNo(applyNo)).thenReturn(apply);
+
+        JournalOverviewResponse overview = service.getJournalOverview(applyNo);
+
+        assertThat(overview).isNotNull();
+        assertThat(overview.getRecord()).isNotNull();
+        assertThat(overview.getRecord().getTraceNo()).isEqualTo(applyNo);
+        assertThat(overview.getRecord().getBusinessCode()).isEqualTo("MANUAL");
+        assertThat(overview.getRecord().getSummary()).isEqualTo("手工凭证补录");
+        assertThat(overview.getTransaction()).isNotNull();
+        assertThat(overview.getTransaction().getTxnNo()).isEqualTo("TXN_MVA_001");
+        assertThat(overview.getVouchers()).hasSize(1);
+        assertThat(overview.getProcessStage()).isEqualTo("SUCCESS");
+        assertThat(overview.getCanRetry()).isFalse(); // 合成流水不具备真实业务流水ID，禁止重试
+    }
+
+    @Test
     @DisplayName("getTransactionStatus: 查询关联事务状态成功")
     void getTransactionStatus_shouldReturnStatus() {
         String traceNo = "TRACE_TXN_001";
@@ -544,5 +593,60 @@ class JournalingApplicationServiceTest {
         assertThat(response.getTxnNo()).isEqualTo("TXN_QUERY_001");
         assertThat(response.getStatus()).isEqualTo(BusinessRecordStatusEnum.SUCCESS.getCode());
         assertThat(response.getAmount()).isEqualByComparingTo("100.00");
+    }
+
+    @Test
+    @DisplayName("getJournalPage: 分页查询业务记账流水记录成功")
+    void getJournalPage_shouldReturnPageResponse() {
+        JournalPageQueryRequest req = new JournalPageQueryRequest();
+        req.setPageNo(1);
+        req.setPageSize(20);
+
+        BusinessRecordPO record = new BusinessRecordPO();
+        record.setTraceNo("TRACE_PAGE_001");
+        record.setAmount(new BigDecimal("100.00"));
+        record.setStatus(BusinessRecordStatusEnum.SUCCESS);
+
+        com.baomidou.mybatisplus.extension.plugins.pagination.Page<BusinessRecordPO> mockPage =
+                new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(1, 20);
+        mockPage.setRecords(List.of(record));
+        mockPage.setTotal(1);
+
+        when(businessRecordRepository.selectPage(req)).thenReturn(mockPage);
+
+        PageResponse<JournalRecordItemResponse> response = service.getJournalPage(req);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getTotal()).isEqualTo(1L);
+        assertThat(response.getList()).hasSize(1);
+        assertThat(response.getList().get(0).getTraceNo()).isEqualTo("TRACE_PAGE_001");
+    }
+
+    @Test
+    @DisplayName("getTransactionPage: 分页查询账务事务记录成功")
+    void getTransactionPage_shouldReturnPageResponse() {
+        TransactionPageQueryRequest req = new TransactionPageQueryRequest();
+        req.setPageNo(1);
+        req.setPageSize(20);
+
+        TransactionPO txn = new TransactionPO();
+        txn.setTxnNo("TXN_PAGE_001");
+        txn.setTraceNo("TRACE_PAGE_001");
+        txn.setAmount(new BigDecimal("100.00"));
+        txn.setStatus(TransactionStatusEnum.SUCCESS);
+
+        com.baomidou.mybatisplus.extension.plugins.pagination.Page<TransactionPO> mockPage =
+                new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(1, 20);
+        mockPage.setRecords(List.of(txn));
+        mockPage.setTotal(1);
+
+        when(transactionRepository.selectPage(req)).thenReturn(mockPage);
+
+        PageResponse<TransactionRecordItemResponse> response = service.getTransactionPage(req);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getTotal()).isEqualTo(1L);
+        assertThat(response.getList()).hasSize(1);
+        assertThat(response.getList().get(0).getTxnNo()).isEqualTo("TXN_PAGE_001");
     }
 }

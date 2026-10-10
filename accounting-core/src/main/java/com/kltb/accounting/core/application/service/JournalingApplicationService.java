@@ -2,6 +2,7 @@
 package com.kltb.accounting.core.application.service;
 
 import cn.hutool.core.util.StrUtil;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.api.request.*;
 import com.kltb.accounting.api.response.*;
@@ -57,6 +58,7 @@ public class JournalingApplicationService {
     private final com.kltb.accounting.core.domain.service.RollbackDomainService rollbackDomainService;
     private final BufferPostingDetailRepository bufferPostingDetailRepository;
     private final com.kltb.accounting.core.infrastructure.messaging.LocalMessageService localMessageService;
+    private final ManualVoucherApplyRepository manualVoucherApplyRepository;
 
     /**
      * 提交记账流水（含入口幂等锁控制）
@@ -396,12 +398,37 @@ public class JournalingApplicationService {
      */
     public JournalOverviewResponse getJournalOverview(String traceNo) {
         BusinessRecordPO record = businessRecordRepository.selectByTraceNo(traceNo);
-        if (record == null) {
+        TransactionPO txn = transactionRepository.selectByTraceNo(traceNo);
+        if (txn == null) {
+            txn = transactionRepository.selectByTxnNo(traceNo);
+        }
+
+        List<AccountingVoucherPO> vouchers = accountingVoucherRepository.selectByTraceNo(traceNo);
+        if ((vouchers == null || vouchers.isEmpty()) && txn != null) {
+            vouchers = accountingVoucherRepository.selectByTxnNo(txn.getTxnNo());
+        }
+
+        ManualVoucherApplyPO manualApply = null;
+        if (manualVoucherApplyRepository != null) {
+            manualApply = manualVoucherApplyRepository.selectByApplyNo(traceNo);
+            if (manualApply == null && txn != null && StrUtil.isNotBlank(txn.getTraceNo())) {
+                manualApply = manualVoucherApplyRepository.selectByApplyNo(txn.getTraceNo());
+            }
+            if (manualApply == null && vouchers != null && !vouchers.isEmpty()) {
+                manualApply = manualVoucherApplyRepository.selectByApplyNo(vouchers.get(0).getTraceNo());
+            }
+        }
+
+        // 如果流水、事务、凭证、手工记账申请全都不存在，才返回 null
+        if (record == null && txn == null && (vouchers == null || vouchers.isEmpty()) && manualApply == null) {
             return null;
         }
 
-        TransactionPO txn = transactionRepository.selectByTraceNo(traceNo);
-        List<AccountingVoucherPO> vouchers = accountingVoucherRepository.selectByTraceNo(traceNo);
+        // 如果没有常规流水记录（如通过手工凭证审批入账的事务），合成 BusinessRecordPO
+        if (record == null) {
+            record = buildSyntheticRecord(traceNo, txn, vouchers, manualApply);
+        }
+
         Map<String, List<AccountingVoucherEntryPO>> entryMap = new HashMap<>();
         if (vouchers != null && !vouchers.isEmpty()) {
             List<String> voucherNos = vouchers.stream().map(AccountingVoucherPO::getVoucherNo).toList();
@@ -413,7 +440,7 @@ public class JournalingApplicationService {
         }
 
         AccountFreezeDetailPO freezeDetail = null;
-        if (StrUtil.isNotBlank(record.getOrigFreezeNo())) {
+        if (record != null && StrUtil.isNotBlank(record.getOrigFreezeNo())) {
             freezeDetail = freezeDetailRepository.selectByVoucherNo(record.getOrigFreezeNo());
         }
         if (freezeDetail == null) {
@@ -437,6 +464,66 @@ public class JournalingApplicationService {
         }
 
         return assembler.toOverviewResponse(record, txn, vouchers, entryMap, freezeDetail, bufferDetails, localMessages);
+    }
+
+    /**
+     * 为手工凭证等非业务流水提交产生的事务构建合成流水信息
+     */
+    private BusinessRecordPO buildSyntheticRecord(String traceNo,
+                                                   TransactionPO txn,
+                                                   List<AccountingVoucherPO> vouchers,
+                                                   ManualVoucherApplyPO manualApply) {
+        BusinessRecordPO record = new BusinessRecordPO();
+        record.setTraceNo(traceNo);
+        record.setTraceSeq(1);
+
+        AccountingVoucherPO voucher = (vouchers != null && !vouchers.isEmpty()) ? vouchers.get(0) : null;
+
+        if (manualApply != null) {
+            record.setBusinessCode("MANUAL");
+            record.setTradingCode(voucher != null && StrUtil.isNotBlank(voucher.getTradingCode()) ? voucher.getTradingCode() : "MANUAL_ENTRY");
+            record.setPayChannel(voucher != null && StrUtil.isNotBlank(voucher.getPayChannel()) ? voucher.getPayChannel() : "INTERNAL");
+            record.setTradeType(manualApply.getTradeType() != null ? manualApply.getTradeType() : (voucher != null ? voucher.getTradeType() : TradeTypeEnum.NORMAL));
+            record.setAmount(manualApply.getTotalDebitAmount() != null ? manualApply.getTotalDebitAmount() : (txn != null ? txn.getAmount() : BigDecimal.ZERO));
+            record.setAccountingDate(manualApply.getAccountingDate() != null ? manualApply.getAccountingDate() : (txn != null ? txn.getAccountingDate() : LocalDate.now()));
+            record.setSummary(StrUtil.isNotBlank(manualApply.getSummary()) ? manualApply.getSummary() : "手工记账审批入账");
+            record.setTradeTime(manualApply.getBookkeepingTime() != null ? manualApply.getBookkeepingTime() : manualApply.getCreateTime());
+            record.setCreateTime(manualApply.getCreateTime());
+        } else if (voucher != null) {
+            record.setBusinessCode(StrUtil.isNotBlank(voucher.getBusinessCode()) ? voucher.getBusinessCode() : "SYSTEM");
+            record.setTradingCode(voucher.getTradingCode());
+            record.setPayChannel(voucher.getPayChannel());
+            record.setTradeType(voucher.getTradeType() != null ? voucher.getTradeType() : TradeTypeEnum.NORMAL);
+            record.setAmount(voucher.getAmount() != null ? voucher.getAmount() : (txn != null ? txn.getAmount() : BigDecimal.ZERO));
+            record.setAccountingDate(voucher.getAccountingDate() != null ? voucher.getAccountingDate() : (txn != null ? txn.getAccountingDate() : LocalDate.now()));
+            record.setSummary(StrUtil.isNotBlank(voucher.getSummary()) ? voucher.getSummary() : "系统自动或手工凭证事务");
+            record.setTradeTime(voucher.getTradeTime() != null ? voucher.getTradeTime() : (txn != null ? txn.getCreateTime() : LocalDateTime.now()));
+            record.setCreateTime(voucher.getCreateTime() != null ? voucher.getCreateTime() : LocalDateTime.now());
+        } else if (txn != null) {
+            record.setBusinessCode("SYSTEM");
+            record.setTradingCode("TRANSACTION");
+            record.setPayChannel("INTERNAL");
+            record.setTradeType(TradeTypeEnum.NORMAL);
+            record.setAmount(txn.getAmount() != null ? txn.getAmount() : BigDecimal.ZERO);
+            record.setAccountingDate(txn.getAccountingDate() != null ? txn.getAccountingDate() : LocalDate.now());
+            record.setSummary("账务事务记录");
+            record.setTradeTime(txn.getCreateTime() != null ? txn.getCreateTime() : LocalDateTime.now());
+            record.setCreateTime(txn.getCreateTime() != null ? txn.getCreateTime() : LocalDateTime.now());
+        }
+
+        if (txn != null && txn.getStatus() == TransactionStatusEnum.SUCCESS) {
+            record.setStatus(BusinessRecordStatusEnum.SUCCESS);
+        } else if (txn != null && txn.getStatus() == TransactionStatusEnum.FAILED) {
+            record.setStatus(BusinessRecordStatusEnum.FAILED);
+        } else if (voucher != null && voucher.getStatus() == VoucherStatusEnum.POSTED) {
+            record.setStatus(BusinessRecordStatusEnum.SUCCESS);
+        } else if (voucher != null && (voucher.getStatus() == VoucherStatusEnum.FAILED || voucher.getStatus() == VoucherStatusEnum.REVERSED)) {
+            record.setStatus(BusinessRecordStatusEnum.FAILED);
+        } else {
+            record.setStatus(BusinessRecordStatusEnum.PROCESSING);
+        }
+
+        return record;
     }
 
     /**
@@ -528,9 +615,15 @@ public class JournalingApplicationService {
     public TransactionStatusResponse getTransactionStatus(String traceNo) {
         TransactionPO txn = transactionRepository.selectByTraceNo(traceNo);
         if (txn == null) {
+            txn = transactionRepository.selectByTxnNo(traceNo);
+        }
+        if (txn == null) {
             return null;
         }
         List<AccountingVoucherPO> vouchers = accountingVoucherRepository.selectByTraceNo(traceNo);
+        if ((vouchers == null || vouchers.isEmpty()) && StrUtil.isNotBlank(txn.getTxnNo())) {
+            vouchers = accountingVoucherRepository.selectByTxnNo(txn.getTxnNo());
+        }
         AccountingVoucherPO voucher = (vouchers != null && !vouchers.isEmpty()) ? vouchers.get(0) : null;
         return assembler.toTransactionStatusResponse(txn, voucher);
     }
@@ -577,5 +670,37 @@ public class JournalingApplicationService {
                         "无效的customerType: " + detail.getCustomerType());
             }
         }
+    }
+
+    /**
+     * 分页查询业务记账流水记录
+     */
+    public PageResponse<JournalRecordItemResponse> getJournalPage(JournalPageQueryRequest request) {
+        Page<BusinessRecordPO> pageResult = businessRecordRepository.selectPage(request);
+        List<JournalRecordItemResponse> items = pageResult.getRecords().stream()
+                .map(assembler::toJournalRecordItemResponse)
+                .collect(Collectors.toList());
+        return PageResponse.<JournalRecordItemResponse>builder()
+                .current(pageResult.getCurrent())
+                .pages(pageResult.getPages())
+                .total(pageResult.getTotal())
+                .list(items)
+                .build();
+    }
+
+    /**
+     * 分页查询账务事务记录
+     */
+    public PageResponse<TransactionRecordItemResponse> getTransactionPage(TransactionPageQueryRequest request) {
+        Page<TransactionPO> pageResult = transactionRepository.selectPage(request);
+        List<TransactionRecordItemResponse> items = pageResult.getRecords().stream()
+                .map(assembler::toTransactionRecordItemResponse)
+                .collect(Collectors.toList());
+        return PageResponse.<TransactionRecordItemResponse>builder()
+                .current(pageResult.getCurrent())
+                .pages(pageResult.getPages())
+                .total(pageResult.getTotal())
+                .list(items)
+                .build();
     }
 }

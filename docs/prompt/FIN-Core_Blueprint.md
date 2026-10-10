@@ -826,6 +826,42 @@
     - **测试验证与回归保障**：
       - `JournalingApplicationServiceTest`（12 个用例）、`JournalingControllerTest`（8 个用例）与 `PostingApplicationServiceTest`（6 个用例）100% 通过；
       - `accounting-core` 模块 305 个单元与集成测试全部通过，无回归。
+  → 完成内容（Step 23.7 记账流水与事务监控工作台、多维分页检索与全生命周期全景看板落地）：
+    - **后端接口与分页支持（accounting-api & accounting-core）**：
+      - 契约扩展：新增 `JournalPageQueryRequest`、`TransactionPageQueryRequest`、`JournalRecordItemResponse`、`TransactionRecordItemResponse`；
+      - 仓储与应用层：`BusinessRecordRepository` 与 `TransactionRepository` 落地 `selectPage` 多条件动态检索（支持跟踪号、业务线、交易类别、状态、原冻结号、会计日期区间）；
+      - 枚举与转换器：`BusinessRecordStatusEnum` 与 `TransactionStatusEnum` 补充 `fromCode`，`JournalingAssembler` 扩展列表项映射；
+      - 控制器端点：`JournalingController` 暴露 `GET /accounting/journal/page` 与 `GET /accounting/journal/transaction/page`；
+      - 单元测试：扩展 `JournalingApplicationServiceTest`（14 个用例）与 `JournalingControllerTest`（10 个用例），`accounting-core` 309 个用例全部通过。
+    - **前端业务管理页面落地（accounting-ui）**：
+      - API 模块：新增 `src/api/journal.ts`，支持分页检索、全景档案查询、一键失败重试及冲正回滚；
+      - 路由与菜单导航：在 `router/index.ts` 注册 `/business/journal`，在 `Sidebar.vue` 侧边栏【账务业务】新增「流水与事务监控」菜单；
+      - 业务视图：创建 `views/business/journal/index.vue` 工作台：
+        - 顶部 4 维核心 KPI 看板（流水总数、处理中、记账成功、记账失败）；
+        - Tab 1 业务记账流水记录（`t_business_record`）多维检索与状态操作；
+        - Tab 2 账务事务记录（`t_transaction`）多维检索与全局事务审计；
+        - 全流程全景总览抽屉（Panoramic Overview Drawer）：链路 Steps 步骤条、要素概览卡片、关联事务信息、预冻结明细卡片、记账凭证与分录明细表、异步本地消息及缓冲调度监控，并内置一键【失败重试】与【冲正回滚】交互；
+      - 构建验证：`vue-tsc` 与 `vite build` 生产构建 100% 成功。
+  → 完成内容（Step 23.8 记账流水与事务监控体验优化、手工凭证全景穿透与记账规则“需先预冻结”闭环）：
+    - **业务流水与事务监控体验优化（accounting-ui）**：
+      - 业务线筛选下拉改造：业务流水记录列表筛选中的“业务线”由原来的文本输入框改造为 `el-select` 下拉选择框，接入 `getDictByType('business_code')` 字典数据，并增加表格与抽屉的业务线格式化展示标签；
+      - 会计日期筛选宽度扩展：账务事务记录列表中的会计日期范围选择框宽度加宽至 300px，并优化占位符提示（“开始日期 / 结束日期”），彻底消除界面拥挤与右侧空隙；
+    - **账务事务记录穿透手工凭证全景档案（Manual Voucher Panoramic Penetration）**：
+      - 根因排查与支持：针对由手工凭证（`t_manual_voucher_apply`）录入审批生成的事务记录（如 `MVA20261008000002`），因不经过业务端记账请求不存在 `t_business_record`，原接口直接抛 `未找到流水记录` 异常；
+      - 后端扩展（`JournalingApplicationService` & `AccountingVoucherRepository`）：
+        - 扩展 `AccountingVoucherRepository.selectByTxnNo` 与 `selectByTraceNo` 支持；
+        - `getJournalOverview` 增加多源聚合兜底：当 `record == null` 时，自动探测关联的 `TransactionPO`、`AccountingVoucherPO` 及 `ManualVoucherApplyPO`，合成要素完整的业务概览模型；
+        - 智能防误操作：对于无底层业务流水的合成事务，标记 `canRetry = false`，抽屉内自动隐藏失败重试按钮并展示“手工记账直录凭证”专属标签，抽屉中所有字段增加安全可选链保护；
+      - 单测保障：新增 `getJournalOverview_manualVoucherWithoutBusinessRecord_shouldSynthesizeOverview` 单元测试并通过验证；
+    - **记账规则“需先预冻结”（require_pre_freeze）全链路闭环**：
+      - API 契约扩展（`accounting-api`）：在 `RuleCreateRequest` 与 `RuleUpdateRequest` 中增加 `requirePreFreeze` 字段；
+      - 核心模型与转换器（`accounting-core`）：在 `RuleResponse` 中增加 `requirePreFreeze`，在 `RuleConverter.toPO`、`updatePO`、`toResponse` 中完成全量字段映射；
+      - 前端配置全面呈现（`accounting-ui`）：
+        - `api/rule.ts`：更新类型定义，对齐 `requirePreFreeze`；
+        - `views/config/rule/index.vue`：规则表格新增「需先预冻结」标签列、规则新建/编辑对话框新增「需先预冻结」开关及提示、规则详情抽屉新增「需先预冻结」属性展示，表单模型与复制新建逻辑全量对齐；
+    - **测试与构建验证**：
+      - 后端单元测试全部通过（`JournalingApplicationServiceTest` 15用例、`RuleApplicationServiceTest` 7用例、`JournalingControllerTest` 10用例全部通过）；
+      - 前端 `vue-tsc && vite build` 生产打包编译 0 错误通过。
 - [x] **Step 23** · 业务功能页面开发全量交付完毕（100% 完成）
 
 

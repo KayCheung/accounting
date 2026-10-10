@@ -1,4 +1,4 @@
-﻿import request from '@/utils/request'
+import request from '@/utils/request'
 import type { PageResponse, SelectOption } from './types'
 
 /**
@@ -42,6 +42,7 @@ export interface RuleResponse {
   payChannel: string
   isOpenAccount: boolean
   freezeDuration?: number
+  requirePreFreeze?: number
   preRuleId?: number
   status: number // 1-待启用，2-启用，3-停用
   entries?: RuleEntryResponse[]
@@ -96,6 +97,7 @@ export interface RuleCreateRequest {
   payChannel: string
   isOpenAccount?: boolean
   freezeDuration?: number
+  requirePreFreeze?: number
   preRuleId?: number
   status: number
   entries: RuleEntryRequest[]
@@ -109,6 +111,7 @@ export interface RuleUpdateRequest {
   voucherType?: string
   isOpenAccount?: boolean
   freezeDuration?: number
+  requirePreFreeze?: number
   preRuleId?: number
   status?: number
   entries?: RuleEntryRequest[]

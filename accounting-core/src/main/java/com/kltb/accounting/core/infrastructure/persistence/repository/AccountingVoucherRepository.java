@@ -56,6 +56,20 @@ public class AccountingVoucherRepository {
     }
 
     /**
+     * 按全局事务号查询凭证列表
+     *
+     * @param txnNo 全局事务号
+     * @return 凭证列表，无数据时返回空列表
+     */
+    public List<AccountingVoucherPO> selectByTxnNo(String txnNo) {
+        if (StrUtil.isBlank(txnNo)) {
+            return Collections.emptyList();
+        }
+        List<AccountingVoucherPO> result = voucherMapper.selectByTxnNo(txnNo);
+        return result != null ? result : Collections.emptyList();
+    }
+
+    /**
      * 按原凭证号查询红冲凭证
      *
      * @param origVoucherNo 原凭证号

@@ -359,7 +359,7 @@ public class JournalingAssembler {
             response.setProcessStage("FAILED");
             response.setStageDesc("记账失败");
             response.setProgressPercent(100);
-            response.setCanRetry(true);
+            response.setCanRetry(record != null && record.getId() != null);
             response.setCanRollback(true);
         } else if (isSuccess) {
             response.setProcessStage("SUCCESS");
@@ -409,5 +409,53 @@ public class JournalingAssembler {
             response.setVoucherStatusDesc(voucher.getStatus() != null ? voucher.getStatus().getDesc() : null);
         }
         return response;
+    }
+
+    /**
+     * 业务流水 PO → 列表项响应 DTO
+     */
+    public JournalRecordItemResponse toJournalRecordItemResponse(BusinessRecordPO record) {
+        if (record == null) {
+            return null;
+        }
+        return JournalRecordItemResponse.builder()
+                .traceNo(record.getTraceNo())
+                .traceSeq(record.getTraceSeq())
+                .businessCode(record.getBusinessCode())
+                .tradingCode(record.getTradingCode())
+                .payChannel(record.getPayChannel())
+                .tradeType(record.getTradeType() != null ? record.getTradeType().getCode() : null)
+                .tradeTypeDesc(record.getTradeType() != null ? record.getTradeType().getDesc() : null)
+                .amount(record.getAmount())
+                .tradeTime(record.getTradeTime())
+                .accountingDate(record.getAccountingDate())
+                .summary(record.getSummary())
+                .origFreezeNo(record.getOrigFreezeNo())
+                .status(record.getStatus() != null ? record.getStatus().getCode() : null)
+                .statusDesc(record.getStatus() != null ? record.getStatus().getDesc() : null)
+                .createTime(record.getCreateTime())
+                .build();
+    }
+
+    /**
+     * 账务事务 PO → 列表项响应 DTO
+     */
+    public TransactionRecordItemResponse toTransactionRecordItemResponse(TransactionPO txn) {
+        if (txn == null) {
+            return null;
+        }
+        return TransactionRecordItemResponse.builder()
+                .txnNo(txn.getTxnNo())
+                .traceNo(txn.getTraceNo())
+                .accountingDate(txn.getAccountingDate())
+                .relateAccountCount(txn.getRelateAccountCount())
+                .amount(txn.getAmount())
+                .currency(txn.getCurrency())
+                .status(txn.getStatus() != null ? txn.getStatus().getCode() : null)
+                .statusDesc(txn.getStatus() != null ? txn.getStatus().getDesc() : null)
+                .failReason(txn.getFailReason())
+                .finishTime(txn.getFinishTime())
+                .createTime(txn.getCreateTime())
+                .build();
     }
 }

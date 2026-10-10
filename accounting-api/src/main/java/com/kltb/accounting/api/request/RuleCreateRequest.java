@@ -57,6 +57,9 @@ public class RuleCreateRequest implements Serializable {
     @Schema(description = "冻结时长（秒）", example = "0")
     private Integer freezeDuration;
 
+    @Schema(description = "是否需先预冻结：0-否，1-是", example = "0")
+    private Integer requirePreFreeze;
+
     @Schema(description = "前置入账规则ID", example = "0")
     private Long preRuleId;
 

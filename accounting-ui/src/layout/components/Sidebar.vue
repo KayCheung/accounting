@@ -49,6 +49,7 @@
           <el-menu-item index="/business/account">账户开户与状态</el-menu-item>
           <el-menu-item index="/business/balance">余额与明细查询</el-menu-item>
           <el-menu-item index="/business/freeze">资金冻结与扣款</el-menu-item>
+          <el-menu-item index="/business/journal">流水与事务监控</el-menu-item>
           <el-menu-item index="/business/voucher">记账凭证管理</el-menu-item>
           <el-menu-item index="/business/manual-voucher">手工凭证录入与审核</el-menu-item>
           <el-menu-item index="/business/eod">日切与试算平衡</el-menu-item>

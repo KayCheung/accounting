@@ -208,6 +208,13 @@
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column prop="requirePreFreeze" label="需先预冻结" width="105" align="center">
+          <template #default="{ row }">
+            <el-tag size="small" :type="row.requirePreFreeze === 1 ? 'warning' : 'info'">
+              {{ row.requirePreFreeze === 1 ? '需预冻结' : '否' }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="status" label="状态" width="100" align="center">
           <template #default="{ row }">
             <el-tag :type="getStatusMeta(row.status).tagType" size="small">
@@ -403,17 +410,30 @@
             </el-form-item>
           </el-col>
 
-          <el-col :span="24">
+          <el-col :span="12">
+            <el-form-item label="需先预冻结">
+              <el-switch
+                v-model="formModel.requirePreFreeze"
+                :active-value="1"
+                :inactive-value="0"
+                active-text="是"
+                inactive-text="否"
+              />
+              <span class="text-placeholder" style="margin-left: 8px;">（须先冻结）</span>
+            </el-form-item>
+          </el-col>
+
+          <el-col :span="12">
             <el-form-item label="冻结时长(秒)">
-              <div style="display: flex; align-items: center; gap: 12px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
                 <el-input-number
                   v-model="formModel.freezeDuration"
                   :min="0"
                   :max="8640000"
                   controls-position="right"
-                  style="width: 220px;"
+                  style="width: 140px;"
                 />
-                <span class="text-placeholder">（针对资金冻结类交易，0 表示不冻结）</span>
+                <span class="text-placeholder">（0表示不冻结）</span>
               </div>
             </el-form-item>
           </el-col>
@@ -858,6 +878,11 @@
               {{ getStatusMeta(detailRecord.status).label }}
             </el-tag>
           </el-descriptions-item>
+          <el-descriptions-item label="需先预冻结">
+            <el-tag size="small" :type="detailRecord.requirePreFreeze === 1 ? 'warning' : 'info'">
+              {{ detailRecord.requirePreFreeze === 1 ? '是 (须先冻结)' : '否 (直接入账)' }}
+            </el-tag>
+          </el-descriptions-item>
           <el-descriptions-item label="冻结时长">{{ detailRecord.freezeDuration || 0 }} 秒</el-descriptions-item>
           <el-descriptions-item label="前置规则">{{ getRuleNameById(detailRecord.preRuleId) }}</el-descriptions-item>
         </el-descriptions>
@@ -999,6 +1024,7 @@ interface RuleFormState {
   payChannel: string
   isOpenAccount: boolean
   freezeDuration: number
+  requirePreFreeze: number
   preRuleId?: number
   status: number
   entries: RuleEntryRequest[]
@@ -1012,6 +1038,7 @@ const formModel = ref<RuleFormState>({
   payChannel: 'CASH',
   isOpenAccount: false,
   freezeDuration: 0,
+  requirePreFreeze: 0,
   preRuleId: undefined,
   status: 1,
   entries: []
@@ -1293,6 +1320,7 @@ const openCreateDialog = () => {
     payChannel: 'CASH',
     isOpenAccount: false,
     freezeDuration: 0,
+    requirePreFreeze: 0,
     preRuleId: undefined,
     status: 1,
     entries: [
@@ -1431,6 +1459,7 @@ const doOpenEdit = (detail: RuleResponse) => {
     payChannel: detail.payChannel,
     isOpenAccount: !!detail.isOpenAccount,
     freezeDuration: detail.freezeDuration || 0,
+    requirePreFreeze: detail.requirePreFreeze || 0,
     preRuleId: detail.preRuleId && detail.preRuleId > 0 ? detail.preRuleId : undefined,
     status: detail.status || 1,
     entries: (detail.entries || []).map(e => ({
@@ -1469,6 +1498,7 @@ const handleCopyRule = async (row: RuleResponse) => {
       payChannel: detail.payChannel,
       isOpenAccount: !!detail.isOpenAccount,
       freezeDuration: detail.freezeDuration || 0,
+      requirePreFreeze: detail.requirePreFreeze || 0,
       preRuleId: detail.preRuleId && detail.preRuleId > 0 ? detail.preRuleId : undefined,
       status: 1, // 副本默认待启用
       entries: (detail.entries || []).map(e => ({
@@ -1609,6 +1639,7 @@ const handleSubmit = async () => {
         voucherType: formModel.value.voucherType,
         isOpenAccount: formModel.value.isOpenAccount,
         freezeDuration: formModel.value.freezeDuration,
+        requirePreFreeze: formModel.value.requirePreFreeze,
         preRuleId: formModel.value.preRuleId || 0,
         status: formModel.value.status,
         entries: formModel.value.entries
@@ -1623,6 +1654,7 @@ const handleSubmit = async () => {
         payChannel: formModel.value.payChannel,
         isOpenAccount: formModel.value.isOpenAccount,
         freezeDuration: formModel.value.freezeDuration,
+        requirePreFreeze: formModel.value.requirePreFreeze,
         preRuleId: formModel.value.preRuleId || 0,
         status: formModel.value.status,
         entries: formModel.value.entries

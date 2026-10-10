@@ -40,6 +40,15 @@ public interface AccountingVoucherMapper extends BaseMapper<AccountingVoucherPO>
     }
 
     /**
+     * 按全局事务号查询凭证列表
+     */
+    default List<AccountingVoucherPO> selectByTxnNo(String txnNo) {
+        return this.selectList(new LambdaQueryWrapper<AccountingVoucherPO>()
+                .eq(AccountingVoucherPO::getTxnNo, txnNo)
+                .eq(AccountingVoucherPO::getIsDelete, 0));
+    }
+
+    /**
      * 按原凭证号查询红冲凭证
      */
     default List<AccountingVoucherPO> selectReversalByOrig(String origVoucherNo) {

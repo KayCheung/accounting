@@ -248,4 +248,60 @@ class JournalingControllerTest {
 
         verify(journalingApplicationService, times(1)).rollbackJournal(eq("TRACE_FAIL_001"), eq("MANUAL_TEST"));
     }
+
+    @Test
+    @DisplayName("GET /accounting/journal/page: 分页查询业务记账流水记录成功")
+    void getJournalPage_shouldSucceed() throws Exception {
+        JournalRecordItemResponse item = JournalRecordItemResponse.builder()
+                .traceNo("TRC001")
+                .businessCode("LOAN")
+                .amount(new BigDecimal("100.00"))
+                .status(2)
+                .statusDesc("成功")
+                .build();
+        PageResponse<JournalRecordItemResponse> pageResp = PageResponse.<JournalRecordItemResponse>builder()
+                .current(1L)
+                .pages(1L)
+                .total(1L)
+                .list(List.of(item))
+                .build();
+
+        when(journalingApplicationService.getJournalPage(any())).thenReturn(pageResp);
+
+        mockMvc.perform(get("/accounting/journal/page?pageNo=1&pageSize=20&traceNo=TRC001"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.list[0].traceNo").value("TRC001"));
+
+        verify(journalingApplicationService, times(1)).getJournalPage(any());
+    }
+
+    @Test
+    @DisplayName("GET /accounting/journal/transaction/page: 分页查询账务事务记录成功")
+    void getTransactionPage_shouldSucceed() throws Exception {
+        TransactionRecordItemResponse item = TransactionRecordItemResponse.builder()
+                .txnNo("TXN001")
+                .traceNo("TRC001")
+                .amount(new BigDecimal("100.00"))
+                .status(2)
+                .statusDesc("成功")
+                .build();
+        PageResponse<TransactionRecordItemResponse> pageResp = PageResponse.<TransactionRecordItemResponse>builder()
+                .current(1L)
+                .pages(1L)
+                .total(1L)
+                .list(List.of(item))
+                .build();
+
+        when(journalingApplicationService.getTransactionPage(any())).thenReturn(pageResp);
+
+        mockMvc.perform(get("/accounting/journal/transaction/page?pageNo=1&pageSize=20&txnNo=TXN001"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.list[0].txnNo").value("TXN001"));
+
+        verify(journalingApplicationService, times(1)).getTransactionPage(any());
+    }
 }

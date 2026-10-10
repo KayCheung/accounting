@@ -42,6 +42,7 @@ public class RuleConverter {
         po.setOpenAccount(request.getIsOpenAccount() != null && request.getIsOpenAccount()
                 ? OpenAccountFlagEnum.ENABLED : OpenAccountFlagEnum.DISABLED);
         po.setFreezeDuration(request.getFreezeDuration() != null ? request.getFreezeDuration() : 0);
+        po.setRequirePreFreeze(request.getRequirePreFreeze() != null ? request.getRequirePreFreeze() : 0);
         po.setPreRuleId(request.getPreRuleId() != null ? request.getPreRuleId() : 0L);
         po.setStatus(Optional.ofNullable(RuleStatusEnum.fromCode(request.getStatus()))
                 .orElse(RuleStatusEnum.PENDING));
@@ -67,6 +68,9 @@ public class RuleConverter {
         }
         if (request.getFreezeDuration() != null) {
             po.setFreezeDuration(request.getFreezeDuration());
+        }
+        if (request.getRequirePreFreeze() != null) {
+            po.setRequirePreFreeze(request.getRequirePreFreeze());
         }
         if (request.getPreRuleId() != null) {
             po.setPreRuleId(request.getPreRuleId());
@@ -138,6 +142,7 @@ public class RuleConverter {
         resp.setPayChannel(po.getPayChannel());
         resp.setIsOpenAccount(po.getOpenAccount() != null && po.getOpenAccount() == OpenAccountFlagEnum.ENABLED);
         resp.setFreezeDuration(po.getFreezeDuration());
+        resp.setRequirePreFreeze(po.getRequirePreFreeze() != null ? po.getRequirePreFreeze() : 0);
         resp.setPreRuleId(po.getPreRuleId());
         resp.setStatus(Optional.ofNullable(po.getStatus()).map(RuleStatusEnum::getCode).orElse(null));
         resp.setEntries(entries);

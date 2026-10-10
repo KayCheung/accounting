@@ -24,4 +24,14 @@ public enum BusinessRecordStatusEnum {
     private final Integer code;
 
     private final String desc;
+
+    public static BusinessRecordStatusEnum fromCode(Integer code) {
+        if (code == null) return null;
+        for (BusinessRecordStatusEnum value : values()) {
+            if (value.code.equals(code)) {
+                return value;
+            }
+        }
+        return null;
+    }
 }

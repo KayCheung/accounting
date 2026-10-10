@@ -1,8 +1,11 @@
 // accounting-core/src/main/java/com/kltb/accounting/core/infrastructure/persistence/repository/TransactionRepository.java
 package com.kltb.accounting.core.infrastructure.persistence.repository;
 
+import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.kltb.accounting.api.request.TransactionPageQueryRequest;
 import com.kltb.accounting.core.domain.enums.TransactionStatusEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.TransactionPO;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.TransactionMapper;
@@ -86,5 +89,26 @@ public class TransactionRepository {
      */
     public Map<String, Object> selectDurationStats(LocalDate startDate, LocalDate endDate, String businessCode) {
         return transactionMapper.selectDurationStats(startDate, endDate, businessCode);
+    }
+
+    /**
+     * 账务事务多条件分页查询
+     */
+    public Page<TransactionPO> selectPage(TransactionPageQueryRequest request) {
+        Page<TransactionPO> page = new Page<>(
+                request.getPageNo() != null ? request.getPageNo() : 1,
+                request.getPageSize() != null ? request.getPageSize() : 20
+        );
+        TransactionStatusEnum statusEnum = request.getStatus() != null ? TransactionStatusEnum.fromCode(request.getStatus()) : null;
+
+        LambdaQueryWrapper<TransactionPO> wrapper = new LambdaQueryWrapper<TransactionPO>()
+                .like(StrUtil.isNotBlank(request.getTxnNo()), TransactionPO::getTxnNo, request.getTxnNo() != null ? request.getTxnNo().trim() : null)
+                .like(StrUtil.isNotBlank(request.getTraceNo()), TransactionPO::getTraceNo, request.getTraceNo() != null ? request.getTraceNo().trim() : null)
+                .eq(statusEnum != null, TransactionPO::getStatus, statusEnum)
+                .ge(request.getStartDate() != null, TransactionPO::getAccountingDate, request.getStartDate())
+                .le(request.getEndDate() != null, TransactionPO::getAccountingDate, request.getEndDate())
+                .eq(TransactionPO::getIsDelete, 0)
+                .orderByDesc(TransactionPO::getCreateTime);
+        return transactionMapper.selectPage(page, wrapper);
     }
 }

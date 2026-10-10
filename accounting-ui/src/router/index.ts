@@ -76,6 +76,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '资金冻结与扣款' }
       },
       {
+        path: 'business/journal',
+        name: 'JournalBusiness',
+        component: () => import('@/views/business/journal/index.vue'),
+        meta: { title: '记账流水与事务监控' }
+      },
+      {
         path: 'business/voucher',
         name: 'VoucherBusiness',
         component: () => import('@/views/business/voucher/index.vue'),

@@ -3,8 +3,10 @@ package com.kltb.accounting.core.interfaces;
 
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.api.request.JournalFreezeRequest;
+import com.kltb.accounting.api.request.JournalPageQueryRequest;
 import com.kltb.accounting.api.request.JournalSubmitRequest;
 import com.kltb.accounting.api.request.JournalUnfreezeRequest;
+import com.kltb.accounting.api.request.TransactionPageQueryRequest;
 import com.kltb.accounting.api.response.*;
 import com.kltb.accounting.core.application.service.JournalingApplicationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -48,6 +50,22 @@ public class JournalingController {
     public ApiResponse<JournalUnfreezeResponse> unfreeze(
             @Valid @RequestBody JournalUnfreezeRequest request) {
         JournalUnfreezeResponse response = journalingApplicationService.unfreezeJournal(request);
+        return ApiResponse.ok(response);
+    }
+
+    @GetMapping("/page")
+    @Operation(summary = "分页查询业务记账流水记录", description = "面向管理后台，支持按跟踪号、业务代码、交易类型、状态、原冻结号及日期范围多维组合检索")
+    public ApiResponse<PageResponse<JournalRecordItemResponse>> getJournalPage(
+            @Valid JournalPageQueryRequest request) {
+        PageResponse<JournalRecordItemResponse> response = journalingApplicationService.getJournalPage(request);
+        return ApiResponse.ok(response);
+    }
+
+    @GetMapping("/transaction/page")
+    @Operation(summary = "分页查询账务事务记录", description = "面向管理后台，支持按事务号、跟踪号、状态及日期范围多维检索")
+    public ApiResponse<PageResponse<TransactionRecordItemResponse>> getTransactionPage(
+            @Valid TransactionPageQueryRequest request) {
+        PageResponse<TransactionRecordItemResponse> response = journalingApplicationService.getTransactionPage(request);
         return ApiResponse.ok(response);
     }
 
