@@ -121,7 +121,6 @@ public class JournalingDomainService {
                     detailPO.setCustomerId(detail.getCustomerId());
                     detailPO.setCustomerType(CustomerTypeEnum.fromValue(detail.getCustomerType()));
                     detailPO.setFundsType(detail.getFundsType());
-                    detailPO.setItemCode(detail.getItemCode()); // N2 修复
                     detailPO.setAmount(detail.getAmount());
                     if (detail.getExtraAttrs() != null && !detail.getExtraAttrs().isEmpty()) {
                         detailPO.setExtraAttrs(JSONUtil.toJsonStr(detail.getExtraAttrs()));
@@ -171,7 +170,6 @@ public class JournalingDomainService {
                     detailPO.setCustomerId(detail.getCustomerId());
                     detailPO.setCustomerType(CustomerTypeEnum.fromValue(detail.getCustomerType()));
                     detailPO.setFundsType(detail.getFundsType());
-                    detailPO.setItemCode(detail.getItemCode());
                     detailPO.setAmount(detail.getAmount());
                     if (detail.getExtraAttrs() != null && !detail.getExtraAttrs().isEmpty()) {
                         detailPO.setExtraAttrs(JSONUtil.toJsonStr(detail.getExtraAttrs()));

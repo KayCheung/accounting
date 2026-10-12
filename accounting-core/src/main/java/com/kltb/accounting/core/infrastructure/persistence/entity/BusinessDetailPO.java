@@ -37,13 +37,6 @@ public class BusinessDetailPO extends BaseEntity {
     private String fundsType;
 
     /**
-     * 款项明细编码（字典CODE）
-     * DDL 唯一索引 uk_trace_no 包含此字段：(trace_no, trace_seq, customer_id, item_code)
-     * 用于区分同一客户在同一笔流水中的不同款项明细
-     */
-    private String itemCode;
-
-    /**
      * 交易金额
      * 必须使用 BigDecimal，禁止 new BigDecimal(double)
      */

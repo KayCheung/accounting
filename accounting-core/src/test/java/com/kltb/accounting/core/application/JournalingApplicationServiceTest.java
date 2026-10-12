@@ -139,7 +139,6 @@ class JournalingApplicationServiceTest {
         detail.setCustomerId("CUST001");
         detail.setCustomerType(CustomerTypeEnum.PERSONAL.getCode());
         detail.setFundsType("PRINCIPAL");
-        detail.setItemCode("ITEM001");
         detail.setAmount(new BigDecimal("100.00"));
         request.setDetails(List.of(detail));
 
@@ -173,7 +172,6 @@ class JournalingApplicationServiceTest {
         detail.setCustomerId("USER100");
         detail.setCustomerType(CustomerTypeEnum.PERSONAL.getCode());
         detail.setFundsType("DEPOSIT");
-        detail.setItemCode("ITEM001");
         detail.setAmount(new BigDecimal("200.00"));
         request.setDetails(List.of(detail));
 
@@ -245,7 +243,6 @@ class JournalingApplicationServiceTest {
         detail.setCustomerId("USER100");
         detail.setCustomerType(1);
         detail.setFundsType("DEPOSIT");
-        detail.setItemCode("ITEM001");
         detail.setAmount(new BigDecimal("100.00"));
         request.setDetails(List.of(detail));
 
@@ -275,7 +272,6 @@ class JournalingApplicationServiceTest {
         detail.setCustomerId("USER100");
         detail.setCustomerType(1);
         detail.setFundsType("DEPOSIT");
-        detail.setItemCode("ITEM001");
         detail.setAmount(new BigDecimal("100.00"));
         request.setDetails(List.of(detail));
 
@@ -499,7 +495,6 @@ class JournalingApplicationServiceTest {
         detail.setCustomerId("CUST001");
         detail.setCustomerType(CustomerTypeEnum.PERSONAL.getCode());
         detail.setFundsType("PRINCIPAL");
-        detail.setItemCode("ITEM001");
         detail.setAmount(new BigDecimal("100.00"));
         request.setDetails(List.of(detail));
 

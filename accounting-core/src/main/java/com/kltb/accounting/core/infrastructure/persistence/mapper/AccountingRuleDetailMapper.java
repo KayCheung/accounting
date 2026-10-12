@@ -14,7 +14,7 @@ import org.apache.ibatis.annotations.Param;
 public interface AccountingRuleDetailMapper extends BaseMapper<AccountingRuleDetailPO> {
 
     /**
-     * 按规则ID查询规则明细（含辅助核算项联查）
+     * 按规则ID查询规则明细列表（按行号升序）
      *
      * @param ruleId 规则ID
      * @return 规则明细列表

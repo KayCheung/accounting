@@ -150,6 +150,50 @@ class RuleApplicationServiceTest {
     }
 
     @Test
+    @DisplayName("创建规则: 辅助核算SpEL分摊脚本为空报 PARAM_ERROR")
+    void create_auxiliarySpelScriptEmpty_shouldThrow() {
+        AccountSubjectPO subject = new AccountSubjectPO().setSubjectCode("101001");
+        when(subjectRepository.selectByCode("101001")).thenReturn(subject);
+        doAnswer(invocation -> {
+            ((org.springframework.transaction.support.TransactionCallback<?>) invocation.getArgument(0)).doInTransaction(null);
+            return null;
+        }).when(transactionTemplate).execute(any());
+
+        RuleAuxiliaryRequest aux = new RuleAuxiliaryRequest()
+                .setAuxType("PARTNER").setAuxCode("P01").setAllocationMethod(4)
+                .setExtendScript("");
+        RuleEntryRequest entry = buildEntry("101001", 1);
+        entry.setAuxiliaries(List.of(aux));
+        RuleCreateRequest request = buildRequestWithEntries(List.of(entry, buildEntry("201001", 2)));
+
+        assertThatThrownBy(() -> ruleApplicationService.create(request))
+                .isInstanceOf(ServiceException.class)
+                .hasMessageContaining("SpEL脚本不能为空");
+    }
+
+    @Test
+    @DisplayName("创建规则: 辅助核算SpEL语法错误报 PARAM_ERROR")
+    void create_auxiliarySpelScriptInvalid_shouldThrow() {
+        AccountSubjectPO subject = new AccountSubjectPO().setSubjectCode("101001");
+        when(subjectRepository.selectByCode("101001")).thenReturn(subject);
+        doAnswer(invocation -> {
+            ((org.springframework.transaction.support.TransactionCallback<?>) invocation.getArgument(0)).doInTransaction(null);
+            return null;
+        }).when(transactionTemplate).execute(any());
+
+        RuleAuxiliaryRequest aux = new RuleAuxiliaryRequest()
+                .setAuxType("PARTNER").setAuxCode("P01").setAllocationMethod(4)
+                .setExtendScript("invalid[[syntax");
+        RuleEntryRequest entry = buildEntry("101001", 1);
+        entry.setAuxiliaries(List.of(aux));
+        RuleCreateRequest request = buildRequestWithEntries(List.of(entry, buildEntry("201001", 2)));
+
+        assertThatThrownBy(() -> ruleApplicationService.create(request))
+                .isInstanceOf(ServiceException.class)
+                .hasMessageContaining("SpEL脚本语法错误");
+    }
+
+    @Test
     @DisplayName("停用规则: 存在关联凭证报 OPERATION_NOT_ALLOWED")
     void disable_hasVouchers_shouldThrow() {
         AccountingRulePO rule = new AccountingRulePO()

@@ -117,10 +117,15 @@ public class RuleConverter {
         po.setRuleDetailId(ruleDetailId);
         po.setAuxType(request.getAuxType());
         po.setAuxCode(request.getAuxCode());
-        po.setAllocationMethod(Optional.ofNullable(AllocationMethodEnum.fromCode(request.getAllocationMethod()))
-                .orElse(AllocationMethodEnum.NONE));
-        po.setAllocationValue(request.getAllocationValue() != null ? request.getAllocationValue() : BigDecimal.ZERO);
-        po.setExtendScript(request.getExtendScript() != null ? request.getExtendScript() : "");
+        AllocationMethodEnum method = Optional.ofNullable(AllocationMethodEnum.fromCode(request.getAllocationMethod()))
+                .orElse(AllocationMethodEnum.NONE);
+        po.setAllocationMethod(method);
+        if (method == AllocationMethodEnum.SPEL_SCRIPT) {
+            po.setAllocationValue(BigDecimal.ZERO);
+        } else {
+            po.setAllocationValue(request.getAllocationValue() != null ? request.getAllocationValue() : BigDecimal.ZERO);
+        }
+        po.setExtendScript(request.getExtendScript() != null ? request.getExtendScript().trim() : "");
         po.setCreateId(Constants.SYSTEM_OPERATOR);
         po.setCreateName(Constants.SYSTEM_OPERATOR);
         po.setUpdateId(Constants.SYSTEM_OPERATOR);

@@ -8,8 +8,8 @@ export interface RuleAuxiliaryResponse {
   id?: number
   auxType: string
   auxCode: string
-  allocationMethod: number // 1-不分摊，2-固定金额，3-按比例
-  allocationValue?: number | string
+  allocationMethod: number // 1-不分摊，2-固定金额，3-按比例，4-SpEL表达式
+  allocationValue?: number | string | null
   extendScript?: string
 }
 
@@ -66,7 +66,7 @@ export interface RuleAuxiliaryRequest {
   auxType: string
   auxCode: string
   allocationMethod: number
-  allocationValue?: number | string
+  allocationValue?: number | string | null
   extendScript?: string
 }
 

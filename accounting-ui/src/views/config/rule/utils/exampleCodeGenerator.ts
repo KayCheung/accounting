@@ -163,7 +163,6 @@ export function buildSampleDetails(rule: RuleResponse, totalAmount: number) {
         customerId: 'CUST_10001',
         customerType: 1, // 1-个人, 2-企业
         fundsType: fundsTypes[0],
-        itemCode: 'ITEM_001',
         amount: Number(totalAmount.toFixed(2)),
         extraAttrs: {
           subAccountNo: 'SUB_ACC_10001',
@@ -187,7 +186,6 @@ export function buildSampleDetails(rule: RuleResponse, totalAmount: number) {
       customerId: `CUST_${10001 + index}`,
       customerType: 1, // 1-个人, 2-企业
       fundsType: ft,
-      itemCode: `ITEM_${index + 1}`,
       amount: itemAmt,
       extraAttrs: {
         subAccountNo: `SUB_ACC_${10001 + index}`,

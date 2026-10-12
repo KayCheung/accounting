@@ -500,13 +500,7 @@ const paramSpecData = computed(() => {
       ruleValue: uniqueFundsTypes.join(' / '),
       desc: '交易款项类型编码。必须与当前记账规则分录明细中配置的款项类型严格一致，否则将抛出分录匹配异常。'
     },
-    {
-      field: 'details[].itemCode',
-      type: 'String',
-      required: true,
-      ruleValue: 'ITEM_001',
-      desc: '款项明细细项编码，长度≤32。同笔流水内区分不同明细，是防重唯一索引 uk_trace_no 的组成字段。'
-    },
+
     {
       field: 'details[].amount',
       type: 'BigDecimal',

@@ -8,7 +8,6 @@
                d.debit_credit, d.currency, d.is_unilateral, d.extend_script, d.summary,
                d.create_time, d.update_time, d.is_delete, d.tenant_id
         FROM t_accounting_rule_detail d
-        LEFT JOIN t_accounting_rule_auxiliary a ON d.id = a.rule_detail_id AND a.is_delete = 0
         WHERE d.rule_id = #{ruleId}
           AND d.is_delete = 0
         ORDER BY d.row_num ASC

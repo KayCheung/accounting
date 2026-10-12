@@ -57,7 +57,6 @@ class JournalingControllerTest {
         detail.setCustomerId("CUST_001");
         detail.setCustomerType(1);
         detail.setFundsType("PRINCIPAL");
-        detail.setItemCode("ITEM_001");
         detail.setAmount(amount);
         return detail;
     }

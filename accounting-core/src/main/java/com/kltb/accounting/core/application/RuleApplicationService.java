@@ -305,9 +305,36 @@ public class RuleApplicationService {
     }
 
     /**
-     * 辅助核算项校验：按比例分摊时总和须等于 1
+     * 辅助核算项校验：分摊方式参数合法性与 SpEL 语法预检
      */
     private void validateAuxiliaries(List<RuleAuxiliaryRequest> auxiliaries) {
+        for (RuleAuxiliaryRequest aux : auxiliaries) {
+            if (aux.getAllocationMethod() == null) {
+                continue;
+            }
+            if (aux.getAllocationMethod() == 4) {
+                // SpEL 表达式分摊
+                if (aux.getExtendScript() == null || aux.getExtendScript().isBlank()) {
+                    throw new ServiceException(ResultCode.PARAM_ERROR,
+                            "辅助核算项选择SpEL表达式分摊时，SpEL脚本不能为空：" + aux.getAuxCode());
+                }
+                validateSpelScript(aux.getExtendScript());
+            } else if (aux.getAllocationMethod() == 2) {
+                // 固定金额分摊
+                if (aux.getAllocationValue() == null || aux.getAllocationValue().compareTo(BigDecimal.ZERO) <= 0) {
+                    throw new ServiceException(ResultCode.PARAM_ERROR,
+                            "辅助核算项固定金额分摊值必须大于0：" + aux.getAuxCode());
+                }
+            } else if (aux.getAllocationMethod() == 3) {
+                // 按比例分摊单项正数检查
+                if (aux.getAllocationValue() == null || aux.getAllocationValue().compareTo(BigDecimal.ZERO) <= 0) {
+                    throw new ServiceException(ResultCode.PARAM_ERROR,
+                            "辅助核算项按比例分摊值必须大于0：" + aux.getAuxCode());
+                }
+            }
+        }
+
+        // 按比例分摊总和须等于 1
         boolean hasProportional = auxiliaries.stream()
                 .anyMatch(a -> a.getAllocationMethod() != null && a.getAllocationMethod() == 3);
         if (hasProportional) {

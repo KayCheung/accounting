@@ -693,7 +693,7 @@
         </el-table-column>
         <el-table-column label="分摊方式 *" width="130">
           <template #default="{ row }">
-            <el-select v-model="row.allocationMethod" size="small">
+            <el-select v-model="row.allocationMethod" size="small" @change="handleAllocationMethodChange(row)">
               <el-option
                 v-for="item in ALLOCATION_METHOD_OPTIONS"
                 :key="item.value"
@@ -719,7 +719,7 @@
             />
             <el-input
               v-else-if="row.allocationMethod === 4"
-              v-model="row.allocationValue"
+              v-model="row.extendScript"
               placeholder="如 #extra['rate'] 或 #amount*0.1"
               size="small"
             >
@@ -1557,8 +1557,8 @@ const doOpenEdit = (detail: RuleResponse) => {
         auxType: a.auxType,
         auxCode: a.auxCode,
         allocationMethod: a.allocationMethod,
-        allocationValue: a.allocationValue,
-        extendScript: a.extendScript || ''
+        allocationValue: a.allocationMethod === 4 ? null : a.allocationValue,
+        extendScript: a.extendScript || (a.allocationMethod === 4 && a.allocationValue ? String(a.allocationValue) : '')
       }))
     }))
   }
@@ -1596,8 +1596,8 @@ const handleCopyRule = async (row: RuleResponse) => {
           auxType: a.auxType,
           auxCode: a.auxCode,
           allocationMethod: a.allocationMethod,
-          allocationValue: a.allocationValue,
-          extendScript: a.extendScript || ''
+          allocationValue: a.allocationMethod === 4 ? null : a.allocationValue,
+          extendScript: a.extendScript || (a.allocationMethod === 4 && a.allocationValue ? String(a.allocationValue) : '')
         }))
       }))
     }
@@ -1625,6 +1625,21 @@ const handleAddAuxItem = () => {
   })
 }
 
+// 切换分摊方式时同步清洗字段
+const handleAllocationMethodChange = (row: any) => {
+  if (row.allocationMethod === 4) {
+    if (!row.extendScript && row.allocationValue && isNaN(Number(row.allocationValue))) {
+      row.extendScript = String(row.allocationValue)
+    }
+    row.allocationValue = null
+  } else if (row.allocationMethod === 1) {
+    row.allocationValue = null
+    row.extendScript = ''
+  } else {
+    row.extendScript = ''
+  }
+}
+
 const handleRemoveAuxItem = (index: number) => {
   currentAuxList.value.splice(index, 1)
 }
@@ -1640,9 +1655,23 @@ const saveAuxiliaries = () => {
       ElMessage.warning('辅助核算类型与项目编码均不可为空')
       return
     }
-    if (item.allocationMethod === 4 && (!item.allocationValue || !String(item.allocationValue).trim())) {
-      ElMessage.warning('选择 SpEL 表达式分摊时，必须填写 SpEL 脚本')
-      return
+    if (item.allocationMethod === 4) {
+      const script = item.extendScript || item.allocationValue
+      if (!script || !String(script).trim()) {
+        ElMessage.warning('选择 SpEL 表达式分摊时，必须填写 SpEL 脚本')
+        return
+      }
+      item.extendScript = String(script).trim()
+      item.allocationValue = null
+    } else if (item.allocationMethod === 2 || item.allocationMethod === 3) {
+      if (item.allocationValue === '' || item.allocationValue === null || item.allocationValue === undefined) {
+        ElMessage.warning('请填写辅助核算分摊值')
+        return
+      }
+      item.extendScript = ''
+    } else {
+      item.allocationValue = null
+      item.extendScript = ''
     }
   }
   if (currentEntryIndex.value >= 0 && formModel.value.entries[currentEntryIndex.value]) {
@@ -1660,7 +1689,7 @@ const viewRowAuxiliaries = (row: any) => {
       : a.allocationMethod === 2
       ? `固定金额(${a.allocationValue})`
       : a.allocationMethod === 4
-      ? `SpEL脚本(${a.allocationValue})`
+      ? `SpEL脚本(${a.extendScript || a.allocationValue || '未配置'})`
       : '不分摊'
     return `${i + 1}. [${a.auxType}] 编码:${a.auxCode} ｜ ${methodText}`
   }).join('\n')
@@ -1688,7 +1717,7 @@ const openAuxSpelEditor = (row: any, index: number) => {
   textEditorRowIndex.value = currentEntryIndex.value
   textEditorRowNum.value = currentEntryIndex.value + 1
   textEditorField.value = 'extendScript'
-  textEditorContent.value = (row.allocationValue as string) || ''
+  textEditorContent.value = (row.extendScript as string) || (row.allocationValue as string) || ''
   textEditorVisible.value = true
 }
 
@@ -1703,7 +1732,8 @@ const insertIntoEditor = (text: string) => {
 const saveLargeTextEditor = () => {
   if (isAuxSpelMode.value) {
     if (auxSpelItemIndex.value >= 0 && currentAuxList.value[auxSpelItemIndex.value]) {
-      currentAuxList.value[auxSpelItemIndex.value].allocationValue = textEditorContent.value.trim()
+      currentAuxList.value[auxSpelItemIndex.value].extendScript = textEditorContent.value.trim()
+      currentAuxList.value[auxSpelItemIndex.value].allocationValue = null
     }
     isAuxSpelMode.value = false
     auxSpelItemIndex.value = -1
@@ -1747,6 +1777,23 @@ const handleSubmit = async () => {
 
   submitting.value = true
   try {
+    // 规范化清洗明细与辅助核算项数据，确保 SpEL 表达式与分摊数值字段类型严格匹配后端契约
+    const cleanEntries = formModel.value.entries.map(entry => ({
+      ...entry,
+      auxiliaries: (entry.auxiliaries || []).map((a: any) => {
+        const isSpel = a.allocationMethod === 4
+        const isFixed = a.allocationMethod === 2
+        const isRatio = a.allocationMethod === 3
+        return {
+          auxType: a.auxType,
+          auxCode: a.auxCode,
+          allocationMethod: a.allocationMethod,
+          allocationValue: isSpel ? null : (isFixed || isRatio ? (a.allocationValue !== '' && a.allocationValue !== null && a.allocationValue !== undefined ? Number(a.allocationValue) : null) : null),
+          extendScript: isSpel ? (a.extendScript || a.allocationValue || '').trim() : ''
+        }
+      })
+    }))
+
     if (isEditMode.value && currentEditId.value) {
       await updateRule(currentEditId.value, {
         ruleName: formModel.value.ruleName,
@@ -1756,7 +1803,7 @@ const handleSubmit = async () => {
         requirePreFreeze: formModel.value.requirePreFreeze,
         preRuleId: formModel.value.preRuleId || 0,
         status: formModel.value.status,
-        entries: formModel.value.entries
+        entries: cleanEntries
       })
       ElMessage.success('记账规则更新成功')
     } else {
@@ -1771,7 +1818,7 @@ const handleSubmit = async () => {
         requirePreFreeze: formModel.value.requirePreFreeze,
         preRuleId: formModel.value.preRuleId || 0,
         status: formModel.value.status,
-        entries: formModel.value.entries
+        entries: cleanEntries
       })
       ElMessage.success('记账规则创建成功')
     }
