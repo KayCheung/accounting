@@ -275,7 +275,15 @@ class VoucheringDomainServiceTest {
                         && v.getPostingType() == PostingTypeEnum.AUTOMATIC
                         && v.getStatus() == VoucherStatusEnum.PENDING
         ));
-        verify(accountingVoucherRepository, times(2)).insertEntry(any());
+        org.mockito.ArgumentCaptor<AccountingVoucherEntryPO> entryCaptor =
+                org.mockito.ArgumentCaptor.forClass(AccountingVoucherEntryPO.class);
+        verify(accountingVoucherRepository, times(2)).insertEntry(entryCaptor.capture());
+        List<AccountingVoucherEntryPO> capturedEntries = entryCaptor.getAllValues();
+        assertThat(capturedEntries).allSatisfy(entry -> {
+            assertThat(entry.getChangeDirection()).isNotNull();
+            assertThat(entry.getUnilateral()).isNotNull();
+            assertThat(entry.getBuffered()).isNotNull();
+        });
     }
 
     private AccountingRuleDetailPO buildRuleDetail(Long id, String subjectCode, int rowNum) {

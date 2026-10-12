@@ -8,12 +8,15 @@ import com.kltb.accounting.api.response.VoucherFullDetailResponse;
 import com.kltb.accounting.api.response.VoucherPageItemResponse;
 import com.kltb.accounting.core.application.assembler.VoucheringAssembler;
 import com.kltb.accounting.core.application.service.VoucheringApplicationService;
+import com.kltb.accounting.core.domain.enums.ChangeDirectionEnum;
 import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
 import com.kltb.accounting.core.domain.enums.PostingTypeEnum;
 import com.kltb.accounting.core.domain.enums.TradeTypeEnum;
 import com.kltb.accounting.core.domain.enums.VoucherStatusEnum;
 import com.kltb.accounting.core.domain.service.AuxiliaryDomainService;
+import com.kltb.accounting.core.domain.service.AuxiliaryItemData;
 import com.kltb.accounting.core.domain.service.BufferPostingDomainService;
+import com.kltb.accounting.core.domain.service.VoucherEntryData;
 import com.kltb.accounting.core.domain.service.VoucheringDomainService;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountRepository;
@@ -291,6 +294,11 @@ class VoucheringApplicationServiceTest {
         txn.setTxnNo("TXN001");
         when(transactionRepository.selectByTraceNo("TRC001")).thenReturn(txn);
 
+        AccountSubjectPO subject = new AccountSubjectPO();
+        subject.setSubjectCode("1001");
+        subject.setDebitCredit(DebitCreditEnum.DEBIT);
+        when(subjectRepository.selectByCode("1001")).thenReturn(subject);
+
         when(voucheringDomainService.calculateEntryAmount(eq(rd1), eq(d1), eq(journal)))
                 .thenReturn(new BigDecimal("100.00"));
 
@@ -358,6 +366,11 @@ class VoucheringApplicationServiceTest {
         txn.setTxnNo("TXN002");
         when(transactionRepository.selectByTraceNo("TRC002")).thenReturn(txn);
 
+        AccountSubjectPO subject = new AccountSubjectPO();
+        subject.setSubjectCode("1001");
+        subject.setDebitCredit(DebitCreditEnum.DEBIT);
+        when(subjectRepository.selectByCode("1001")).thenReturn(subject);
+
         when(voucheringDomainService.calculateEntryAmount(eq(rd1), eq(d1), eq(journal)))
                 .thenReturn(new BigDecimal("200.00"));
 
@@ -382,5 +395,191 @@ class VoucheringApplicationServiceTest {
         assertThat(resp).isNotNull();
         assertThat(resp.getEntries().get(0).getAccountNo()).isEqualTo("ACC-FROM-DB-002");
         verify(accountRepository).selectByOwnerIdAndSubjectCode("CUST002", "1001");
+    }
+
+    @Test
+    @DisplayName("generateVoucher: 校验分录增减方向 changeDirection 正确推导（借借为增，借贷为减）")
+    void generateVoucher_changeDirectionDerivation_shouldSetCorrectDirection() {
+        VoucherGenerateRequest req = new VoucherGenerateRequest();
+        req.setTraceNo("TRC_DIR_001");
+        req.setAccountMapping(Map.of("CUST_A:1001", "ACC_001", "CUST_B:2001", "ACC_002"));
+
+        BusinessRecordPO journal = new BusinessRecordPO();
+        journal.setTraceNo("TRC_DIR_001");
+        journal.setStatus(BusinessRecordStatusEnum.PROCESSING);
+        journal.setBusinessCode("PAY");
+        journal.setTradingCode("TRANSFER");
+        journal.setPayChannel("WECHAT");
+        journal.setAccountingDate(LocalDate.now());
+
+        BusinessDetailPO d1 = new BusinessDetailPO();
+        d1.setFundsType("FEE");
+        d1.setCustomerId("CUST_A");
+        d1.setAmount(new BigDecimal("100.00"));
+
+        BusinessDetailPO d2 = new BusinessDetailPO();
+        d2.setFundsType("FEE");
+        d2.setCustomerId("CUST_B");
+        d2.setAmount(new BigDecimal("100.00"));
+
+        VoucheringDomainService.JournalWithDetails jwd = new VoucheringDomainService.JournalWithDetails(
+                journal, List.of(d1, d2));
+        when(voucheringDomainService.loadJournal("TRC_DIR_001")).thenReturn(jwd);
+
+        AccountingRulePO rule = new AccountingRulePO();
+        rule.setId(2L);
+        AccountingRuleDetailPO rd1 = new AccountingRuleDetailPO();
+        rd1.setId(21L);
+        rd1.setRowNum(1);
+        rd1.setFundsType("FEE");
+        rd1.setSubjectCode("1001"); // 借方科目
+        rd1.setDebitCredit(DebitCreditEnum.DEBIT); // 借方分录 -> INCREASE
+        rd1.setCurrency("CNY");
+
+        AccountingRuleDetailPO rd2 = new AccountingRuleDetailPO();
+        rd2.setId(22L);
+        rd2.setRowNum(2);
+        rd2.setFundsType("FEE");
+        rd2.setSubjectCode("2001"); // 贷方科目
+        rd2.setDebitCredit(DebitCreditEnum.DEBIT); // 借方分录 -> DECREASE
+        rd2.setCurrency("CNY");
+
+        VoucheringDomainService.AccountingRuleWithDetails rwd = new VoucheringDomainService.AccountingRuleWithDetails(
+                rule, List.of(rd1, rd2), Collections.emptyMap());
+        when(voucheringDomainService.matchRule("PAY", "TRANSFER", "WECHAT")).thenReturn(rwd);
+
+        TransactionPO txn = new TransactionPO();
+        txn.setTxnNo("TXN_DIR_001");
+        when(transactionRepository.selectByTraceNo("TRC_DIR_001")).thenReturn(txn);
+
+        AccountSubjectPO sub1 = new AccountSubjectPO();
+        sub1.setSubjectCode("1001");
+        sub1.setDebitCredit(DebitCreditEnum.DEBIT); // 借方余额方向
+        AccountSubjectPO sub2 = new AccountSubjectPO();
+        sub2.setSubjectCode("2001");
+        sub2.setDebitCredit(DebitCreditEnum.CREDIT); // 贷方余额方向
+        when(subjectRepository.selectByCode("1001")).thenReturn(sub1);
+        when(subjectRepository.selectByCode("2001")).thenReturn(sub2);
+
+        when(voucheringDomainService.calculateEntryAmount(eq(rd1), any(), eq(journal)))
+                .thenReturn(new BigDecimal("100.00"));
+        when(voucheringDomainService.calculateEntryAmount(eq(rd2), any(), eq(journal)))
+                .thenReturn(new BigDecimal("100.00"));
+
+        when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> cb = invocation.getArgument(0);
+            return cb.doInTransaction(null);
+        });
+
+        org.mockito.ArgumentCaptor<List<VoucherEntryData>> entriesCaptor = org.mockito.ArgumentCaptor.forClass(List.class);
+        when(voucheringDomainService.persistVoucher(any(), any(), entriesCaptor.capture(), any())).thenReturn("VOU_DIR");
+        when(accountingVoucherRepository.updateTxnNoByVoucherNo("VOU_DIR", "TXN_DIR_001")).thenReturn(1);
+
+        AccountingVoucherPO savedVoucher = new AccountingVoucherPO();
+        savedVoucher.setVoucherNo("VOU_DIR");
+        savedVoucher.setAmount(new BigDecimal("100.00"));
+        when(accountingVoucherRepository.selectByTraceNo("TRC_DIR_001")).thenReturn(List.of(savedVoucher));
+
+        VoucherGenerateResponse resp = service.generateVoucher(req);
+        assertThat(resp).isNotNull();
+
+        List<VoucherEntryData> captured = entriesCaptor.getValue();
+        assertThat(captured).hasSize(2);
+        // 借方分录(1) + 借方科目(1) -> 增 (1)
+        assertThat(captured.get(0).getChangeDirection()).isEqualTo(ChangeDirectionEnum.INCREASE.getCode());
+        // 借方分录(1) + 贷方科目(2) -> 减 (2)
+        assertThat(captured.get(1).getChangeDirection()).isEqualTo(ChangeDirectionEnum.DECREASE.getCode());
+    }
+
+    @Test
+    @DisplayName("generateVoucher: 携带辅助核算项时应正确回填真实生成的 voucherNo 与 entryId")
+    void generateVoucher_withAuxiliary_shouldBackfillVoucherNoAndEntryId() {
+        VoucherGenerateRequest req = new VoucherGenerateRequest();
+        req.setTraceNo("TRC_AUX_001");
+        req.setAccountMapping(Map.of("CUST_A:1001", "ACC_001"));
+
+        BusinessRecordPO journal = new BusinessRecordPO();
+        journal.setTraceNo("TRC_AUX_001");
+        journal.setStatus(BusinessRecordStatusEnum.PROCESSING);
+        journal.setBusinessCode("PAY");
+        journal.setTradingCode("TRANSFER");
+        journal.setPayChannel("WECHAT");
+        journal.setAccountingDate(LocalDate.now());
+
+        BusinessDetailPO d1 = new BusinessDetailPO();
+        d1.setFundsType("PRINCIPAL");
+        d1.setCustomerId("CUST_A");
+        d1.setAmount(new BigDecimal("100.00"));
+
+        VoucheringDomainService.JournalWithDetails jwd = new VoucheringDomainService.JournalWithDetails(
+                journal, List.of(d1));
+        when(voucheringDomainService.loadJournal("TRC_AUX_001")).thenReturn(jwd);
+
+        AccountingRulePO rule = new AccountingRulePO();
+        rule.setId(3L);
+        AccountingRuleDetailPO rd1 = new AccountingRuleDetailPO();
+        rd1.setId(31L);
+        rd1.setRowNum(1);
+        rd1.setFundsType("PRINCIPAL");
+        rd1.setSubjectCode("1001");
+        rd1.setDebitCredit(DebitCreditEnum.DEBIT);
+        rd1.setCurrency("CNY");
+
+        AccountingRuleAuxiliaryPO auxConfig = new AccountingRuleAuxiliaryPO();
+        auxConfig.setId(301L);
+        auxConfig.setRuleDetailId(31L);
+        auxConfig.setAuxType("DEPT");
+        auxConfig.setAuxCode("D001");
+
+        VoucheringDomainService.AccountingRuleWithDetails rwd = new VoucheringDomainService.AccountingRuleWithDetails(
+                rule, List.of(rd1), Map.of(31L, List.of(auxConfig)));
+        when(voucheringDomainService.matchRule("PAY", "TRANSFER", "WECHAT")).thenReturn(rwd);
+
+        TransactionPO txn = new TransactionPO();
+        txn.setTxnNo("TXN_AUX_001");
+        when(transactionRepository.selectByTraceNo("TRC_AUX_001")).thenReturn(txn);
+
+        AccountSubjectPO sub1 = new AccountSubjectPO();
+        sub1.setSubjectCode("1001");
+        sub1.setDebitCredit(DebitCreditEnum.DEBIT);
+        when(subjectRepository.selectByCode("1001")).thenReturn(sub1);
+
+        when(voucheringDomainService.calculateEntryAmount(eq(rd1), any(), eq(journal)))
+                .thenReturn(new BigDecimal("100.00"));
+
+        AuxiliaryItemData mockAuxItem = new AuxiliaryItemData(
+                null, null, "1001", "DEPT", "D001", "技术部", 1, new BigDecimal("100.00"), LocalDate.now());
+        when(auxiliaryDomainService.calculateAuxiliaryAllocation(any(), any(), any(), any()))
+                .thenReturn(List.of(mockAuxItem));
+
+        when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> cb = invocation.getArgument(0);
+            return cb.doInTransaction(null);
+        });
+
+        when(voucheringDomainService.persistVoucher(any(), any(), any(), any())).thenAnswer(invocation -> {
+            List<VoucherEntryData> entryList = invocation.getArgument(2);
+            for (int i = 0; i < entryList.size(); i++) {
+                entryList.get(i).setVoucherNo("VOU_AUX_001");
+                entryList.get(i).setEntryId("ENT_AUX_00" + (i + 1));
+            }
+            return "VOU_AUX_001";
+        });
+        when(accountingVoucherRepository.updateTxnNoByVoucherNo("VOU_AUX_001", "TXN_AUX_001")).thenReturn(1);
+
+        AccountingVoucherPO savedVoucher = new AccountingVoucherPO();
+        savedVoucher.setVoucherNo("VOU_AUX_001");
+        savedVoucher.setAmount(new BigDecimal("100.00"));
+        when(accountingVoucherRepository.selectByTraceNo("TRC_AUX_001")).thenReturn(List.of(savedVoucher));
+
+        VoucherGenerateResponse resp = service.generateVoucher(req);
+        assertThat(resp).isNotNull();
+
+        org.mockito.ArgumentCaptor<List<AuxiliaryItemData>> auxCaptor = org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(auxiliaryDomainService).persistAuxiliaryItems(auxCaptor.capture());
+        List<AuxiliaryItemData> savedAuxList = auxCaptor.getValue();
+        assertThat(savedAuxList).hasSize(1);
+        assertThat(savedAuxList.get(0).getVoucherNo()).isEqualTo("VOU_AUX_001");
+        assertThat(savedAuxList.get(0).getEntryId()).isEqualTo("ENT_AUX_001");
     }
 }

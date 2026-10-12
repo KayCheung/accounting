@@ -14,7 +14,9 @@ import com.kltb.accounting.core.domain.service.JournalingDomainService;
 import com.kltb.accounting.core.infrastructure.config.FreezeProperties;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
 import com.kltb.accounting.core.infrastructure.persistence.repository.*;
+import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.infrastructure.redis.DistributedLockTemplate;
+import com.kltb.accounting.core.shared.exception.AccountException;
 import com.kltb.accounting.core.shared.exception.ServiceException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -111,6 +113,12 @@ class JournalingApplicationServiceTest {
                 .thenAnswer(invocation -> {
                     java.util.function.Supplier<?> action = invocation.getArgument(3);
                     return action.get();
+                });
+
+        lenient().when(transactionTemplate.execute(any()))
+                .thenAnswer(invocation -> {
+                    org.springframework.transaction.support.TransactionCallback<?> action = invocation.getArgument(0);
+                    return action.doInTransaction(null);
                 });
 
         lenient().when(accountPreCheckDomainService.preCheckAndOpenAccounts(any(AccountingRulePO.class), any(), any()))
@@ -547,6 +555,28 @@ class JournalingApplicationServiceTest {
         verify(businessRecordRepository).updateStatusByTraceNo(traceNo, BusinessRecordStatusEnum.PROCESSING);
         verify(postingApplicationService).executePosting(any());
         verify(businessRecordRepository).updateStatusByTraceNo(traceNo, BusinessRecordStatusEnum.SUCCESS);
+    }
+
+    @Test
+    @DisplayName("retryJournal: 记账失败流水重试异常时应恢复 FAILED 状态")
+    void retryJournal_whenExceptionOccurs_shouldMarkFailed() {
+        String traceNo = "TRACE_RETRY_ERR";
+        BusinessRecordPO record = new BusinessRecordPO();
+        record.setTraceNo(traceNo);
+        record.setTraceSeq(1);
+        record.setStatus(BusinessRecordStatusEnum.FAILED);
+        when(businessRecordRepository.selectByTraceNo(traceNo)).thenReturn(record);
+        when(accountingVoucherRepository.selectByTraceNo(traceNo)).thenReturn(Collections.emptyList());
+
+        when(voucheringApplicationService.generateVoucher(any()))
+                .thenThrow(new AccountException(ResultCode.SYSTEM_ERROR, "凭证生成失败"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.retryJournal(traceNo))
+                .isInstanceOf(AccountException.class);
+
+        // 验证进入 PROCESSING 后发生异常，被重新置为 FAILED
+        verify(businessRecordRepository).updateStatusByTraceNo(traceNo, BusinessRecordStatusEnum.PROCESSING);
+        verify(businessRecordRepository).updateStatusByTraceNo(traceNo, BusinessRecordStatusEnum.FAILED);
     }
 
     @Test

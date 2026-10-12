@@ -12,14 +12,16 @@ import com.kltb.accounting.core.infrastructure.persistence.repository.Accounting
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountingVoucherRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.BusinessDetailRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.BusinessRecordRepository;
+import com.kltb.accounting.core.infrastructure.persistence.repository.SubjectRepository;
 import com.kltb.accounting.core.infrastructure.spel.JournalSpelContext;
 import com.kltb.accounting.core.infrastructure.spel.RuleScriptExecutor;
+import com.kltb.accounting.core.shared.context.TenantContext;
 import com.kltb.accounting.core.shared.exception.AccountException;
 import com.kltb.accounting.core.shared.exception.ServiceException;
 import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -32,7 +34,6 @@ import java.util.Map;
  * 凭证生成领域服务（P1-1 修复：不开启独立事务，由 Application Service 控制事务边界）
  */
 @Service
-@RequiredArgsConstructor
 public class VoucheringDomainService {
 
     private final AccountingRuleRepository accountingRuleRepository;
@@ -42,6 +43,39 @@ public class VoucheringDomainService {
     private final BusinessNoGenerator businessNoGenerator;
     private final RuleScriptExecutor ruleScriptExecutor;
     private final DictionaryComponent dictionaryComponent;
+    private final SubjectRepository subjectRepository;
+
+    @Autowired
+    public VoucheringDomainService(
+            AccountingRuleRepository accountingRuleRepository,
+            AccountingVoucherRepository accountingVoucherRepository,
+            BusinessRecordRepository businessRecordRepository,
+            BusinessDetailRepository businessDetailRepository,
+            BusinessNoGenerator businessNoGenerator,
+            RuleScriptExecutor ruleScriptExecutor,
+            DictionaryComponent dictionaryComponent,
+            @Autowired(required = false) SubjectRepository subjectRepository) {
+        this.accountingRuleRepository = accountingRuleRepository;
+        this.accountingVoucherRepository = accountingVoucherRepository;
+        this.businessRecordRepository = businessRecordRepository;
+        this.businessDetailRepository = businessDetailRepository;
+        this.businessNoGenerator = businessNoGenerator;
+        this.ruleScriptExecutor = ruleScriptExecutor;
+        this.dictionaryComponent = dictionaryComponent;
+        this.subjectRepository = subjectRepository;
+    }
+
+    public VoucheringDomainService(
+            AccountingRuleRepository accountingRuleRepository,
+            AccountingVoucherRepository accountingVoucherRepository,
+            BusinessRecordRepository businessRecordRepository,
+            BusinessDetailRepository businessDetailRepository,
+            BusinessNoGenerator businessNoGenerator,
+            RuleScriptExecutor ruleScriptExecutor,
+            DictionaryComponent dictionaryComponent) {
+        this(accountingRuleRepository, accountingVoucherRepository, businessRecordRepository,
+                businessDetailRepository, businessNoGenerator, ruleScriptExecutor, dictionaryComponent, null);
+    }
 
     /**
      * 按 traceNo 查询流水及其明细
@@ -188,10 +222,47 @@ public class VoucheringDomainService {
             entryPO.setSummary(entry.getSummary());
             entryPO.setStatus(VoucherEntryStatusEnum.PENDING);
             entryPO.setAccountingDate(entry.getAccountingDate());
+            entryPO.setUnilateral(Boolean.TRUE.equals(entry.getIsUnilateral()) ? 1 : 0);
+            entryPO.setBuffered(Boolean.TRUE.equals(entry.getIsBuffered()) ? 1 : 0);
+            entryPO.setExchangeRate(BigDecimal.ONE);
+            entryPO.setUnitPrice(BigDecimal.ZERO);
+            entryPO.setQuantity(0);
+            entryPO.setPricingUnit("");
+            entryPO.setTenantId(TenantContext.get());
+
+            // 核心财务律法：设置分录增减方向 changeDirection（1-增, 2-减）
+            if (entry.getChangeDirection() != null) {
+                entryPO.setChangeDirection(ChangeDirectionEnum.fromCode(entry.getChangeDirection()));
+            } else {
+                // 兜底机制：优先从科目表推导；若无科目信息，默认 INCREASE 避免数据库非空约束报错
+                ChangeDirectionEnum changeDir = resolveChangeDirection(entry.getSubjectCode(), entryPO.getDebitCredit());
+                entryPO.setChangeDirection(changeDir != null ? changeDir : ChangeDirectionEnum.INCREASE);
+            }
+
             accountingVoucherRepository.insertEntry(entryPO);
         }
 
         return voucherNo;
+    }
+
+    /**
+     * 根据科目余额方向推导增减方向（借贷一致为增，借贷相反为减）
+     */
+    private ChangeDirectionEnum resolveChangeDirection(String subjectCode, DebitCreditEnum debitCredit) {
+        if (subjectRepository == null || StrUtil.isBlank(subjectCode) || debitCredit == null) {
+            return null;
+        }
+        try {
+            AccountSubjectPO subject = subjectRepository.selectByCode(subjectCode);
+            if (subject != null && subject.getDebitCredit() != null) {
+                return (debitCredit == subject.getDebitCredit())
+                        ? ChangeDirectionEnum.INCREASE
+                        : ChangeDirectionEnum.DECREASE;
+            }
+        } catch (Exception ignored) {
+            // 忽略非核心查询异常，返回 null 走默认兜底
+        }
+        return null;
     }
 
     @Data

@@ -14,6 +14,7 @@ import com.kltb.accounting.api.response.VoucherGenerateResponse;
 import com.kltb.accounting.api.response.VoucherPageItemResponse;
 import com.kltb.accounting.core.application.assembler.VoucheringAssembler;
 import com.kltb.accounting.core.domain.enums.BusinessRecordStatusEnum;
+import com.kltb.accounting.core.domain.enums.ChangeDirectionEnum;
 import com.kltb.accounting.core.domain.enums.TradeTypeEnum;
 import com.kltb.accounting.core.domain.enums.VoucherStatusEnum;
 import com.kltb.accounting.core.domain.service.*;
@@ -87,8 +88,20 @@ public class VoucheringApplicationService {
 
         // 3. 逐规则明细行计算分录
         List<VoucherEntryData> entries = new ArrayList<>();
-        List<AuxiliaryItemData> allAuxItems = new ArrayList<>();
+        Map<VoucherEntryData, List<AuxiliaryItemData>> entryAuxMap = new LinkedHashMap<>();
         List<BufferPostingDetailData> allBufferData = new ArrayList<>();
+
+        // 批量预查科目信息，推导 changeDirection（避免循环内单个查库）
+        Set<String> subjectCodes = ruleDetails.stream()
+                .map(AccountingRuleDetailPO::getSubjectCode)
+                .filter(StrUtil::isNotBlank)
+                .collect(Collectors.toSet());
+        Map<String, AccountSubjectPO> subjectMap = subjectCodes.isEmpty()
+                ? Collections.emptyMap()
+                : subjectRepository.selectList(new LambdaQueryWrapper<AccountSubjectPO>()
+                        .in(AccountSubjectPO::getSubjectCode, subjectCodes))
+                        .stream()
+                        .collect(Collectors.toMap(AccountSubjectPO::getSubjectCode, s -> s, (s1, s2) -> s1));
 
         for (AccountingRuleDetailPO ruleDetail : ruleDetails) {
             // 找到匹配的款项类型业务明细
@@ -106,6 +119,19 @@ public class VoucheringApplicationService {
             // 确定账户编号（优先从内存字典匹配真实 accountNo，未命中则走仓储查询）
             String accountNo = resolveAccountNo(ruleDetail, matchedDetail, request.getAccountMapping());
 
+            // 核心财务律法：推导分录增减方向 changeDirection（1-增, 2-减）
+            AccountSubjectPO subject = subjectMap.get(ruleDetail.getSubjectCode());
+            if (subject == null || subject.getDebitCredit() == null) {
+                subject = subjectRepository.selectByCode(ruleDetail.getSubjectCode());
+            }
+            if (subject == null || subject.getDebitCredit() == null) {
+                throw new AccountException(ResultCode.SUBJECT_NOT_FOUND,
+                        "分录科目未配置或缺少借贷余额方向: " + ruleDetail.getSubjectCode());
+            }
+            ChangeDirectionEnum changeDir = (ruleDetail.getDebitCredit() == subject.getDebitCredit())
+                    ? ChangeDirectionEnum.INCREASE
+                    : ChangeDirectionEnum.DECREASE;
+
             // 构建分录数据
             VoucherEntryData entry = new VoucherEntryData(
                     null,  // entryId 由 persistVoucher 内部生成
@@ -119,8 +145,17 @@ public class VoucheringApplicationService {
                     ruleDetail.getSummary(),
                     journal.getAccountingDate(),
                     ruleDetail.getUnilateral() != null && ruleDetail.getUnilateral(),
-                    false  // isBuffered 默认为 false，后续缓冲匹配后更新
+                    false,  // isBuffered 默认为 false，后续缓冲匹配后更新
+                    changeDir.getCode()
             );
+
+            // 提前进行缓冲规则匹配，以便 persistVoucher 时 entry.isBuffered 准确入库
+            BufferPostingRulePO bufferRule = bufferPostingDomainService.matchBufferRule(
+                    entry, journal.getBusinessCode(), journal.getTradingCode(), journal.getPayChannel());
+            if (bufferRule != null) {
+                entry.setIsBuffered(true);
+            }
+
             entries.add(entry);
 
             // 从 auxMap 获取该分录行的辅助核算配置并由专职 AuxiliaryDomainService 计算分摊
@@ -128,7 +163,7 @@ public class VoucheringApplicationService {
             if (auxConfigs != null && !auxConfigs.isEmpty()) {
                 List<AuxiliaryItemData> auxItems = auxiliaryDomainService
                         .calculateAuxiliaryAllocation(entry, auxConfigs, matchedDetail, journal);
-                allAuxItems.addAll(auxItems);
+                entryAuxMap.put(entry, auxItems);
             }
         }
 
@@ -137,24 +172,31 @@ public class VoucheringApplicationService {
 
         // 5. 在统一事务中完成所有持久化操作（P1-1 修复）
         String voucherNo = transactionTemplate.execute(status -> {
-            // 5a. 写入凭证 + 分录
+            // 5a. 写入凭证 + 分录（此时 entry 包含完整的 isBuffered 与 changeDirection，并生成真实 voucherNo 与 entryId）
             String vouNo = voucheringDomainService.persistVoucher(
                     journal, rule, entries, request.getBookkeeperName());
 
-            // 5b. 写入辅助核算项（由专职 AuxiliaryDomainService 持久化）
+            // 5b. 写入辅助核算项（回填真实生成的 voucherNo 与 entryId）
+            List<AuxiliaryItemData> allAuxItems = new ArrayList<>();
+            entryAuxMap.forEach((entry, items) -> {
+                for (AuxiliaryItemData item : items) {
+                    item.setVoucherNo(entry.getVoucherNo());
+                    item.setEntryId(entry.getEntryId());
+                    allAuxItems.add(item);
+                }
+            });
             auxiliaryDomainService.persistAuxiliaryItems(allAuxItems);
 
-            // 5c. 缓冲规则匹配
+            // 5c. 组装缓冲记账明细（此时 entry 的 voucherNo 和 entryId 已由 persistVoucher 回填）
             for (VoucherEntryData entry : entries) {
-                entry.setVoucherNo(vouNo);
-                BufferPostingRulePO bufferRule = bufferPostingDomainService.matchBufferRule(
-                        entry, journal.getBusinessCode(), journal.getTradingCode(), journal.getPayChannel());
-
-                if (bufferRule != null) {
-                    entry.setIsBuffered(true);
-                    Long sharding = bufferPostingDomainService.calculateSharding(entry.getAccountNo());
-                    allBufferData.add(buildBufferPostingData(
-                            bufferRule, entry, journal, txnNo, sharding));
+                if (Boolean.TRUE.equals(entry.getIsBuffered())) {
+                    BufferPostingRulePO bufferRule = bufferPostingDomainService.matchBufferRule(
+                            entry, journal.getBusinessCode(), journal.getTradingCode(), journal.getPayChannel());
+                    if (bufferRule != null) {
+                        Long sharding = bufferPostingDomainService.calculateSharding(entry.getAccountNo());
+                        allBufferData.add(buildBufferPostingData(
+                                bufferRule, entry, journal, txnNo, sharding));
+                    }
                 }
             }
 

@@ -11,6 +11,7 @@ import com.kltb.accounting.core.infrastructure.persistence.entity.BusinessRecord
 import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountingVoucherAuxiliaryMapper;
 import com.kltb.accounting.core.infrastructure.spel.JournalSpelContext;
 import com.kltb.accounting.core.infrastructure.spel.RuleScriptExecutor;
+import com.kltb.accounting.core.shared.context.TenantContext;
 import com.kltb.accounting.core.shared.exception.AccountException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -191,16 +192,20 @@ public class AuxiliaryDomainService {
             }
         }
 
+        Integer changeDir = (entryData != null && entryData.getChangeDirection() != null)
+                ? entryData.getChangeDirection()
+                : (entryData != null ? entryData.getDebitCredit() : 1);
+
         return new AuxiliaryItemData(
-                entryData.getEntryId(),
-                entryData.getVoucherNo(),
-                entryData.getSubjectCode(),
+                entryData != null ? entryData.getEntryId() : null,
+                entryData != null ? entryData.getVoucherNo() : null,
+                entryData != null ? entryData.getSubjectCode() : null,
                 config.getAuxType(),
                 resolvedAuxCode,
                 resolvedAuxCode,
-                entryData.getDebitCredit(),
+                changeDir,
                 amount,
-                entryData.getAccountingDate()
+                entryData != null ? entryData.getAccountingDate() : null
         );
     }
 
@@ -213,17 +218,23 @@ public class AuxiliaryDomainService {
         }
 
         for (AuxiliaryItemData item : items) {
+            if (StrUtil.isBlank(item.getVoucherNo()) || StrUtil.isBlank(item.getEntryId())) {
+                throw new AccountException(ResultCode.SYSTEM_ERROR,
+                        "辅助核算项缺失关联凭证号或分录号: auxCode=" + item.getAuxCode());
+            }
+
             AccountingVoucherAuxiliaryPO po = new AccountingVoucherAuxiliaryPO();
             po.setVoucherNo(item.getVoucherNo());
             po.setEntryId(item.getEntryId());
             po.setSubjectCode(item.getSubjectCode());
             po.setAuxType(item.getAuxType());
             po.setAuxCode(item.getAuxCode());
-            po.setAuxName(item.getAuxName());
+            po.setAuxName(StrUtil.isNotBlank(item.getAuxName()) ? item.getAuxName() : item.getAuxCode());
             po.setChangeDirection(item.getChangeDirection() != null ?
-                    ChangeDirectionEnum.fromCode(item.getChangeDirection()) : null);
+                    ChangeDirectionEnum.fromCode(item.getChangeDirection()) : ChangeDirectionEnum.INCREASE);
             po.setAmount(item.getAmount());
             po.setAccountingDate(item.getAccountingDate());
+            po.setTenantId(TenantContext.get());
             voucherAuxiliaryMapper.insert(po);
         }
     }

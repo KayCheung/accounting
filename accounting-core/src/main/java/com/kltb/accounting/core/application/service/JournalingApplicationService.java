@@ -578,31 +578,40 @@ public class JournalingApplicationService {
 
         String lockKey = RedisKeyConstants.Lock.Idempotent.trace(traceNo, ObjectUtil.defaultIfNull(record.getTraceSeq(), 1));
         return distributedLockTemplate.execute(lockKey, 3, -1, () -> {
-            businessRecordRepository.updateStatusByTraceNo(traceNo, BusinessRecordStatusEnum.PROCESSING);
+            try {
+                businessRecordRepository.updateStatusByTraceNo(traceNo, BusinessRecordStatusEnum.PROCESSING);
 
-            List<AccountingVoucherPO> vouchers = accountingVoucherRepository.selectByTraceNo(traceNo);
-            AccountingVoucherPO voucher = (vouchers != null && !vouchers.isEmpty()) ? vouchers.get(0) : null;
-            if (voucher == null) {
-                VoucherGenerateRequest vReq = new VoucherGenerateRequest();
-                vReq.setTraceNo(traceNo);
-                vReq.setBookkeeperName(Constants.SYSTEM_OPERATOR);
-                VoucherGenerateResponse vResp = voucheringApplicationService.generateVoucher(vReq);
-                if (vResp != null) {
-                    voucher = accountingVoucherRepository.selectByVoucherNoSimple(vResp.getVoucherNo());
+                List<AccountingVoucherPO> vouchers = accountingVoucherRepository.selectByTraceNo(traceNo);
+                AccountingVoucherPO voucher = (vouchers != null && !vouchers.isEmpty()) ? vouchers.get(0) : null;
+                if (voucher == null) {
+                    VoucherGenerateRequest vReq = new VoucherGenerateRequest();
+                    vReq.setTraceNo(traceNo);
+                    vReq.setBookkeeperName(Constants.SYSTEM_OPERATOR);
+                    VoucherGenerateResponse vResp = voucheringApplicationService.generateVoucher(vReq);
+                    if (vResp != null) {
+                        voucher = accountingVoucherRepository.selectByVoucherNoSimple(vResp.getVoucherNo());
+                    }
                 }
-            }
 
-            if (voucher != null) {
-                PostingExecuteRequest postReq = new PostingExecuteRequest();
-                postReq.setVoucherNo(voucher.getVoucherNo());
-                postReq.setOperatorName(Constants.SYSTEM_OPERATOR);
-                PostingExecuteResponse postResp = postingApplicationService.executePosting(postReq);
-                if (postResp != null && VoucherStatusEnum.isPosted(postResp.getVoucherStatus())) {
-                    businessRecordRepository.updateStatusByTraceNo(traceNo, BusinessRecordStatusEnum.SUCCESS);
+                if (voucher != null) {
+                    PostingExecuteRequest postReq = new PostingExecuteRequest();
+                    postReq.setVoucherNo(voucher.getVoucherNo());
+                    postReq.setOperatorName(Constants.SYSTEM_OPERATOR);
+                    PostingExecuteResponse postResp = postingApplicationService.executePosting(postReq);
+                    if (postResp != null && VoucherStatusEnum.isPosted(postResp.getVoucherStatus())) {
+                        businessRecordRepository.updateStatusByTraceNo(traceNo, BusinessRecordStatusEnum.SUCCESS);
+                    }
                 }
-            }
 
-            return getJournalOverview(traceNo);
+                return getJournalOverview(traceNo);
+            } catch (AccountException e) {
+                markJournalFailed(traceNo, e.getResultCode().getMessage());
+                throw e;
+            } catch (RuntimeException e) {
+                log.error("[Journal] 重试记账异常，恢复 FAILED: traceNo={} error={}", traceNo, e.getMessage(), e);
+                markJournalFailed(traceNo, "系统异常: " + e.getMessage());
+                throw e;
+            }
         });
     }
 
