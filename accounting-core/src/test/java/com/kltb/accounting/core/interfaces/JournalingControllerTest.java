@@ -95,6 +95,47 @@ class JournalingControllerTest {
     }
 
     @Test
+    @DisplayName("POST /accounting/journal/submit: 提交记账流水支持 yyyy-MM-dd HH:mm:ss 格式字符串反序列化")
+    void submitJournal_withFormattedDateTimeString_shouldSucceed() throws Exception {
+        String json = "{\n" +
+                "  \"traceNo\": \"TRACE_CTRL_DATE_001\",\n" +
+                "  \"traceSeq\": 0,\n" +
+                "  \"businessCode\": \"LOAN\",\n" +
+                "  \"tradingCode\": \"DISBURSE\",\n" +
+                "  \"payChannel\": \"BANK\",\n" +
+                "  \"tradeType\": 1,\n" +
+                "  \"amount\": 100.00,\n" +
+                "  \"tradeTime\": \"2026-10-12 16:32:19\",\n" +
+                "  \"summary\": \"放款流水提交\",\n" +
+                "  \"details\": [{\n" +
+                "    \"customerId\": \"CUST_001\",\n" +
+                "    \"customerType\": 1,\n" +
+                "    \"fundsType\": \"PRINCIPAL\",\n" +
+                "    \"amount\": 100.00\n" +
+                "  }]\n" +
+                "}";
+
+        JournalSubmitResponse resp = new JournalSubmitResponse();
+        resp.setTraceNo("TRACE_CTRL_DATE_001");
+        resp.setTxnNo("TXN_CTRL_001");
+        resp.setAccountingDate(LocalDate.now());
+
+        when(journalingApplicationService.submitJournal(any())).thenReturn(resp);
+
+        mockMvc.perform(post("/accounting/journal/submit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data.traceNo").value("TRACE_CTRL_DATE_001"));
+
+        verify(journalingApplicationService, times(1)).submitJournal(argThat(req ->
+                req.getTradeTime() != null
+                        && req.getTradeTime().equals(LocalDateTime.of(2026, 10, 12, 16, 32, 19))
+        ));
+    }
+
+    @Test
     @DisplayName("POST /accounting/journal/freeze: 业务预冻结成功")
     void freezeJournal_shouldSucceed() throws Exception {
         JournalFreezeRequest request = new JournalFreezeRequest();

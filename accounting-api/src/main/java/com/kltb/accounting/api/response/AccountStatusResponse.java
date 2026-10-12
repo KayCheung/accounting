@@ -1,5 +1,7 @@
 package com.kltb.accounting.api.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Getter;
 import lombok.Setter;
@@ -47,8 +49,10 @@ public class AccountStatusResponse implements Serializable {
     private BigDecimal balance;
 
     @Schema(description = "开户日期")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private LocalDate openDate;
 
     @Schema(description = "注销生效日（未注销时为null）")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private LocalDate inactiveDate;
 }

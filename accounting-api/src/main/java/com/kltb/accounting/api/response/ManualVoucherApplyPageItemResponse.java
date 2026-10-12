@@ -42,6 +42,7 @@ public class ManualVoucherApplyPageItemResponse implements Serializable {
     private String tradeTypeDesc;
 
     @Schema(description = "会计日期")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private LocalDate accountingDate;
 
     @Schema(description = "凭证摘要", example = "9月末手工调账")

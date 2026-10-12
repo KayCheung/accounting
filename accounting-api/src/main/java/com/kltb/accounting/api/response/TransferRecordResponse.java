@@ -1,5 +1,7 @@
 package com.kltb.accounting.api.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -18,6 +20,7 @@ public class TransferRecordResponse {
     private String transferNo;
 
     @Schema(description = "会计日期")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private LocalDate accountingDate;
 
     @Schema(description = "结转类型：1-损益结转, 2-成本结转, 3-自定义结转")
@@ -48,8 +51,10 @@ public class TransferRecordResponse {
     private String failReason;
 
     @Schema(description = "执行时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime executeTime;
 
     @Schema(description = "完成时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime finishTime;
 }

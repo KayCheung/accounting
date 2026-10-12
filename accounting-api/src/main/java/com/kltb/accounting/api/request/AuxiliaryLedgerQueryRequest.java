@@ -1,5 +1,6 @@
 package com.kltb.accounting.api.request;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
@@ -25,9 +26,11 @@ public class AuxiliaryLedgerQueryRequest implements Serializable {
     @Schema(description = "辅助核算项目编码（空或 ALL 表示全部核算项汇总）", example = "DEPT001")
     private String auxCode;
 
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     @Schema(description = "会计期间起始日期", example = "2026-03-01")
     private LocalDate startDate;
 
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     @Schema(description = "会计期间截止日期", example = "2026-03-31")
     private LocalDate endDate;
 

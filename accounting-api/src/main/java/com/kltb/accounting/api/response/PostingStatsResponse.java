@@ -1,5 +1,7 @@
 package com.kltb.accounting.api.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -12,7 +14,9 @@ import java.util.List;
 @Data
 public class PostingStatsResponse {
 
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private LocalDate startDate;
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private LocalDate endDate;
     private String dimension;
     private List<StatsGroupData> statsList;

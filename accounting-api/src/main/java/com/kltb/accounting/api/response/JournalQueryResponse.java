@@ -1,6 +1,8 @@
 // accounting-api/src/main/java/com/kltb/accounting/api/response/JournalQueryResponse.java
 package com.kltb.accounting.api.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -44,6 +46,7 @@ public class JournalQueryResponse {
     private BigDecimal amount;
 
     /** 会计日期 */
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private LocalDate accountingDate;
 
     /** 摘要 */
@@ -62,8 +65,10 @@ public class JournalQueryResponse {
     private String failReason;
 
     /** 交易发生时间 */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime tradeTime;
 
     /** 记账完成时间 */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime finishTime;
 }

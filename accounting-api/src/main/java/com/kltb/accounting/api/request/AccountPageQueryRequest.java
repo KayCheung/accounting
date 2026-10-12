@@ -1,5 +1,6 @@
 package com.kltb.accounting.api.request;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -46,9 +47,11 @@ public class AccountPageQueryRequest extends PageRequest {
     @Schema(description = "风控状态：1-正常, 2-止入, 3-止出, 4-止入止出", example = "1")
     private Integer riskStatus;
 
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     @Schema(description = "开户起始日期", example = "2026-01-01")
     private LocalDate startDate;
 
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     @Schema(description = "开户截止日期", example = "2026-12-31")
     private LocalDate endDate;
 }

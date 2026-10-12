@@ -1,5 +1,7 @@
 package com.kltb.accounting.api.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,6 +23,7 @@ public class IncomeStatementResponse implements Serializable {
     private String periodDesc;
 
     @Schema(description = "报告期截止日期", example = "2026-03-31")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private LocalDate accountingDate;
 
     @Schema(description = "货币币种", example = "CNY")

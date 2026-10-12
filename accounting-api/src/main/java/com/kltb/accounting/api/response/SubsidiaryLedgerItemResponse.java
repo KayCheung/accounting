@@ -1,5 +1,7 @@
 package com.kltb.accounting.api.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,6 +23,7 @@ public class SubsidiaryLedgerItemResponse implements Serializable {
     private String rowType;
 
     @Schema(description = "会计日期", example = "2026-03-15")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private LocalDate accountingDate;
 
     @Schema(description = "记账凭证号", example = "VC202603150001")

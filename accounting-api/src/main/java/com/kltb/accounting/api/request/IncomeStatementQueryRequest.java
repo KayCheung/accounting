@@ -1,5 +1,6 @@
 package com.kltb.accounting.api.request;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -20,15 +21,19 @@ public class IncomeStatementQueryRequest implements Serializable {
     private Integer compareType = 1;
 
     // 自定义期间扩展
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     @Schema(description = "报告期间起始日期（自定义期间模式使用，如 2026-01-01）", example = "2026-01-01")
     private LocalDate startDate;
 
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     @Schema(description = "报告期间截止日期（自定义期间模式使用，如 2026-03-31）", example = "2026-03-31")
     private LocalDate endDate;
 
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     @Schema(description = "对比期间起始日期（自定义期间模式使用，如 2025-01-01）", example = "2025-01-01")
     private LocalDate compareStartDate;
 
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     @Schema(description = "对比期间截止日期（自定义期间模式使用，如 2025-03-31）", example = "2025-03-31")
     private LocalDate compareEndDate;
 }

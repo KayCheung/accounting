@@ -1,5 +1,7 @@
 package com.kltb.accounting.api.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import lombok.Builder;
 import lombok.Data;
 
@@ -27,11 +29,13 @@ public class ReversalResponse {
     private BigDecimal amount;
 
     /** 红冲会计日期 */
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private LocalDate accountingDate;
 
     /** 红冲分录数 */
     private int entryCount;
 
     /** 红冲时间 */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime reversaledAt;
 }

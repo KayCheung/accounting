@@ -1,5 +1,6 @@
 package com.kltb.accounting.api.request;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -15,8 +16,10 @@ import java.time.LocalDate;
 public class BatchPostingRequest {
 
     @NotNull(message = "起始日期不能为空")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private LocalDate startDate;
 
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private LocalDate endDate;  // 默认等于 startDate
 
     @Size(max = 32, message = "业务线编码长度不能超过32")

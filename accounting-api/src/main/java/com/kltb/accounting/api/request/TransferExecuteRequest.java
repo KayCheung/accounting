@@ -1,5 +1,6 @@
 package com.kltb.accounting.api.request;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
@@ -11,6 +12,7 @@ import java.time.LocalDate;
 public class TransferExecuteRequest {
 
     @NotNull(message = "会计日期不能为空")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     @Schema(description = "会计日期（yyyy-MM-dd）", example = "2026-10-08")
     private LocalDate accountingDate;
 

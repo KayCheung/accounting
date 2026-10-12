@@ -1,6 +1,8 @@
 // accounting-api/src/main/java/com/kltb/accounting/api/response/JournalOverviewResponse.java
 package com.kltb.accounting.api.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -75,7 +77,9 @@ public class JournalOverviewResponse {
         private Integer status;
         private String statusDesc;
         private Integer retryCount;
+        @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
         private LocalDateTime nextRetryTime;
+        @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
         private LocalDateTime createTime;
     }
 
@@ -92,7 +96,9 @@ public class JournalOverviewResponse {
         private Integer changeDirection;
         private Integer status;
         private String statusDesc;
+        @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
         private LocalDateTime triggerTime;
+        @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
         private LocalDateTime postTime;
         private String failReason;
     }
@@ -107,12 +113,15 @@ public class JournalOverviewResponse {
         private Integer tradeType;
         private String tradeTypeDesc;
         private BigDecimal amount;
+        @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
         private LocalDate accountingDate;
         private String summary;
         private String origFreezeNo;
         private Integer status;
         private String statusDesc;
+        @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
         private LocalDateTime tradeTime;
+        @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
         private LocalDateTime createTime;
     }
 
@@ -122,6 +131,7 @@ public class JournalOverviewResponse {
         private Integer status;
         private String statusDesc;
         private String failReason;
+        @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
         private LocalDateTime finishTime;
         private Integer relateAccountCount;
     }
@@ -160,6 +170,7 @@ public class JournalOverviewResponse {
         private BigDecimal origFreezeAmount;
         private BigDecimal unfrozenAmount;
         private BigDecimal deductedAmount;
+        @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
         private LocalDateTime expireTime;
         private Integer status;
         private String statusDesc;

@@ -35,19 +35,19 @@ public class ManualVoucherApplyPageRequest extends PageRequest implements Serial
     @Schema(description = "凭证摘要(支持模糊匹配)", example = "调账")
     private String summary;
 
-    @JsonFormat(pattern = "yyyy-MM-dd")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     @Schema(description = "会计日期起始", example = "2026-09-01")
     private LocalDate startDate;
 
-    @JsonFormat(pattern = "yyyy-MM-dd")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     @Schema(description = "会计日期截止", example = "2026-09-30")
     private LocalDate endDate;
 
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     @Schema(description = "申请创建时间起始", example = "2026-09-01 00:00:00")
     private LocalDateTime createStartTime;
 
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     @Schema(description = "申请创建时间截止", example = "2026-09-30 23:59:59")
     private LocalDateTime createEndTime;
 }

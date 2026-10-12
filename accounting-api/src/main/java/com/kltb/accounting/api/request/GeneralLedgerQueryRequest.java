@@ -1,5 +1,6 @@
 package com.kltb.accounting.api.request;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
@@ -12,10 +13,12 @@ import java.time.LocalDate;
 public class GeneralLedgerQueryRequest implements Serializable {
 
     @NotNull(message = "开始日期不能为空")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     @Schema(description = "会计期间起始日期", example = "2026-01-01")
     private LocalDate startDate;
 
     @NotNull(message = "结束日期不能为空")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     @Schema(description = "会计期间截止日期", example = "2026-03-31")
     private LocalDate endDate;
 

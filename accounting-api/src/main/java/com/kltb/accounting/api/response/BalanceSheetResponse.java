@@ -1,5 +1,7 @@
 package com.kltb.accounting.api.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -19,9 +21,11 @@ import java.util.List;
 public class BalanceSheetResponse implements Serializable {
 
     @Schema(description = "报告期截止日期", example = "2026-03-31")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private LocalDate accountingDate;
 
     @Schema(description = "对比年初日期", example = "2026-01-01")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private LocalDate compareDate;
 
     @Schema(description = "编制单位", example = "智能账务核心企业")

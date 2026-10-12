@@ -1,5 +1,6 @@
 package com.kltb.accounting.api.request;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -11,9 +12,11 @@ import java.time.LocalDate;
 @Schema(description = "期末结转执行记录分页查询请求")
 public class TransferRecordQueryRequest extends PageRequest {
 
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     @Schema(description = "开始会计日期")
     private LocalDate startDate;
 
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     @Schema(description = "结束会计日期")
     private LocalDate endDate;
 

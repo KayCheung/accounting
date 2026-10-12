@@ -41,7 +41,7 @@ public class ManualVoucherApplySaveRequest implements Serializable {
     private Integer tradeType = 2;
 
     @NotNull(message = "会计日期不能为空")
-    @JsonFormat(pattern = "yyyy-MM-dd")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     @Schema(description = "会计日期", example = "2026-09-29", requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDate accountingDate;
 

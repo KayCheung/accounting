@@ -1,5 +1,7 @@
 package com.kltb.accounting.api.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -92,11 +94,14 @@ public class AccountPageResponse implements Serializable {
     private String requestNo;
 
     @Schema(description = "开户日期", example = "2026-03-01")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private LocalDate openDate;
 
     @Schema(description = "最后动支日期", example = "2026-03-02")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private LocalDate inactiveDate;
 
     @Schema(description = "创建时间", example = "2026-03-01 10:00:00")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime createdAt;
 }

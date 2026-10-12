@@ -1,5 +1,7 @@
 package com.kltb.accounting.api.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -31,9 +33,11 @@ public class SubsidiaryLedgerResponse implements Serializable {
     private String balanceDirectionDesc;
 
     @Schema(description = "期间起始日期", example = "2026-03-01")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private LocalDate startDate;
 
     @Schema(description = "期间截止日期", example = "2026-03-31")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private LocalDate endDate;
 
     @Schema(description = "期初余额", example = "12856430.00")

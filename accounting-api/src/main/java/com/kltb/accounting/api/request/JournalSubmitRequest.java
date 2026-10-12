@@ -1,6 +1,7 @@
 // accounting-api/src/main/java/com/kltb/accounting/api/request/JournalSubmitRequest.java
 package com.kltb.accounting.api.request;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
 import jakarta.validation.Valid;
@@ -43,6 +44,7 @@ public class JournalSubmitRequest {
     private BigDecimal amount;
 
     @NotNull(message = "tradeTime不能为空")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime tradeTime;
 
     @Size(max = 64, message = "summary长度不能超过64")

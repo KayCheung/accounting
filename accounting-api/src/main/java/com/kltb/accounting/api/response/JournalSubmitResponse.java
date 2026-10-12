@@ -1,6 +1,8 @@
 // accounting-api/src/main/java/com/kltb/accounting/api/response/JournalSubmitResponse.java
 package com.kltb.accounting.api.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import lombok.Data;
 
 import java.time.LocalDate;
@@ -15,6 +17,7 @@ public class JournalSubmitResponse {
     private String traceNo;
 
     /** 会计日期 */
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private LocalDate accountingDate;
 
     /** 事务编号（Step 9 生成） */

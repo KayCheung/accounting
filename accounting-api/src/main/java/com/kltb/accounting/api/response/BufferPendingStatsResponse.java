@@ -1,5 +1,7 @@
 package com.kltb.accounting.api.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -19,5 +21,6 @@ public class BufferPendingStatsResponse {
     private Integer mode3Count;
     private BigDecimal mode3Amount;
     private Integer totalAccounts;
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime oldestPendingTime;
 }

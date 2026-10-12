@@ -1,5 +1,7 @@
 package com.kltb.accounting.api.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -69,6 +71,7 @@ public class VoucherPageItemResponse implements Serializable {
     private String tradeTypeDesc;
 
     @Schema(description = "交易时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime tradeTime;
 
     @Schema(description = "凭证金额", example = "10000.00")
@@ -81,9 +84,11 @@ public class VoucherPageItemResponse implements Serializable {
     private String statusDesc;
 
     @Schema(description = "过账时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime postTime;
 
     @Schema(description = "会计日期", example = "2026-09-20")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private LocalDate accountingDate;
 
     @Schema(description = "摘要", example = "放款本金入账")
@@ -111,6 +116,7 @@ public class VoucherPageItemResponse implements Serializable {
     private Integer skipFlag;
 
     @Schema(description = "制单时间/创建时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime createTime;
 
     @Schema(description = "借贷分录列表")

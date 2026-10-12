@@ -1,5 +1,7 @@
 package com.kltb.accounting.api.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -23,6 +25,7 @@ public class TransactionStatusResponse {
     private String failReason;
 
     /** 事务完成时间 */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime finishTime;
 
     /** 关联账户数 */

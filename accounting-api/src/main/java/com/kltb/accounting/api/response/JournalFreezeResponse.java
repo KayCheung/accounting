@@ -1,6 +1,8 @@
 // accounting-api/src/main/java/com/kltb/accounting/api/response/JournalFreezeResponse.java
 package com.kltb.accounting.api.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -26,9 +28,11 @@ public class JournalFreezeResponse {
     private BigDecimal freezeAmount;
 
     /** 冻结过期时间 */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime expireTime;
 
     /** 会计日期 */
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private LocalDate accountingDate;
 
     /** 冻结状态：1-冻结, 2-已解冻 */
@@ -47,6 +51,7 @@ public class JournalFreezeResponse {
         private String customerId;
         private String fundsType;
         private BigDecimal freezeAmount;
+        @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
         private LocalDateTime expireTime;
         private Integer status;
         private String statusDesc;

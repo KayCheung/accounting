@@ -10,6 +10,7 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.stream.Collectors;
 
@@ -117,12 +119,21 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 处理 HTTP 请求体解析失败异常（HttpMessageNotReadableException，如 JSON 格式错误或日期时间格式解析失败）
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    @ResponseStatus(HttpStatus.OK)
+    public ApiResponse<Void> handleHttpMessageNotReadableException(HttpMessageNotReadableException ex) {
+        log.warn("[请求体解析失败] {}", ex.getMessage());
+        return ApiResponse.fail(ResultCode.PARAM_ERROR, "请求数据格式错误，请检查 JSON 格式或日期时间字段");
+    }
+
+    /**
      * 处理 404 资源或路由未找到异常（Spring Boot 3.2+ NoResourceFoundException）
      */
-    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    @ExceptionHandler(NoResourceFoundException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
-    public ApiResponse<Void> handleNoResourceFoundException(
-            org.springframework.web.servlet.resource.NoResourceFoundException ex) {
+    public ApiResponse<Void> handleNoResourceFoundException(NoResourceFoundException ex) {
         log.warn("[404 未找到] 请求接口或资源不存在: {}", ex.getResourcePath());
         return ApiResponse.fail(ResultCode.DATA_NOT_FOUND, "请求接口或资源不存在: " + ex.getResourcePath());
     }

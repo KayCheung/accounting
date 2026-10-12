@@ -1,5 +1,6 @@
 package com.kltb.accounting.api.request;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
@@ -12,6 +13,7 @@ import java.time.LocalDate;
 public class BufferExecuteRequest {
 
     @NotNull(message = "会计日期不能为空")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private LocalDate accountingDate;
 
     @NotNull(message = "缓冲模式不能为空")

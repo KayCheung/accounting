@@ -1,5 +1,7 @@
 package com.kltb.accounting.api.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -15,6 +17,7 @@ public class PostingMonitorResponse {
     private String no;
     private Integer status;
     private String statusDesc;
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private LocalDate accountingDate;
     private int totalCount;
     private int postedCount;

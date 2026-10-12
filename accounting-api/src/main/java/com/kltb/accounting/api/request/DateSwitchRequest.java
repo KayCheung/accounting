@@ -13,6 +13,6 @@ import java.time.LocalDate;
 public class DateSwitchRequest {
 
     /** 目标会计日期（不传则自动+1天） */
-    @JsonFormat(pattern = "yyyy-MM-dd")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private LocalDate targetDate;
 }
