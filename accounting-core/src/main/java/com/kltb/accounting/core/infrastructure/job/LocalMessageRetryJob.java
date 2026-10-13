@@ -1,4 +1,4 @@
-package com.kltb.accounting.job.job;
+package com.kltb.accounting.core.infrastructure.job;
 
 import com.aliyun.openservices.ons.api.SendResult;
 import com.kltb.accounting.core.infrastructure.messaging.LocalMessageService;

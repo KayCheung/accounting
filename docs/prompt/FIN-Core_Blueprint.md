@@ -963,8 +963,12 @@
       - 测试覆盖：在 `RollbackDomainServiceTest` 中落地 `testIsRetryable` 单元测试，全面覆盖直接抛出、嵌套包装、可重试与不可重试业务异常断言，测试 100% 通过。
     - **质量验收与测试保障**：
       - 后端：`RollbackDomainServiceTest`、`JournalingApplicationServiceTest`、`AsyncPostingDomainServiceTest`、`HangingJournalCompensationJobHandlerTest`、`PostingMessageConsumerTest` 等单测 100% 通过（0 错误，0 失败）；
-      - 前端：`vue-tsc && vite build` 生产构建 0 错误打包通过。
+    - **多模块架构精简与 Job 任务层内聚治理（Step 23.17 模块合并）**：
+      - **合并动因与架构治理**：`accounting-job` 深度依赖 `accounting-core` 内部领域与仓储实现，自身无独立领域模型，而 `accounting-core` 原已作为独立 Spring Boot 启动应用；将 `accounting-job` 的 12 个 XXL-JOB Handler 及单测全部迁移至 `accounting-core`（基础设施包 `com.kltb.accounting.core.infrastructure.job`），消除不必要的跨模块内部依赖与独立打包运维成本；
+      - **依赖收敛**：在 `accounting-core/pom.xml` 中直接引入 `xxl-job-core`，统一由核心模块管理所有外部驱动入口（REST 控制器、MQ 消息监听器、XXL-JOB 定时任务）；
+      - **冗余模块清理**：彻底移除空工程 `accounting-admin` 与已合并的 `accounting-job`，根 `pom.xml` 的 `<modules>` 精简收敛为 `accounting-api` 与 `accounting-core`；全工程 366 个测试用例 100% 编译与执行通过。
 - [x] **Step 23** · 业务功能页面开发全量交付完毕（100% 完成）
+
 
 
 

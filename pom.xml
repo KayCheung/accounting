@@ -14,8 +14,6 @@
     <modules>
         <module>accounting-api</module>
         <module>accounting-core</module>
-        <module>accounting-job</module>
-        <module>accounting-admin</module>
     </modules>
 
     <properties>

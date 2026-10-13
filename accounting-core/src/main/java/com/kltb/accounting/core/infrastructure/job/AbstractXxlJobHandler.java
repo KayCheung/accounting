@@ -1,4 +1,4 @@
-package com.kltb.accounting.job.job;
+package com.kltb.accounting.core.infrastructure.job;
 
 import com.xxl.job.core.context.XxlJobHelper;
 import lombok.extern.slf4j.Slf4j;

@@ -1,4 +1,4 @@
-package com.kltb.accounting.job.job;
+package com.kltb.accounting.core.infrastructure.job;
 
 import com.kltb.accounting.core.application.service.FinancialReportApplicationService;
 import com.xxl.job.core.handler.annotation.XxlJob;

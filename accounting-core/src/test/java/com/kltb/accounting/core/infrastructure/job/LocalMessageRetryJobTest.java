@@ -1,4 +1,4 @@
-package com.kltb.accounting.job.job;
+package com.kltb.accounting.core.infrastructure.job;
 
 import com.kltb.accounting.core.infrastructure.messaging.LocalMessageService;
 import com.kltb.accounting.core.infrastructure.messaging.OnsProducerTemplate;

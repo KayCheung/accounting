@@ -1,4 +1,4 @@
-package com.kltb.accounting.job.job;
+package com.kltb.accounting.core.infrastructure.job;
 
 import cn.hutool.core.util.StrUtil;
 import com.kltb.accounting.core.application.service.JournalingApplicationService;
