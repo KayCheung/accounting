@@ -1,11 +1,11 @@
 // accounting-core/src/test/java/com/kltb/accounting/core/infrastructure/messaging/AbstractMqConsumerTest.java
 package com.kltb.accounting.core.infrastructure.messaging;
 
-import com.aliyun.openservices.ons.api.Action;
-import com.aliyun.openservices.ons.api.ConsumeContext;
-import com.aliyun.openservices.ons.api.Message;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.shared.exception.ServiceException;
+import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyContext;
+import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
+import org.apache.rocketmq.common.message.MessageExt;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,11 +26,11 @@ import static org.mockito.Mockito.*;
  *
  * <p>覆盖场景：
  * <ul>
- *   <li>相同 message_id 重复消费 → 幂等跳过，返回 CommitMessage</li>
- *   <li>首次消费成功 → 写入 status=1 回执，返回 CommitMessage</li>
- *   <li>消费失败（业务异常）→ 写入 status=2 回执（含 errorCode），返回 ReconsumeLater</li>
- *   <li>消费失败（非业务异常）→ 写入 status=2 回执（errorCode 为类名），返回 ReconsumeLater</li>
- *   <li>回执写入失败 → 不影响消费结果，仍返回正确 Action</li>
+ *   <li>相同 message_id 重复消费 → 幂等跳过，返回 CONSUME_SUCCESS</li>
+ *   <li>首次消费成功 → 写入 status=1 回执，返回 CONSUME_SUCCESS</li>
+ *   <li>消费失败（业务异常）→ 写入 status=2 回执（含 errorCode），返回 RECONSUME_LATER</li>
+ *   <li>消费失败（非业务异常）→ 写入 status=2 回执（errorCode 为类名），返回 RECONSUME_LATER</li>
+ *   <li>回执写入失败 → 不影响消费结果，仍返回正确状态</li>
  * </ul>
  */
 @ExtendWith(MockitoExtension.class)
@@ -41,7 +41,7 @@ class AbstractMqConsumerTest {
     private MessageReceiptRepository receiptRepository;
 
     @Mock
-    private ConsumeContext consumeContext;
+    private ConsumeConcurrentlyContext consumeContext;
 
     /** 被测消费者实例，通过匿名子类实例化 */
     private AbstractMqConsumer<String> consumer;
@@ -51,7 +51,7 @@ class AbstractMqConsumerTest {
     private Exception exceptionToThrow;
 
     private static final String CONSUMER_GROUP = "GID_TEST_GROUP";
-    private static final String MESSAGE_ID = "ons-msg-id-001";
+    private static final String MESSAGE_ID = "rmq-msg-id-001";
     private static final String BUSINESS_KEY = "biz-key-001";
     private static final String TOPIC = "test-topic";
 
@@ -63,7 +63,7 @@ class AbstractMqConsumerTest {
         // 通过匿名子类实例化抽象类，consumer_group 来自构造参数，不硬编码
         consumer = new AbstractMqConsumer<String>(receiptRepository) {
             @Override
-            protected void doConsume(String data, Message message) throws Exception {
+            protected void doConsume(String data, MessageExt message) throws Exception {
                 if (shouldThrow) {
                     throw exceptionToThrow;
                 }
@@ -80,17 +80,17 @@ class AbstractMqConsumerTest {
     // ==================== 幂等跳过 ====================
 
     @Test
-    @DisplayName("相同 message_id 重复消费 - 幂等跳过，返回 CommitMessage，不执行业务逻辑")
-    void consume_duplicateMessageId_idempotentSkip_returnsCommitMessage() {
+    @DisplayName("相同 message_id 重复消费 - 幂等跳过，返回 CONSUME_SUCCESS，不执行业务逻辑")
+    void consume_duplicateMessageId_idempotentSkip_returnsConsumeSuccess() {
         // 模拟 t_message_receipt 中已存在该消息的消费记录
         when(receiptRepository.isSuccessConsumed(MESSAGE_ID, CONSUMER_GROUP))
                 .thenReturn(true);
 
-        Message message = buildMessage(MESSAGE_ID, BUSINESS_KEY, TOPIC);
-        Action action = consumer.consume(message, consumeContext);
+        MessageExt message = buildMessage(MESSAGE_ID, BUSINESS_KEY, TOPIC);
+        ConsumeConcurrentlyStatus status = consumer.consume(message, consumeContext);
 
-        // 验证：返回 CommitMessage（幂等跳过）
-        assertThat(action).isEqualTo(Action.CommitMessage);
+        // 验证：返回 CONSUME_SUCCESS（幂等跳过）
+        assertThat(status).isEqualTo(ConsumeConcurrentlyStatus.CONSUME_SUCCESS);
         // 验证：不写入新的回执记录
         verify(receiptRepository, never()).save(any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
     }
@@ -98,15 +98,15 @@ class AbstractMqConsumerTest {
     // ==================== 消费成功 ====================
 
     @Test
-    @DisplayName("首次消费成功 - 写入 status=1 回执，返回 CommitMessage")
-    void consume_firstTime_success_savesReceiptStatus1_returnsCommitMessage() {
+    @DisplayName("首次消费成功 - 写入 status=1 回执，返回 CONSUME_SUCCESS")
+    void consume_firstTime_success_savesReceiptStatus1_returnsConsumeSuccess() {
         when(receiptRepository.isSuccessConsumed(MESSAGE_ID, CONSUMER_GROUP))
                 .thenReturn(false);
 
-        Message message = buildMessage(MESSAGE_ID, BUSINESS_KEY, TOPIC);
-        Action action = consumer.consume(message, consumeContext);
+        MessageExt message = buildMessage(MESSAGE_ID, BUSINESS_KEY, TOPIC);
+        ConsumeConcurrentlyStatus status = consumer.consume(message, consumeContext);
 
-        assertThat(action).isEqualTo(Action.CommitMessage);
+        assertThat(status).isEqualTo(ConsumeConcurrentlyStatus.CONSUME_SUCCESS);
 
         // 验证写入成功回执，status=1
         ArgumentCaptor<Integer> statusCaptor = ArgumentCaptor.forClass(Integer.class);
@@ -122,7 +122,7 @@ class AbstractMqConsumerTest {
     // ==================== 消费失败 - 业务异常 ====================
 
     @Test
-    @DisplayName("消费失败（ServiceException）- 写入 status=2 回执，errorCode 为 ResultCode，返回 ReconsumeLater")
+    @DisplayName("消费失败（ServiceException）- 写入 status=2 回执，errorCode 为 ResultCode，返回 RECONSUME_LATER")
     void consume_serviceException_savesReceiptStatus2WithResultCode_returnsReconsumeLater() {
         when(receiptRepository.isSuccessConsumed(MESSAGE_ID, CONSUMER_GROUP))
                 .thenReturn(false);
@@ -130,10 +130,10 @@ class AbstractMqConsumerTest {
         shouldThrow = true;
         exceptionToThrow = new ServiceException(ResultCode.INSUFFICIENT_BALANCE);
 
-        Message message = buildMessage(MESSAGE_ID, BUSINESS_KEY, TOPIC);
-        Action action = consumer.consume(message, consumeContext);
+        MessageExt message = buildMessage(MESSAGE_ID, BUSINESS_KEY, TOPIC);
+        ConsumeConcurrentlyStatus status = consumer.consume(message, consumeContext);
 
-        assertThat(action).isEqualTo(Action.ReconsumeLater);
+        assertThat(status).isEqualTo(ConsumeConcurrentlyStatus.RECONSUME_LATER);
 
         // 验证写入失败回执，status=2，errorCode 为 ResultCode.INSUFFICIENT_BALANCE 的 code
         ArgumentCaptor<Integer> statusCaptor = ArgumentCaptor.forClass(Integer.class);
@@ -149,7 +149,7 @@ class AbstractMqConsumerTest {
     }
 
     @Test
-    @DisplayName("消费失败（非业务异常）- 写入 status=2 回执，errorCode 为异常类名，返回 ReconsumeLater")
+    @DisplayName("消费失败（非业务异常）- 写入 status=2 回执，errorCode 为异常类名，返回 RECONSUME_LATER")
     void consume_runtimeException_savesReceiptStatus2WithClassName_returnsReconsumeLater() {
         when(receiptRepository.isSuccessConsumed(MESSAGE_ID, CONSUMER_GROUP))
                 .thenReturn(false);
@@ -157,10 +157,10 @@ class AbstractMqConsumerTest {
         shouldThrow = true;
         exceptionToThrow = new RuntimeException("数据库连接失败");
 
-        Message message = buildMessage(MESSAGE_ID, BUSINESS_KEY, TOPIC);
-        Action action = consumer.consume(message, consumeContext);
+        MessageExt message = buildMessage(MESSAGE_ID, BUSINESS_KEY, TOPIC);
+        ConsumeConcurrentlyStatus status = consumer.consume(message, consumeContext);
 
-        assertThat(action).isEqualTo(Action.ReconsumeLater);
+        assertThat(status).isEqualTo(ConsumeConcurrentlyStatus.RECONSUME_LATER);
 
         ArgumentCaptor<Integer> statusCaptor = ArgumentCaptor.forClass(Integer.class);
         ArgumentCaptor<String> errorCodeCaptor = ArgumentCaptor.forClass(String.class);
@@ -178,23 +178,23 @@ class AbstractMqConsumerTest {
     // ==================== 回执写入失败容错 ====================
 
     @Test
-    @DisplayName("消费成功但回执写入失败 - 不影响返回 CommitMessage")
-    void consume_success_receiptSaveFails_stillReturnsCommitMessage() {
+    @DisplayName("消费成功但回执写入失败 - 不影响返回 CONSUME_SUCCESS")
+    void consume_success_receiptSaveFails_stillReturnsConsumeSuccess() {
         when(receiptRepository.isSuccessConsumed(MESSAGE_ID, CONSUMER_GROUP))
                 .thenReturn(false);
         // 模拟回执写入抛异常
         doThrow(new RuntimeException("DB 写入失败"))
                 .when(receiptRepository).save(any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
 
-        Message message = buildMessage(MESSAGE_ID, BUSINESS_KEY, TOPIC);
-        Action action = consumer.consume(message, consumeContext);
+        MessageExt message = buildMessage(MESSAGE_ID, BUSINESS_KEY, TOPIC);
+        ConsumeConcurrentlyStatus status = consumer.consume(message, consumeContext);
 
         // 回执写入失败不影响消费结果
-        assertThat(action).isEqualTo(Action.CommitMessage);
+        assertThat(status).isEqualTo(ConsumeConcurrentlyStatus.CONSUME_SUCCESS);
     }
 
     @Test
-    @DisplayName("消费失败且回执写入也失败 - 仍返回 ReconsumeLater")
+    @DisplayName("消费失败且回执写入也失败 - 仍返回 RECONSUME_LATER")
     void consume_failure_receiptSaveFails_stillReturnsReconsumeLater() {
         when(receiptRepository.isSuccessConsumed(MESSAGE_ID, CONSUMER_GROUP))
                 .thenReturn(false);
@@ -203,10 +203,10 @@ class AbstractMqConsumerTest {
         doThrow(new RuntimeException("DB 写入失败"))
                 .when(receiptRepository).save(any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
 
-        Message message = buildMessage(MESSAGE_ID, BUSINESS_KEY, TOPIC);
-        Action action = consumer.consume(message, consumeContext);
+        MessageExt message = buildMessage(MESSAGE_ID, BUSINESS_KEY, TOPIC);
+        ConsumeConcurrentlyStatus status = consumer.consume(message, consumeContext);
 
-        assertThat(action).isEqualTo(Action.ReconsumeLater);
+        assertThat(status).isEqualTo(ConsumeConcurrentlyStatus.RECONSUME_LATER);
     }
 
     // ==================== 泛型反序列化与消息体不被修改 ====================
@@ -226,7 +226,7 @@ class AbstractMqConsumerTest {
         String[] capturedOrderNo = new String[1];
         AbstractMqConsumer<SamplePayload> genericConsumer = new AbstractMqConsumer<SamplePayload>(receiptRepository) {
             @Override
-            protected void doConsume(SamplePayload data, Message message) throws Exception {
+            protected void doConsume(SamplePayload data, MessageExt message) throws Exception {
                 capturedOrderNo[0] = data.getOrderNo();
             }
 
@@ -237,13 +237,16 @@ class AbstractMqConsumerTest {
         };
 
         String rawJson = "{\"orderNo\":\"ORD-20261013-0001\"}";
-        Message message = new Message(TOPIC, "tag", BUSINESS_KEY, rawJson.getBytes(StandardCharsets.UTF_8));
-        Message spyMessage = spy(message);
-        doReturn(MESSAGE_ID).when(spyMessage).getMsgID();
+        MessageExt message = new MessageExt();
+        message.setTopic(TOPIC);
+        message.setTags("tag");
+        message.setKeys(BUSINESS_KEY);
+        message.setMsgId(MESSAGE_ID);
+        message.setBody(rawJson.getBytes(StandardCharsets.UTF_8));
 
-        Action action = genericConsumer.consume(spyMessage, consumeContext);
+        ConsumeConcurrentlyStatus status = genericConsumer.consume(message, consumeContext);
 
-        assertThat(action).isEqualTo(Action.CommitMessage);
+        assertThat(status).isEqualTo(ConsumeConcurrentlyStatus.CONSUME_SUCCESS);
         assertThat(capturedOrderNo[0]).isEqualTo("ORD-20261013-0001");
 
         // 验证回执中的 payload 与原始消息内容完全一致，未做任何截断与改动
@@ -267,15 +270,15 @@ class AbstractMqConsumerTest {
         // 第一次消费：模拟业务异常
         shouldThrow = true;
         exceptionToThrow = new RuntimeException("网络抖动");
-        Message message = buildMessage(MESSAGE_ID, BUSINESS_KEY, TOPIC);
+        MessageExt message = buildMessage(MESSAGE_ID, BUSINESS_KEY, TOPIC);
 
-        Action firstAction = consumer.consume(message, consumeContext);
-        assertThat(firstAction).isEqualTo(Action.ReconsumeLater);
+        ConsumeConcurrentlyStatus firstStatus = consumer.consume(message, consumeContext);
+        assertThat(firstStatus).isEqualTo(ConsumeConcurrentlyStatus.RECONSUME_LATER);
 
         // 第二次重试消费：网络恢复，业务正常
         shouldThrow = false;
-        Action retryAction = consumer.consume(message, consumeContext);
-        assertThat(retryAction).isEqualTo(Action.CommitMessage);
+        ConsumeConcurrentlyStatus retryStatus = consumer.consume(message, consumeContext);
+        assertThat(retryStatus).isEqualTo(ConsumeConcurrentlyStatus.CONSUME_SUCCESS);
 
         // 验证两次调用都写入了回执（第一次 status=2，第二次 status=1）
         ArgumentCaptor<Integer> statusCaptor = ArgumentCaptor.forClass(Integer.class);
@@ -291,13 +294,15 @@ class AbstractMqConsumerTest {
     // ==================== 辅助方法 ====================
 
     /**
-     * 构建测试用 ONS Message
+     * 构建测试用 RocketMQ MessageExt
      */
-    private Message buildMessage(String msgId, String key, String topic) {
-        Message message = new Message(topic, "tag", key, "test-body".getBytes(StandardCharsets.UTF_8));
-        // ONS MsgID 通过反射或 mock 设置；此处使用 mock 绕过 ONS 内部构造
-        Message spyMessage = spy(message);
-        doReturn(msgId).when(spyMessage).getMsgID();
-        return spyMessage;
+    private MessageExt buildMessage(String msgId, String key, String topic) {
+        MessageExt message = new MessageExt();
+        message.setTopic(topic);
+        message.setTags("tag");
+        message.setKeys(key);
+        message.setMsgId(msgId);
+        message.setBody("test-body".getBytes(StandardCharsets.UTF_8));
+        return message;
     }
 }

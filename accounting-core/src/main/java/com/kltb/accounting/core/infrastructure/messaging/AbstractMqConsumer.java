@@ -2,36 +2,37 @@
 package com.kltb.accounting.core.infrastructure.messaging;
 
 import com.alibaba.fastjson2.JSON;
-import com.aliyun.openservices.ons.api.Action;
-import com.aliyun.openservices.ons.api.ConsumeContext;
-import com.aliyun.openservices.ons.api.Message;
-import com.aliyun.openservices.ons.api.MessageListener;
 import com.kltb.accounting.core.shared.exception.GenericException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyContext;
+import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
+import org.apache.rocketmq.client.consumer.listener.MessageListenerConcurrently;
+import org.apache.rocketmq.common.message.MessageExt;
 
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
- * MQ 消费者抽象基类
+ * RocketMQ 消费者抽象基类
  *
- * <p>职责：封装消费幂等逻辑，子类只需实现 {@link #doConsume(Message)} 方法，
+ * <p>职责：封装消费幂等逻辑，子类只需实现 {@link #doConsume(Object, MessageExt)} 方法，
  * 专注于业务处理，无需关心幂等去重细节。
  *
  * <p>幂等流程：
  * <ol>
- *   <li>以 message_id + consumer_group 查询 t_message_receipt，已存在则直接返回 CommitMessage（幂等跳过）</li>
+ *   <li>以 message_id + consumer_group 查询 t_message_receipt，已存在则直接返回 CONSUME_SUCCESS（幂等跳过）</li>
  *   <li>执行子类 doConsume() 业务逻辑</li>
- *   <li>成功：写入 t_message_receipt（status=1）→ 返回 CommitMessage</li>
- *   <li>失败：写入 t_message_receipt（status=2，含 errorCode / errorMessage）→ 返回 ReconsumeLater</li>
+ *   <li>成功：写入 t_message_receipt（status=1）→ 返回 CONSUME_SUCCESS</li>
+ *   <li>失败：写入 t_message_receipt（status=2，含 errorCode / errorMessage）→ 返回 RECONSUME_LATER</li>
  * </ol>
  *
  * <p>子类扩展点：
  * <ul>
- *   <li>{@link #doConsume(Object, Message)}：实现具体业务消费逻辑</li>
+ *   <li>{@link #doConsume(Object, MessageExt)}：实现具体业务消费逻辑</li>
  *   <li>{@link #getConsumerGroup()}：返回当前消费者组名称，不得硬编码</li>
  * </ul>
  *
@@ -39,13 +40,13 @@ import java.time.LocalDateTime;
  *
  * <p>异常处理：
  * <ul>
- *   <li>业务异常 → 写入失败回执（status=2），返回 ReconsumeLater 触发 ONS 重试</li>
+ *   <li>业务异常 → 写入失败回执（status=2），返回 RECONSUME_LATER 触发 RocketMQ 重试</li>
  *   <li>回执写入失败 → 记录 error 日志，不影响消费结果（消息可靠性优先）</li>
  * </ul>
  */
 @Slf4j
 @RequiredArgsConstructor
-public abstract class AbstractMqConsumer<T> implements MessageListener {
+public abstract class AbstractMqConsumer<T> implements MessageListenerConcurrently {
 
     /** 消息回执存储接口 */
     private final MessageReceiptRepository receiptRepository;
@@ -58,27 +59,43 @@ public abstract class AbstractMqConsumer<T> implements MessageListener {
     /** 消费失败状态 */
     private static final Integer RECEIPT_STATUS_FAILED = 2;
 
-    // ==================== MessageListener 实现 ====================
+    // ==================== MessageListenerConcurrently 实现 ====================
 
     /**
-     * ONS 框架回调入口，内置幂等校验与反序列化，final 禁止子类覆盖
+     * RocketMQ 框架回调入口（批量列表），委托单条消息处理，final 禁止子类覆盖
      */
     @Override
-    public final Action consume(Message message, ConsumeContext context) {
-        String messageId = message.getMsgID();
-        // ONS Key 对应业务 messageId（t_local_message.message_id）
-        String businessKey = message.getKey();
+    public final ConsumeConcurrentlyStatus consumeMessage(List<MessageExt> msgs, ConsumeConcurrentlyContext context) {
+        if (msgs == null || msgs.isEmpty()) {
+            return ConsumeConcurrentlyStatus.CONSUME_SUCCESS;
+        }
+        for (MessageExt message : msgs) {
+            ConsumeConcurrentlyStatus status = consume(message, context);
+            if (status != ConsumeConcurrentlyStatus.CONSUME_SUCCESS) {
+                return status;
+            }
+        }
+        return ConsumeConcurrentlyStatus.CONSUME_SUCCESS;
+    }
+
+    /**
+     * 单条消息消费处理入口，内置幂等校验与反序列化，final 禁止子类覆盖
+     */
+    public final ConsumeConcurrentlyStatus consume(MessageExt message, ConsumeConcurrentlyContext context) {
+        String messageId = message.getMsgId();
+        // RocketMQ Keys 对应业务 messageId（t_local_message.message_id）
+        String businessKey = message.getKeys();
         String topic = message.getTopic();
         String consumerGroup = getConsumerGroup();
 
-        log.info("[MQ] 收到消息 topic={} messageId={} businessKey={} consumerGroup={}",
+        log.info("[RocketMQ] 收到消息 topic={} messageId={} businessKey={} consumerGroup={}",
                 topic, messageId, businessKey, consumerGroup);
 
         // ── 步骤 1：幂等检查（仅当已被指定消费者组成功消费时幂等跳过，失败允许重试） ───────
         if (receiptRepository.isSuccessConsumed(messageId, consumerGroup)) {
             // 已成功消费过，直接提交，防止重复处理（幂等跳过）
-            log.info("[MQ] 幂等跳过（已成功消费） topic={} messageId={} consumerGroup={}", topic, messageId, consumerGroup);
-            return Action.CommitMessage;
+            log.info("[RocketMQ] 幂等跳过（已成功消费） topic={} messageId={} consumerGroup={}", topic, messageId, consumerGroup);
+            return ConsumeConcurrentlyStatus.CONSUME_SUCCESS;
         }
 
         // ── 步骤 2：执行业务逻辑 ─────────────────────────────────────────
@@ -96,15 +113,15 @@ public abstract class AbstractMqConsumer<T> implements MessageListener {
             saveReceipt(messageId, businessKey, consumerGroup, topic,
                     RECEIPT_STATUS_SUCCESS, "", "", payload, receivedTime, processedTime);
 
-            log.info("[MQ] 消费成功 topic={} messageId={} consumerGroup={} cost={}ms",
+            log.info("[RocketMQ] 消费成功 topic={} messageId={} consumerGroup={} cost={}ms",
                     topic, messageId, consumerGroup, costMs);
-            return Action.CommitMessage;
+            return ConsumeConcurrentlyStatus.CONSUME_SUCCESS;
 
         } catch (Exception e) {
             LocalDateTime processedTime = LocalDateTime.now();
             long costMs = System.currentTimeMillis() - startTime;
-            // 业务消费异常：记录 error 日志，写入失败回执，返回 ReconsumeLater 触发重试
-            log.error("[MQ] 消费失败 topic={} messageId={} consumerGroup={} cost={}ms error={}",
+            // 业务消费异常：记录 error 日志，写入失败回执，返回 RECONSUME_LATER 触发重试
+            log.error("[RocketMQ] 消费失败 topic={} messageId={} consumerGroup={} cost={}ms error={}",
                     topic, messageId, consumerGroup, costMs, e.getMessage(), e);
 
             // ── 步骤 4：写入失败回执 ──────────────────────────────────────
@@ -113,7 +130,7 @@ public abstract class AbstractMqConsumer<T> implements MessageListener {
             saveReceipt(messageId, businessKey, consumerGroup, topic,
                     RECEIPT_STATUS_FAILED, errorCode, errorMessage, payload, receivedTime, processedTime);
 
-            return Action.ReconsumeLater;
+            return ConsumeConcurrentlyStatus.RECONSUME_LATER;
         }
     }
 
@@ -122,14 +139,14 @@ public abstract class AbstractMqConsumer<T> implements MessageListener {
     /**
      * 子类实现具体业务消费逻辑
      *
-     * <p>注意：此方法内抛出任何异常，基类均会捕获并写入失败回执，触发 ONS 重试。
+     * <p>注意：此方法内抛出任何异常，基类均会捕获并写入失败回执，触发 RocketMQ 重试。
      * 若业务已处理成功（或已执行补偿/单边回滚）不希望重试，请在方法内自行处理异常，不要向上抛出。
      *
      * @param data    反序列化后的泛型业务对象
-     * @param message ONS 消息对象，含 topic / tag / key / reconsumeTimes 等上下文
+     * @param message RocketMQ 消息对象，含 topic / tags / keys / reconsumeTimes 等上下文
      * @throws Exception 业务处理异常，触发重试
      */
-    protected abstract void doConsume(T data, Message message) throws Exception;
+    protected abstract void doConsume(T data, MessageExt message) throws Exception;
 
     /**
      * 返回当前消费者组名称
@@ -147,12 +164,12 @@ public abstract class AbstractMqConsumer<T> implements MessageListener {
      * 反序列化消息体为泛型类型 T
      */
     @SuppressWarnings("unchecked")
-    protected T deserializePayload(String payload, Message message) {
+    protected T deserializePayload(String payload, MessageExt message) {
         Class<T> messageType = resolveMessageType();
         if (messageType == null || messageType == Object.class) {
             return (T) payload;
         }
-        if (messageType == Message.class) {
+        if (messageType == MessageExt.class) {
             return (T) message;
         }
         if (messageType == String.class) {
@@ -209,7 +226,7 @@ public abstract class AbstractMqConsumer<T> implements MessageListener {
                     receivedTime, processedTime);
         } catch (Exception e) {
             // 回执写入失败：记录 error 日志，不影响消费结果（消息可靠性优先于回执记录）
-            log.error("[MQ] 回执写入失败 messageId={} consumerGroup={} status={} error={}",
+            log.error("[RocketMQ] 回执写入失败 messageId={} consumerGroup={} status={} error={}",
                     messageId, consumerGroup, status, e.getMessage(), e);
         }
     }
@@ -233,10 +250,10 @@ public abstract class AbstractMqConsumer<T> implements MessageListener {
      * 提取消息体为 UTF-8 字符串
      * <p>注意：消费者不对消息内容进行任何变动与截断
      *
-     * @param message ONS 消息
+     * @param message RocketMQ 消息
      * @return 消息体字符串，body 为 null 时返回空字符串
      */
-    private String extractPayload(Message message) {
+    private String extractPayload(MessageExt message) {
         if (message == null || message.getBody() == null) {
             return "";
         }

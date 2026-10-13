@@ -6,9 +6,9 @@ import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.*;
 import com.kltb.accounting.core.infrastructure.account.AccountBalanceCalculator;
 import com.kltb.accounting.core.infrastructure.account.AccountValidator;
-import com.aliyun.openservices.ons.api.SendResult;
+import org.apache.rocketmq.client.producer.SendResult;
 import com.kltb.accounting.core.infrastructure.messaging.LocalMessageService;
-import com.kltb.accounting.core.infrastructure.messaging.OnsProducerTemplate;
+import com.kltb.accounting.core.infrastructure.messaging.RocketMqProducerTemplate;
 import com.kltb.accounting.core.infrastructure.messaging.PostingMessagePayload;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountDetailMapper;
@@ -43,7 +43,7 @@ import java.util.UUID;
 public class AsyncPostingDomainService {
 
     private final LocalMessageService localMessageService;
-    private final OnsProducerTemplate onsProducerTemplate;
+    private final RocketMqProducerTemplate rocketMqProducerTemplate;
     private final AccountingVoucherRepository accountingVoucherRepository;
     private final AccountRepository accountRepository;
     private final SubAccountRepository subAccountRepository;
@@ -107,7 +107,7 @@ public class AsyncPostingDomainService {
         }
         try {
             byte[] body = message.getPayload().getBytes(StandardCharsets.UTF_8);
-            SendResult sendResult = onsProducerTemplate.send(
+            SendResult sendResult = rocketMqProducerTemplate.send(
                 message.getTopic(),
                 message.getTag(),
                 message.getMessageId(),

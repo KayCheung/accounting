@@ -114,7 +114,7 @@ server:
   servlet:
     context-path: /
 
-# ==================== ONS Producer 配置 ====================
+# ==================== RocketMQ 开源版配置 ====================
 # ==================== 业务异步线程池（支持 Nacos 动态刷新） ====================
 accounting:
   freeze:
@@ -127,17 +127,17 @@ accounting:
       queue-capacity: ${BIZ_THREAD_POOL_QUEUE:256}
       keep-alive-seconds: ${BIZ_THREAD_POOL_KEEPALIVE:60}
   messaging:
-    ons:
-      # 是否启用 ONS Producer。默认 false，避免本地无配置时启动失败
-      enabled: ${ONS_ENABLED:false}
-      # ONS 接入地址，例如：http://onsaddr-internet.aliyun.com:80
-      endpoint: ${ONS_ENDPOINT:}
-      # 生产者 ID（Group），例如：PID_xxx
-      producer-id: ${ONS_PRODUCER_ID:}
-      # 阿里云访问凭证
-      access-key: ${ONS_ACCESS_KEY:}
-      secret-key: ${ONS_SECRET_KEY:}
-      # 实例 ID（可选）
-      instance-id: ${ONS_INSTANCE_ID:}
+    rocketmq:
+      # 是否启用 RocketMQ Producer。默认 false，避免本地无配置时启动失败
+      enabled: ${ROCKETMQ_ENABLED:false}
+      # NameServer 接入地址，例如：127.0.0.1:9876 或 nameserver1:9876;nameserver2:9876
+      name-server: ${ROCKETMQ_NAME_SERVER:127.0.0.1:9876}
+      # 生产者分组
+      producer-group: ${ROCKETMQ_PRODUCER_GROUP:PG_ACCOUNTING_CORE}
       # 发送超时（毫秒）
-      send-msg-timeout-millis: ${ONS_SEND_TIMEOUT_MILLIS:3000}
+      send-msg-timeout-millis: ${ROCKETMQ_SEND_TIMEOUT_MILLIS:3000}
+      # 消息重试次数
+      retry-times: ${ROCKETMQ_RETRY_TIMES:2}
+      # 消费者配置
+      consumer:
+        posting-group: ${ROCKETMQ_CONSUMER_POSTING_GROUP:GID_ACCOUNTING_POSTING}

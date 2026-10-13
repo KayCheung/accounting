@@ -38,9 +38,9 @@ logging:
   level:
     com.kltb.accounting: DEBUG
 
-# ==================== ONS Producer（本地默认关闭） ====================
+# ==================== RocketMQ Producer（本地默认关闭） ====================
 accounting:
   messaging:
-    ons:
+    rocketmq:
       enabled: false
 

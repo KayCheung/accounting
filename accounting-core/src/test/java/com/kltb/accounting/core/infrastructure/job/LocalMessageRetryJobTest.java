@@ -1,7 +1,7 @@
 package com.kltb.accounting.core.infrastructure.job;
 
 import com.kltb.accounting.core.infrastructure.messaging.LocalMessageService;
-import com.kltb.accounting.core.infrastructure.messaging.OnsProducerTemplate;
+import com.kltb.accounting.core.infrastructure.messaging.RocketMqProducerTemplate;
 import com.kltb.accounting.core.infrastructure.persistence.entity.LocalMessagePO;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,7 +26,7 @@ class LocalMessageRetryJobTest {
     private LocalMessageService localMessageService;
 
     @Mock
-    private OnsProducerTemplate onsProducerTemplate;
+    private RocketMqProducerTemplate rocketMqProducerTemplate;
 
     @Test
     @DisplayName("第1次失败后 next_retry_time = NOW + 10s")
@@ -36,10 +36,10 @@ class LocalMessageRetryJobTest {
 
         when(localMessageService.queryPendingByShard(100, 0, 1)).thenReturn(List.of(message));
         when(localMessageService.claimForSend(1L, 0)).thenReturn(true);
-        when(onsProducerTemplate.send(any(), any(), any(), any())).thenReturn(null);
+        when(rocketMqProducerTemplate.send(any(), any(), any(), any())).thenReturn(null);
 
         TestableLocalMessageRetryJob job = new TestableLocalMessageRetryJob(
-                localMessageService, onsProducerTemplate, fixedNow, 0, 1);
+                localMessageService, rocketMqProducerTemplate, fixedNow, 0, 1);
 
         job.execute();
 
@@ -56,10 +56,10 @@ class LocalMessageRetryJobTest {
 
         when(localMessageService.queryPendingByShard(100, 0, 1)).thenReturn(List.of(message));
         when(localMessageService.claimForSend(2L, 1)).thenReturn(true);
-        when(onsProducerTemplate.send(any(), any(), any(), any())).thenReturn(null);
+        when(rocketMqProducerTemplate.send(any(), any(), any(), any())).thenReturn(null);
 
         TestableLocalMessageRetryJob job = new TestableLocalMessageRetryJob(
-                localMessageService, onsProducerTemplate, fixedNow, 0, 1);
+                localMessageService, rocketMqProducerTemplate, fixedNow, 0, 1);
 
         job.execute();
 
@@ -76,10 +76,10 @@ class LocalMessageRetryJobTest {
 
         when(localMessageService.queryPendingByShard(100, 0, 1)).thenReturn(List.of(message));
         when(localMessageService.claimForSend(3L, 3)).thenReturn(true);
-        when(onsProducerTemplate.send(any(), any(), any(), any())).thenReturn(null);
+        when(rocketMqProducerTemplate.send(any(), any(), any(), any())).thenReturn(null);
 
         TestableLocalMessageRetryJob job = new TestableLocalMessageRetryJob(
-                localMessageService, onsProducerTemplate, fixedNow, 0, 1);
+                localMessageService, rocketMqProducerTemplate, fixedNow, 0, 1);
 
         job.execute();
 
@@ -94,12 +94,12 @@ class LocalMessageRetryJobTest {
         when(localMessageService.queryPendingByShard(100, 1, 4)).thenReturn(List.of());
 
         TestableLocalMessageRetryJob job = new TestableLocalMessageRetryJob(
-                localMessageService, onsProducerTemplate, fixedNow, 1, 4);
+                localMessageService, rocketMqProducerTemplate, fixedNow, 1, 4);
 
         job.execute();
 
         verify(localMessageService).queryPendingByShard(100, 1, 4);
-        verifyNoMoreInteractions(onsProducerTemplate);
+        verifyNoMoreInteractions(rocketMqProducerTemplate);
     }
 
     private LocalMessagePO buildMessage(Long id, String messageId, Integer retryCount, Integer maxRetry) {
@@ -120,11 +120,11 @@ class LocalMessageRetryJobTest {
         private final int testShardTotal;
 
         private TestableLocalMessageRetryJob(LocalMessageService localMessageService,
-                                             OnsProducerTemplate onsProducerTemplate,
+                                             RocketMqProducerTemplate rocketMqProducerTemplate,
                                              LocalDateTime fixedNow,
                                              int shardIndex,
                                              int shardTotal) {
-            super(localMessageService, onsProducerTemplate);
+            super(localMessageService, rocketMqProducerTemplate);
             this.fixedNow = fixedNow;
             this.testShardIndex = shardIndex;
             this.testShardTotal = shardTotal;

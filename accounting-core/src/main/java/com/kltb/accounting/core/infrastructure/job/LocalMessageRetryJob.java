@@ -1,8 +1,8 @@
 package com.kltb.accounting.core.infrastructure.job;
 
-import com.aliyun.openservices.ons.api.SendResult;
+import org.apache.rocketmq.client.producer.SendResult;
 import com.kltb.accounting.core.infrastructure.messaging.LocalMessageService;
-import com.kltb.accounting.core.infrastructure.messaging.OnsProducerTemplate;
+import com.kltb.accounting.core.infrastructure.messaging.RocketMqProducerTemplate;
 import com.kltb.accounting.core.infrastructure.persistence.entity.LocalMessagePO;
 import com.xxl.job.core.handler.annotation.XxlJob;
 import lombok.RequiredArgsConstructor;
@@ -34,7 +34,7 @@ public class LocalMessageRetryJob extends AbstractXxlJobHandler {
     private static final int BATCH_LIMIT = 100;
 
     private final LocalMessageService localMessageService;
-    private final OnsProducerTemplate onsProducerTemplate;
+    private final RocketMqProducerTemplate rocketMqProducerTemplate;
 
     @Override
     protected String jobName() {
@@ -73,7 +73,7 @@ public class LocalMessageRetryJob extends AbstractXxlJobHandler {
         }
 
         try {
-            SendResult sendResult = onsProducerTemplate.send(
+            SendResult sendResult = rocketMqProducerTemplate.send(
                     message.getTopic(),
                     message.getTag(),
                     message.getMessageId(),

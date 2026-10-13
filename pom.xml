@@ -30,7 +30,7 @@
         <springdoc.version>2.5.0</springdoc.version>
         <skywalking.version>9.3.0</skywalking.version>
         <flyway.version>10.13.0</flyway.version>
-        <ons-client.version>2.0.4.Final</ons-client.version>
+        <rocketmq.version>5.1.4</rocketmq.version>
         <xxl-job.version>2.4.1</xxl-job.version>
         <fastjson2.version>2.0.51</fastjson2.version>
         <spring-cloud-alibaba.version>2023.0.3.4</spring-cloud-alibaba.version>
@@ -120,11 +120,11 @@
                 <version>${skywalking.version}</version>
             </dependency>
 
-            <!-- Aliyun ONS Client（RocketMQ 阿里云版） -->
+            <!-- Apache RocketMQ Client（开源版） -->
             <dependency>
-                <groupId>com.aliyun.openservices</groupId>
-                <artifactId>ons-client</artifactId>
-                <version>${ons-client.version}</version>
+                <groupId>org.apache.rocketmq</groupId>
+                <artifactId>rocketmq-client</artifactId>
+                <version>${rocketmq.version}</version>
             </dependency>
 
             <!-- XXX-JOB -->

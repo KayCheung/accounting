@@ -107,10 +107,10 @@
             <artifactId>apm-toolkit-logback-1.x</artifactId>
         </dependency>
 
-        <!-- Aliyun ONS Client（RocketMQ 阿里云版，屏蔽原生 RocketMQ 客户端） -->
+        <!-- Apache RocketMQ Client（开源版） -->
         <dependency>
-            <groupId>com.aliyun.openservices</groupId>
-            <artifactId>ons-client</artifactId>
+            <groupId>org.apache.rocketmq</groupId>
+            <artifactId>rocketmq-client</artifactId>
         </dependency>
 
         <!-- Spring Cloud Alibaba Nacos Config（动态配置刷新） -->

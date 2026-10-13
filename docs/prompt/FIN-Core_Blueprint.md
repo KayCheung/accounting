@@ -29,6 +29,7 @@
   → task-2（本地消息表）：`docs/prompt/tasks/step-04-task-2-outbox.md`
   → task-3（Redis / 分布式锁 / 字典缓存）：`docs/prompt/tasks/step-04-task-3-redis.md`
   → task-4（Prometheus + 告警）：`docs/prompt/tasks/step-04-task-4-monitor.md`
+  → 架构优化（MQ 迁移）：已将 Aliyun ONS Client 全面迁移替换为开源 Apache RocketMQ Client（5.1.4），并完成 RocketMqProducerTemplate、AbstractMqConsumer 与相关业务链路和全部单测的平滑切换。
 
 - [X] **Step 5** · Domain Alignment｜领域模型对齐
   → 详见 `docs/prompt/step-05-alignment.md`

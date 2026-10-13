@@ -19,7 +19,7 @@ public interface MessageReceiptRepository {
      * 幂等防重准则：仅当且仅当 status=1 (SUCCESS) 时返回 true（触发幂等跳过）；
      * 若无记录或此前消费失败（status=2），返回 false，允许重试。
      *
-     * @param messageId     ONS 消息 ID
+     * @param messageId     RocketMQ 消息 ID
      * @param consumerGroup 消费者组
      * @return true 表示已成功消费，应幂等跳过；false 表示未消费或消费失败需重试
      */
@@ -31,7 +31,7 @@ public interface MessageReceiptRepository {
      * 若 (message_id, consumer_group) 不存在则新增；
      * 若已存在（如上次重试失败后本次重试成功或再次失败），则更新其状态、错误信息与时间戳。
      *
-     * @param messageId     ONS 消息 ID
+     * @param messageId     RocketMQ 消息 ID
      * @param businessKey   业务唯一键
      * @param consumerGroup 消费者组
      * @param topic         消息主题

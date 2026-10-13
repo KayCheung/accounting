@@ -2,9 +2,9 @@ package com.kltb.accounting.core.domain.service;
 
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.*;
-import com.aliyun.openservices.ons.api.SendResult;
+import org.apache.rocketmq.client.producer.SendResult;
 import com.kltb.accounting.core.infrastructure.messaging.LocalMessageService;
-import com.kltb.accounting.core.infrastructure.messaging.OnsProducerTemplate;
+import com.kltb.accounting.core.infrastructure.messaging.RocketMqProducerTemplate;
 import com.kltb.accounting.core.infrastructure.messaging.PostingMessagePayload;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountDetailMapper;
@@ -47,7 +47,7 @@ class AsyncPostingDomainServiceTest {
     @Mock private AccountDetailMapper accountDetailMapper;
     @Mock private SubAccountDetailMapper subAccountDetailMapper;
     @Mock private TransactionRepository transactionRepository;
-    @Mock private OnsProducerTemplate onsProducerTemplate;
+    @Mock private RocketMqProducerTemplate rocketMqProducerTemplate;
     @Mock private RollbackDomainService rollbackDomainService;
     @Mock private com.kltb.accounting.core.infrastructure.persistence.repository.BusinessRecordRepository businessRecordRepository;
 
@@ -325,11 +325,11 @@ class AsyncPostingDomainServiceTest {
         message.setPayload("{\"voucherNo\":\"VOU01\"}");
 
         SendResult sendResult = mock(SendResult.class);
-        when(onsProducerTemplate.send(eq("posting_topic"), eq("POSTING_ENTRY"), eq("MSG_001"), any())).thenReturn(sendResult);
+        when(rocketMqProducerTemplate.send(eq("posting_topic"), eq("POSTING_ENTRY"), eq("MSG_001"), any())).thenReturn(sendResult);
 
         asyncPostingDomainService.sendAsyncPostingMessage(message);
 
-        verify(onsProducerTemplate).send(eq("posting_topic"), eq("POSTING_ENTRY"), eq("MSG_001"), any());
+        verify(rocketMqProducerTemplate).send(eq("posting_topic"), eq("POSTING_ENTRY"), eq("MSG_001"), any());
         verify(localMessageService).markSent("MSG_001");
     }
 
@@ -343,11 +343,11 @@ class AsyncPostingDomainServiceTest {
         message.setBusinessKey("ENTRY_002");
         message.setPayload("{\"voucherNo\":\"VOU02\"}");
 
-        when(onsProducerTemplate.send(anyString(), anyString(), anyString(), any())).thenReturn(null);
+        when(rocketMqProducerTemplate.send(anyString(), anyString(), anyString(), any())).thenReturn(null);
 
         asyncPostingDomainService.sendAsyncPostingMessage(message);
 
-        verify(onsProducerTemplate).send(eq("posting_topic"), eq("POSTING_ENTRY"), eq("MSG_002"), any());
+        verify(rocketMqProducerTemplate).send(eq("posting_topic"), eq("POSTING_ENTRY"), eq("MSG_002"), any());
         verify(localMessageService, never()).markSent("MSG_002");
     }
 
@@ -361,7 +361,7 @@ class AsyncPostingDomainServiceTest {
         message.setBusinessKey("ENTRY_003");
         message.setPayload("{\"voucherNo\":\"VOU03\"}");
 
-        when(onsProducerTemplate.send(anyString(), anyString(), anyString(), any()))
+        when(rocketMqProducerTemplate.send(anyString(), anyString(), anyString(), any()))
                 .thenThrow(new RuntimeException("MQ 网络闪断"));
 
         // 验证不会抛出异常
@@ -377,11 +377,11 @@ class AsyncPostingDomainServiceTest {
         LocalMessagePO msg2 = new LocalMessagePO().setMessageId("M2").setTopic("T").setPayload("{}");
 
         SendResult res = mock(SendResult.class);
-        when(onsProducerTemplate.send(any(), any(), any(), any())).thenReturn(res);
+        when(rocketMqProducerTemplate.send(any(), any(), any(), any())).thenReturn(res);
 
         asyncPostingDomainService.sendAsyncPostingMessages(List.of(msg1, msg2));
 
-        verify(onsProducerTemplate, times(2)).send(any(), any(), any(), any());
+        verify(rocketMqProducerTemplate, times(2)).send(any(), any(), any(), any());
         verify(localMessageService).markSent("M1");
         verify(localMessageService).markSent("M2");
     }
