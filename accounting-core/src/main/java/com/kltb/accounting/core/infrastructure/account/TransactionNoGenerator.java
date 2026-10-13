@@ -45,7 +45,7 @@ public class TransactionNoGenerator {
         RFuture<Object> future = redissonClient.getScript(LongCodec.INSTANCE)
                 .evalAsync(RScript.Mode.READ_WRITE,
                         luaScript,
-                        RScript.ReturnType.INTEGER,
+                        RScript.ReturnType.LONG,
                         Collections.singletonList(key),
                         String.valueOf(TimeUnit.HOURS.toSeconds(25)));
 

@@ -41,7 +41,7 @@ public class FreezeIdGenerator {
         long seq = redissonClient.getScript(LongCodec.INSTANCE)
                 .eval(RScript.Mode.READ_WRITE,
                         luaScript,
-                        RScript.ReturnType.INTEGER,
+                        RScript.ReturnType.LONG,
                         Collections.singletonList(key),
                         String.valueOf(TimeUnit.HOURS.toSeconds(25)));
         return "FRZ" + date + String.format("%06d", seq);

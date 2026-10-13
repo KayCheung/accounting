@@ -226,9 +226,9 @@
                   业务红冲
                 </el-button>
 
-                <!-- 处理中或失败：整笔回滚 -->
+                <!-- 处理中流水：整笔回滚 -->
                 <el-button
-                  v-if="(row.status === 1 || row.status === 3) && row.tradeType !== 3 && row.tradeType !== 6"
+                  v-if="row.status === 1 && row.tradeType !== 3 && row.tradeType !== 6"
                   link
                   type="danger"
                   size="small"

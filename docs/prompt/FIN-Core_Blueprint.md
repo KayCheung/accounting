@@ -962,12 +962,14 @@
       - 核心机制强化：在 `RollbackDomainService.isRetryable(Throwable ex)` 中正式纳入 `AsyncRetryException`（显式声明的异步重试异常），并保留数据库悲观锁冲突（`PessimisticLockingFailureException`）、超时（`TimeoutException`）与瞬态资源异常（`TransientDataAccessResourceException`）；
       - 异常链穿透（Cause Penetration）：采用 `while (current != null)` 递归排查底层根因，杜绝 Spring 事务包装（如 `TransactionSystemException`、`UndeclaredThrowableException`）掩盖底层重试标志导致误判失败与单边回滚；
       - 测试覆盖：在 `RollbackDomainServiceTest` 中落地 `testIsRetryable` 单元测试，全面覆盖直接抛出、嵌套包装、可重试与不可重试业务异常断言，测试 100% 通过。
-    - **质量验收与测试保障**：
-      - 后端：`RollbackDomainServiceTest`、`JournalingApplicationServiceTest`、`AsyncPostingDomainServiceTest`、`HangingJournalCompensationJobHandlerTest`、`PostingMessageConsumerTest` 等单测 100% 通过（0 错误，0 失败）；
-    - **多模块架构精简与 Job 任务层内聚治理（Step 23.17 模块合并）**：
-      - **合并动因与架构治理**：`accounting-job` 深度依赖 `accounting-core` 内部领域与仓储实现，自身无独立领域模型，而 `accounting-core` 原已作为独立 Spring Boot 启动应用；将 `accounting-job` 的 12 个 XXL-JOB Handler 及单测全部迁移至 `accounting-core`（基础设施包 `com.kltb.accounting.core.infrastructure.job`），消除不必要的跨模块内部依赖与独立打包运维成本；
-      - **依赖收敛**：在 `accounting-core/pom.xml` 中直接引入 `xxl-job-core`，统一由核心模块管理所有外部驱动入口（REST 控制器、MQ 消息监听器、XXL-JOB 定时任务）；
-      - **冗余模块清理**：彻底移除空工程 `accounting-admin` 与已合并的 `accounting-job`，根 `pom.xml` 的 `<modules>` 精简收敛为 `accounting-api` 与 `accounting-core`；全工程 366 个测试用例 100% 编译与执行通过。
+    - **回滚辅助核算明细作废与重复回滚幂等防重治理（BUG治理）**：
+      - **辅助核算明细全链路作废与账簿过滤**：
+        1. 针对业务流水回滚后 `t_accounting_voucher_auxiliary` 仍保留未作废导致辅助核算账簿统计残留脏数据的严重缺陷，在仓储层扩展 `deleteAuxiliaryByVoucherNos` 逻辑删除方法（`is_delete = 1`），并在 `RollbackDomainService.executeFullJournalRollback` 与 `executeRollbackForAsyncFailure` 中完整联动执行作废；
+        2. 辅助核算账簿底表查询全量加固：重写 `AccountingVoucherAuxiliaryMapper.xml` 中的 5 大报表 SQL（`selectDistinctAuxItems`、`selectAuxiliarySummary`、`selectMatrixCellAmounts`、`selectSubjectBreakdown`、`selectEntryRecords`），强制 `INNER JOIN t_accounting_voucher v ON a.voucher_no = v.voucher_no AND v.is_delete = 0 AND v.status = 3`，从数据库层彻底杜绝任何未过账（PENDING/FAILED）凭证的辅助核算明细进入核算账簿；
+      - **整笔回滚幂等防重与操作权限精准收敛**：
+        1. 后端幂等防重：在 `RollbackDomainService` 中新增 `hasPendingRollbackData` 检测，若流水处于 `FAILED` 且关联的所有凭证、分录均已作废、预冻结已释放且辅助核算已清理（无待回滚脏数据），再次执行回滚时精准拦截并提示“该业务流水已完成全额回滚清理，无需重复回滚”，彻底消除重复操作；
+        2. 总览权限与前端收敛：在 `JournalingAssembler.java` 中将 `canRollback` 与 `hasPendingRollbackData` 联动，回滚完毕后总览数据的 `canRollback` 立即变为 `false`；在 `accounting-ui` 流水列表操作列中仅对处理中（`row.status === 1`）显示【整笔回滚】，彻底杜绝列表与详情抽屉反复触发回滚的体验问题；
+      - **测试与验证**：`RollbackDomainServiceTest`、`JournalingApplicationServiceTest`、`AuxiliaryLedgerApplicationServiceTest` 等单元测试 100% 通过（29 个用例 0 失败），前端生产构建 0 错误打包通过。
 - [x] **Step 23** · 业务功能页面开发全量交付完毕（100% 完成）
 
 

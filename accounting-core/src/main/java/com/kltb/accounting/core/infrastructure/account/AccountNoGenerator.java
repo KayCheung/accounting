@@ -65,7 +65,7 @@ public class AccountNoGenerator {
         String dateStr = LocalDate.now(ZONE_SHANGHAI).format(DATE_FMT);
         String key = RedisKeyConstants.Sequence.extAccount(orgCode, dateStr);
         Long seq = redissonClient.getScript(LongCodec.INSTANCE)
-                .eval(RScript.Mode.READ_WRITE, LUA_INCR_EXPIRE, RScript.ReturnType.INTEGER, Collections.singletonList(key));
+                .eval(RScript.Mode.READ_WRITE, LUA_INCR_EXPIRE, RScript.ReturnType.LONG, Collections.singletonList(key));
         return orgCode + dateStr + String.format("%05d", seq);
     }
 
@@ -102,7 +102,7 @@ public class AccountNoGenerator {
         String bizCode = StrUtil.isNotBlank(context.getBusinessCode()) ? context.getBusinessCode() : orgCode;
         String seqKey = RedisKeyConstants.Sequence.extAccount(bizCode, dateStr);
         Long seq = redissonClient.getScript(LongCodec.INSTANCE)
-                .eval(RScript.Mode.READ_WRITE, LUA_INCR_EXPIRE, RScript.ReturnType.INTEGER, Collections.singletonList(seqKey));
+                .eval(RScript.Mode.READ_WRITE, LUA_INCR_EXPIRE, RScript.ReturnType.LONG, Collections.singletonList(seqKey));
 
         String directionCode = "";
         if (context.getBalanceDirectionCode() != null) {
@@ -303,7 +303,7 @@ public class AccountNoGenerator {
     public String generateInternalAccountNo(String subjectCode) {
         String key = RedisKeyConstants.Sequence.innerAccount(subjectCode);
         Long seq = redissonClient.getScript(LongCodec.INSTANCE)
-                .eval(RScript.Mode.READ_WRITE, LUA_INCR, RScript.ReturnType.INTEGER, Collections.singletonList(key));
+                .eval(RScript.Mode.READ_WRITE, LUA_INCR, RScript.ReturnType.LONG, Collections.singletonList(key));
         return "INNER" + subjectCode + String.format("%03d", seq);
     }
 }

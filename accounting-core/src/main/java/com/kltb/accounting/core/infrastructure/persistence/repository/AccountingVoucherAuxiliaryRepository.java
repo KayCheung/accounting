@@ -1,6 +1,7 @@
 package com.kltb.accounting.core.infrastructure.persistence.repository;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.api.request.AuxiliaryLedgerQueryRequest;
@@ -153,6 +154,34 @@ public class AccountingVoucherAuxiliaryRepository {
             return Collections.emptyList();
         }
         return auxiliaryMapper.selectList(new LambdaQueryWrapper<AccountingVoucherAuxiliaryPO>()
+                .in(AccountingVoucherAuxiliaryPO::getEntryId, entryIds)
+                .eq(AccountingVoucherAuxiliaryPO::getIsDelete, 0));
+    }
+
+    /**
+     * 按凭证号集合逻辑删除辅助核算项（流水回滚/凭证作废场景）
+     */
+    public int deleteByVoucherNos(Collection<String> voucherNos) {
+        if (voucherNos == null || voucherNos.isEmpty()) {
+            return 0;
+        }
+        AccountingVoucherAuxiliaryPO updatePO = new AccountingVoucherAuxiliaryPO();
+        updatePO.setIsDelete(1L);
+        return auxiliaryMapper.update(updatePO, new LambdaUpdateWrapper<AccountingVoucherAuxiliaryPO>()
+                .in(AccountingVoucherAuxiliaryPO::getVoucherNo, voucherNos)
+                .eq(AccountingVoucherAuxiliaryPO::getIsDelete, 0));
+    }
+
+    /**
+     * 按分录ID集合逻辑删除辅助核算项（流水回滚/凭证作废场景）
+     */
+    public int deleteByEntryIds(Collection<String> entryIds) {
+        if (entryIds == null || entryIds.isEmpty()) {
+            return 0;
+        }
+        AccountingVoucherAuxiliaryPO updatePO = new AccountingVoucherAuxiliaryPO();
+        updatePO.setIsDelete(1L);
+        return auxiliaryMapper.update(updatePO, new LambdaUpdateWrapper<AccountingVoucherAuxiliaryPO>()
                 .in(AccountingVoucherAuxiliaryPO::getEntryId, entryIds)
                 .eq(AccountingVoucherAuxiliaryPO::getIsDelete, 0));
     }

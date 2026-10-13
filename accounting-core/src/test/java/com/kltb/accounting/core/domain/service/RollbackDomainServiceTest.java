@@ -23,6 +23,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
 
@@ -141,9 +142,41 @@ class RollbackDomainServiceTest {
         // 验证释放预冻结资金
         verify(freezeDomainService).unfreezeFund(eq("FRZ_001"), eq(new BigDecimal("100.00")), anyString());
 
+        // 验证逻辑删除凭证关联的辅助核算明细
+        verify(accountingVoucherRepository).deleteAuxiliaryByVoucherNos(eq(List.of("VOU_001")));
+
         // 验证事务与流水终态置为 FAILED
         verify(transactionRepository).updateStatusByTxnNo(eq("TXN_001"), eq(TransactionStatusEnum.FAILED), anyString(), any());
         verify(businessRecordRepository).updateStatusByTraceNo(traceNo, BusinessRecordStatusEnum.FAILED);
+    }
+
+    @Test
+    @DisplayName("executeFullJournalRollback: 已完全回滚的流水再次执行回滚应被拦截")
+    void executeFullJournalRollback_alreadyRolledBack_shouldThrowException() {
+        String traceNo = "TRC_ALREADY_ROLLED_BACK";
+        BusinessRecordPO record = new BusinessRecordPO();
+        record.setTraceNo(traceNo);
+        record.setStatus(BusinessRecordStatusEnum.FAILED);
+        when(businessRecordRepository.selectByTraceNo(traceNo)).thenReturn(record);
+
+        TransactionPO txn = new TransactionPO();
+        txn.setTxnNo("TXN_999");
+        txn.setStatus(TransactionStatusEnum.FAILED);
+        when(transactionRepository.selectByTraceNo(traceNo)).thenReturn(txn);
+
+        AccountingVoucherPO voucher = new AccountingVoucherPO();
+        voucher.setVoucherNo("VOU_999");
+        voucher.setStatus(VoucherStatusEnum.FAILED);
+        when(accountingVoucherRepository.selectByTraceNo(traceNo)).thenReturn(List.of(voucher));
+
+        AccountingVoucherEntryPO entry = new AccountingVoucherEntryPO();
+        entry.setStatus(VoucherEntryStatusEnum.FAILED);
+        when(accountingVoucherRepository.selectEntriesByVoucherNo("VOU_999")).thenReturn(List.of(entry));
+        when(accountingVoucherRepository.selectAuxiliaryByVoucherNo("VOU_999")).thenReturn(Collections.emptyList());
+
+        assertThatThrownBy(() -> rollbackDomainService.executeFullJournalRollback(traceNo, "重复操作测试"))
+                .isInstanceOf(ServiceException.class)
+                .hasMessageContaining("已完成全额回滚清理，无需重复回滚");
     }
 
     @Test

@@ -2,6 +2,7 @@ package com.kltb.accounting.core.infrastructure.persistence.repository;
 
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherAttachmentPO;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -385,5 +387,33 @@ public class AccountingVoucherRepository {
                 .orderByAsc(AccountingVoucherEntryPO::getRowNum);
         List<AccountingVoucherEntryPO> result = entryMapper.selectList(wrapper);
         return result != null ? result : Collections.emptyList();
+    }
+
+    /**
+     * 按凭证号集合逻辑删除辅助核算项（流水回滚/凭证作废场景）
+     */
+    public int deleteAuxiliaryByVoucherNos(Collection<String> voucherNos) {
+        if (voucherNos == null || voucherNos.isEmpty()) {
+            return 0;
+        }
+        AccountingVoucherAuxiliaryPO updatePO = new AccountingVoucherAuxiliaryPO();
+        updatePO.setIsDelete(1L);
+        return auxiliaryMapper.update(updatePO, new LambdaUpdateWrapper<AccountingVoucherAuxiliaryPO>()
+                .in(AccountingVoucherAuxiliaryPO::getVoucherNo, voucherNos)
+                .eq(AccountingVoucherAuxiliaryPO::getIsDelete, 0));
+    }
+
+    /**
+     * 按分录ID集合逻辑删除辅助核算项（流水回滚/凭证作废场景）
+     */
+    public int deleteAuxiliaryByEntryIds(Collection<String> entryIds) {
+        if (entryIds == null || entryIds.isEmpty()) {
+            return 0;
+        }
+        AccountingVoucherAuxiliaryPO updatePO = new AccountingVoucherAuxiliaryPO();
+        updatePO.setIsDelete(1L);
+        return auxiliaryMapper.update(updatePO, new LambdaUpdateWrapper<AccountingVoucherAuxiliaryPO>()
+                .in(AccountingVoucherAuxiliaryPO::getEntryId, entryIds)
+                .eq(AccountingVoucherAuxiliaryPO::getIsDelete, 0));
     }
 }

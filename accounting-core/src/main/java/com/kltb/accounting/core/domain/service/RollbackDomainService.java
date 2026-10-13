@@ -120,6 +120,13 @@ public class RollbackDomainService {
                     "记账成功的流水禁止执行技术回滚，请使用凭证红冲操作: " + traceNo);
         }
 
+        // 防重校验：若流水已是 FAILED 且不存在需要回滚的半成品数据，拦截重复回滚
+        if (record.getStatus() == BusinessRecordStatusEnum.FAILED && !hasPendingRollbackData(traceNo, record)) {
+            log.warn("[ROLLBACK] 流水已完成全额回滚清理，拒绝重复回滚: traceNo={}", traceNo);
+            throw new ServiceException(ResultCode.PARAM_ERROR,
+                    "该业务流水已完成全额回滚清理，无需重复回滚: " + traceNo);
+        }
+
         String lockKey = RedisKeyConstants.Lock.Idempotent.trace(
                 traceNo, record.getTraceSeq() != null ? record.getTraceSeq() : 1);
 
@@ -134,10 +141,12 @@ public class RollbackDomainService {
                 }
 
                 List<String> allEntryIds = new ArrayList<>();
+                List<String> allVoucherNos = new ArrayList<>();
 
                 // 2. 处理凭证及分录
                 if (vouchers != null && !vouchers.isEmpty()) {
                     for (AccountingVoucherPO voucher : vouchers) {
+                        allVoucherNos.add(voucher.getVoucherNo());
                         List<AccountingVoucherEntryPO> entries = accountingVoucherRepository
                                 .selectEntriesByVoucherNo(voucher.getVoucherNo());
 
@@ -166,15 +175,20 @@ public class RollbackDomainService {
                     }
                 }
 
-                // 3. 作废待发送的本地消息（防止 MQ 消费端继续入账）
+                // 3. 逻辑删除凭证关联的辅助核算明细（防止报表统计残留）
+                if (!allVoucherNos.isEmpty()) {
+                    accountingVoucherRepository.deleteAuxiliaryByVoucherNos(allVoucherNos);
+                }
+
+                // 4. 作废待发送的本地消息（防止 MQ 消费端继续入账）
                 if (!allEntryIds.isEmpty()) {
                     localMessageService.markFailedByBusinessKeys(allEntryIds, "流水回滚作废: " + safeReason);
                 }
 
-                // 4. 作废缓冲记账明细（防止 Job 批处理再次入账）
+                // 5. 作废缓冲记账明细（防止 Job 批处理再次入账）
                 bufferPostingDetailRepository.markFailedByTraceNo(traceNo, "流水回滚作废: " + safeReason);
 
-                // 5. 释放关联预冻结资金（若关联了 origFreezeNo 且未全额扣减/解冻）
+                // 6. 释放关联预冻结资金（若关联了 origFreezeNo 且未全额扣减/解冻）
                 if (StrUtil.isNotBlank(record.getOrigFreezeNo())) {
                     tryReleaseFreeze(record.getOrigFreezeNo(), safeReason);
                 }
@@ -231,6 +245,9 @@ public class RollbackDomainService {
             // c. 更新原凭证状态
             origVoucher.setStatus(VoucherStatusEnum.FAILED);
             accountingVoucherRepository.updateById(origVoucher);
+
+            // 清理辅助核算明细
+            accountingVoucherRepository.deleteAuxiliaryByVoucherNos(List.of(voucherNo));
 
             // d. 更新事务状态
             if (txnNo != null) {
@@ -423,6 +440,73 @@ public class RollbackDomainService {
             }
             current = current.getCause();
         }
+        return false;
+    }
+
+    /**
+     * 判断指定流水是否仍存在待回滚/待清理的半成品数据
+     *
+     * @param traceNo 流水跟踪号
+     * @param record  流水记录
+     * @return true-存在需要回滚清理的数据; false-无待清理数据（已完全回滚或为空）
+     */
+    public boolean hasPendingRollbackData(String traceNo, BusinessRecordPO record) {
+        if (record == null) {
+            record = businessRecordRepository.selectByTraceNo(traceNo);
+        }
+        if (record == null) {
+            return false;
+        }
+
+        // 1. 若流水处于处理中，必定需要回滚清理
+        if (record.getStatus() == BusinessRecordStatusEnum.PROCESSING) {
+            return true;
+        }
+
+        // 2. 检查关联凭证与分录
+        TransactionPO txn = transactionRepository.selectByTraceNo(traceNo);
+        String txnNo = (txn != null) ? txn.getTxnNo() : null;
+        List<AccountingVoucherPO> vouchers = accountingVoucherRepository.selectByTraceNo(traceNo);
+        if ((vouchers == null || vouchers.isEmpty()) && txnNo != null) {
+            vouchers = accountingVoucherRepository.selectByTxnNo(txnNo);
+        }
+
+        if (vouchers != null && !vouchers.isEmpty()) {
+            for (AccountingVoucherPO v : vouchers) {
+                // 凭证未处于 FAILED 或 REVERSED，需要回滚清理
+                if (v.getStatus() != VoucherStatusEnum.FAILED && v.getStatus() != VoucherStatusEnum.REVERSED) {
+                    return true;
+                }
+                // 检查分录中是否有 POSTED 或 PENDING 分录
+                List<AccountingVoucherEntryPO> entries = accountingVoucherRepository.selectEntriesByVoucherNo(v.getVoucherNo());
+                if (entries != null) {
+                    for (AccountingVoucherEntryPO entry : entries) {
+                        if (entry.getStatus() == VoucherEntryStatusEnum.POSTED || entry.getStatus() == VoucherEntryStatusEnum.PENDING) {
+                            return true;
+                        }
+                    }
+                }
+                // 检查是否存在未删除的辅助核算明细
+                List<AccountingVoucherAuxiliaryPO> auxList = accountingVoucherRepository.selectAuxiliaryByVoucherNo(v.getVoucherNo());
+                if (auxList != null && !auxList.isEmpty()) {
+                    return true;
+                }
+            }
+        }
+
+        // 3. 检查关联预冻结资金是否仍处于冻结状态
+        if (StrUtil.isNotBlank(record.getOrigFreezeNo())) {
+            AccountFreezeDetailPO freezeDetail = freezeDetailRepository.selectByVoucherNo(record.getOrigFreezeNo());
+            if (freezeDetail != null && freezeDetail.getStatus() == FreezeStatusEnum.FROZEN) {
+                return true;
+            }
+        }
+
+        // 4. 检查事务状态是否未处于 FAILED
+        if (txn != null && txn.getStatus() != TransactionStatusEnum.FAILED) {
+            return true;
+        }
+
         return false;
     }
 

@@ -5,6 +5,7 @@ import cn.hutool.core.util.StrUtil;
 import com.kltb.accounting.api.response.*;
 import com.kltb.accounting.core.domain.enums.BusinessRecordStatusEnum;
 import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
+import com.kltb.accounting.core.domain.enums.FreezeStatusEnum;
 import com.kltb.accounting.core.domain.enums.TransactionStatusEnum;
 import com.kltb.accounting.core.domain.enums.VoucherEntryStatusEnum;
 import com.kltb.accounting.core.domain.enums.VoucherStatusEnum;
@@ -364,7 +365,12 @@ public class JournalingAssembler {
             response.setStageDesc("记账失败");
             response.setProgressPercent(100);
             response.setCanRetry(record != null && record.getId() != null);
-            response.setCanRollback(true);
+            // 失败流水仅在存在待清理半成品数据（凭证未作废/分录未作废/预冻结未解冻）时才允许回滚；已彻底回滚干净则禁止重复回滚
+            boolean hasPendingRollback = (record != null && record.getStatus() == BusinessRecordStatusEnum.PROCESSING)
+                    || (vouchers != null && vouchers.stream().anyMatch(v -> v.getStatus() != VoucherStatusEnum.FAILED && v.getStatus() != VoucherStatusEnum.REVERSED))
+                    || (entryMap != null && entryMap.values().stream().flatMap(List::stream).anyMatch(e -> e.getStatus() == VoucherEntryStatusEnum.POSTED || e.getStatus() == VoucherEntryStatusEnum.PENDING))
+                    || (freezeDetail != null && freezeDetail.getStatus() == FreezeStatusEnum.FROZEN);
+            response.setCanRollback(hasPendingRollback);
             response.setCanReversal(false);
         } else if (isSuccess) {
             response.setProcessStage("SUCCESS");

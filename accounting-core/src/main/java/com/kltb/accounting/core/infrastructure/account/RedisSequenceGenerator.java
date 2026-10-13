@@ -88,7 +88,7 @@ public class RedisSequenceGenerator {
         RFuture<Object> future = redissonClient.getScript(LongCodec.INSTANCE)
                 .evalAsync(RScript.Mode.READ_WRITE,
                         LUA_SCRIPT,
-                        RScript.ReturnType.INTEGER,
+                        RScript.ReturnType.LONG,
                         Collections.singletonList(key),
                         String.valueOf(TimeUnit.HOURS.toSeconds(ttlHours)));
 
