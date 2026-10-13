@@ -166,4 +166,19 @@ public class BufferPostingDetailRepository {
                         .eq(BufferPostingDetailPO::getTraceNo, traceNo)
                         .eq(BufferPostingDetailPO::getIsDelete, 0));
     }
+
+    /**
+     * 批量作废缓冲记账明细（流水异常回滚使用，防止 Job 继续批处理入账）
+     */
+    public void markFailedByTraceNo(String traceNo, String reason) {
+        if (StrUtil.isBlank(traceNo)) {
+            return;
+        }
+        List<BufferPostingDetailPO> list = selectByTraceNo(traceNo);
+        for (BufferPostingDetailPO detail : list) {
+            if (detail.getStatus() == BufferStatusEnum.PENDING || detail.getStatus() == BufferStatusEnum.PROCESSING) {
+                updateToFailed(detail.getId(), reason);
+            }
+        }
+    }
 }

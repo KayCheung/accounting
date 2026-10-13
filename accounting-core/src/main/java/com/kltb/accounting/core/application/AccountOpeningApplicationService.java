@@ -54,7 +54,7 @@ public class AccountOpeningApplicationService {
                 request.getRequestNo()
         );
 
-        // TODO Step 10 接入真实 MQ
+        // 开户事件通知扩展点（当前打印日志预留；后续若需与外部用户中心/推送系统集成时，可在此接入 MQ 广播）
         log.info("Account opened event (reserved): accountNo={}", account.getAccountNo());
 
         return accountOpeningAssembler.toResponse(account);

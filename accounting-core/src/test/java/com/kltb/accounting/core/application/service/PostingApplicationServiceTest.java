@@ -12,6 +12,7 @@ import com.kltb.accounting.core.domain.service.RollbackDomainService;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherEntryPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherPO;
+import com.kltb.accounting.core.infrastructure.persistence.entity.LocalMessagePO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.TransactionPO;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountingVoucherRepository;
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -256,5 +258,69 @@ class PostingApplicationServiceTest {
         assertThatThrownBy(() -> postingApplicationService.executePosting(req))
                 .isInstanceOf(ServiceException.class)
                 .hasMessageContaining("凭证状态非法");
+    }
+
+    @Test
+    @DisplayName("executePosting: 包含异步分录时，事务内保存本地消息并在事务提交后主动投递 MQ 消息")
+    void executePosting_withAsyncEntries_shouldWriteLocalMessageAndSendMQAfterCommit() {
+        String voucherNo = "VOUCHER_ASYNC_001";
+        AccountingVoucherPO voucher = new AccountingVoucherPO();
+        voucher.setVoucherNo(voucherNo);
+        voucher.setStatus(VoucherStatusEnum.PENDING);
+        voucher.setTxnNo("TXN_ASYNC_001");
+
+        AccountingVoucherEntryPO realEntry = new AccountingVoucherEntryPO();
+        realEntry.setEntryId("ENTRY_REAL");
+        realEntry.setVoucherNo(voucherNo);
+        realEntry.setAccountNo("ACC_001");
+        realEntry.setUnilateral(1); // 实时
+        realEntry.setBuffered(0);
+
+        AccountingVoucherEntryPO asyncEntry = new AccountingVoucherEntryPO();
+        asyncEntry.setEntryId("ENTRY_ASYNC");
+        asyncEntry.setVoucherNo(voucherNo);
+        asyncEntry.setAccountNo("ACC_002");
+        asyncEntry.setUnilateral(0); // 异步
+        asyncEntry.setBuffered(0);
+
+        when(accountingVoucherRepository.selectByVoucherNoSimple(voucherNo)).thenReturn(voucher);
+        when(accountingVoucherRepository.selectEntriesByVoucherNo(voucherNo)).thenReturn(List.of(realEntry, asyncEntry));
+
+        AccountPO acc1 = new AccountPO().setAccountNo("ACC_001").setStatus(AccountStatusEnum.NORMAL);
+        AccountPO acc2 = new AccountPO().setAccountNo("ACC_002").setStatus(AccountStatusEnum.NORMAL);
+        when(accountRepository.selectByAccountNos(List.of("ACC_001", "ACC_002"))).thenReturn(List.of(acc1, acc2));
+
+        TransactionPO txn = new TransactionPO().setTxnNo("TXN_ASYNC_001");
+        when(transactionRepository.selectByTxnNo("TXN_ASYNC_001")).thenReturn(txn);
+
+        LocalMessagePO generatedMsg = new LocalMessagePO()
+                .setMessageId("MSG_ASYNC_100")
+                .setTopic("posting_topic")
+                .setTag("POSTING_ENTRY")
+                .setBusinessKey("ENTRY_ASYNC");
+        when(asyncPostingDomainService.writeAsyncPostingMessage(eq(asyncEntry), eq(voucher))).thenReturn(generatedMsg);
+
+        PostingExecuteRequest req = new PostingExecuteRequest();
+        req.setVoucherNo(voucherNo);
+        req.setOperatorName("admin");
+
+        PostingExecuteResponse response = postingApplicationService.executePosting(req);
+
+        assertThat(response).isNotNull();
+
+        // 1. 验证实时分录执行实时过账
+        verify(postingDomainService, times(1)).executeRealTimePosting(eq(voucher), anyList());
+
+        // 2. 验证异步分录在事务内写入本地消息
+        verify(asyncPostingDomainService, times(1)).writeAsyncPostingMessage(eq(asyncEntry), eq(voucher));
+
+        // 3. 验证主事务提交后立即主动投递 MQ 消息
+        ArgumentCaptor<List<LocalMessagePO>> msgListCaptor = ArgumentCaptor.forClass(List.class);
+        verify(asyncPostingDomainService, times(1)).sendAsyncPostingMessages(msgListCaptor.capture());
+        assertThat(msgListCaptor.getValue()).containsExactly(generatedMsg);
+
+        // 4. 验证凭证状态保持 POSTING (2)，事务状态保持不变（未提前置为 SUCCESS）
+        assertThat(voucher.getStatus()).isEqualTo(VoucherStatusEnum.POSTING);
+        verify(transactionRepository, never()).updateStatusByTxnNo(anyString(), eq(com.kltb.accounting.core.domain.enums.TransactionStatusEnum.SUCCESS), any(), any());
     }
 }

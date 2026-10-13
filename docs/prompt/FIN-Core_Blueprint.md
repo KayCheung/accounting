@@ -108,7 +108,7 @@
   → 完成内容（Java-B）：AsyncPostingDomainService（本地消息写入 + MQ消费端过账 + 幂等检查 + 状态联动 + executeRollbackOnAsyncFailure）+ RollbackDomainService（markTransactionFailed + executeRollbackForAsyncFailure 反向凭证回滚 + isRetryable）+ PostingMessagePayload + PostingMessageConsumer（含 TransactionTemplate 独立事务 + 指数退避重试）
   → 完成内容（Java-C）：PostingApplicationService（过账编排 + 分布式锁 + 分录分流 + 状态联动 + 重试机制）+ PostingController（3 个接口）+ PostingExecuteRequest/Response/EntryResponse DTO + PostingAssembler
   → 完成内容（持久层补充）：ResultCode 补充 POSTING_STATUS_INVALID/POSTING_FAILED 错误码
-  → Key Fixes: P0-1~P0-7 确认已完成 + ACCOUNT_STATUS_INVALID→ILLEGAL 修复 + subOldBalance 作用域修复 + preBalance 反向计算修复 + MessageReceiptPO 类型修复 + TransactionTemplate 消费端事务控制 + markTransactionFailed txnNo/traceNo 解析修复
+  → Key Fixes: P0-1~P0-7 确认已完成 + ACCOUNT_STATUS_INVALID→ILLEGAL 修复 + subOldBalance 作用域修复 + preBalance 反向计算修复 + MessageReceiptPO 类型修复 + TransactionTemplate 消费端事务控制 + markTransactionFailed txnNo/traceNo 解析修复 + 异步过账事务提交后主动投递 MQ 消息与 LocalMessageService 状态闭环（Transactional Outbox 模式）
 
 - [X] **Step 12** · Posting Engine｜过账引擎
   → 详见 `docs/prompt/step-12-posting.md`
@@ -932,6 +932,38 @@
       - **BUG261010-005（编辑规则删除分录 Duplicate entry '2-1-1' for key 'uk_rule_id' 根治与查询重复治理）**：排查并彻底解决 MyBatis-Plus `@TableLogic` 将删除记录固定赋值为 `is_delete = 1` 导致与 `uk_rule_id (rule_id, row_num, is_delete)` 唯一索引冲突而回滚的严重缺陷；在 `AccountingRuleDetailMapper` 与 `AccountingRuleAuxiliaryMapper` 中增加 `logicDeleteByRuleId`，执行 `SET is_delete = id`（利用自增主键全局绝对唯一特性），从数学上彻底杜绝删除操作唯一键碰撞可能；同时在 `V22` 脚本中平滑清洗存量 `is_delete = 1` 脏数据；进一步排查治理了 `AccountingRuleDetailMapper.selectWithAuxiliary` 中无谓的 `LEFT JOIN t_accounting_rule_auxiliary` 导致分录关联多辅助核算项时 1:N 笛卡尔膨胀返回重复分录行的缺陷，改为单表索引精确查询，彻底消除接口数据重复与前端编辑重复误删隐患，保障全链路测试 100% 通过。
       - **辅助核算项 SpEL 脚本与 allocationValue / extendScript 字段全链路隔离治理**：全面排查使用 `allocationMethod`、`allocationValue`、`extendScript` 的全链路逻辑，根治前端 SpEL 模式（4）将脚本误绑给 `allocationValue` (BigDecimal) 导致反序列化崩溃 `HttpMessageNotReadableException: Cannot deserialize value of type java.math.BigDecimal` 的缺陷；正本清源将前端输入框、大视窗编辑器、明细回显与保存校验统一绑定至 `extendScript`，提交时将 `allocationMethod === 4` 的 `allocationValue` 安全置为 `null`；在 `accounting-ui/src/api/rule.ts` 扩展接口定义；后端在 `RuleApplicationService.validateAuxiliaries` 增补 SpEL 脚本非空校验与 SpEL 语法预校验，并在 `RuleConverter.toAuxiliaryPO` 中执行规范化兜底；新增单元测试覆盖全链路场景，前后端编译与测试 100% 通过。
       - **业务流水明细模型精简与 itemCode 冗余字段移除**：识别并消除 `t_business_detail` 中无实际业务语义的 `item_code` 冗余字段，将其与记账规则驱动主键正本清源统一为 `funds_type`（交易款项类型，如本金、利息、费用）；新增 Flyway 迁移脚本 `V23__remove_item_code_from_business_detail.sql` 重建唯一索引为 `uk_trace_no (trace_no, trace_seq, customer_id, funds_type)`，自然实现同客户同流水同款项维度的防重幂等，并从物理表删除 `item_code`；精简 `JournalDetailRequest`、`BusinessDetailPO`、`JournalingDomainService` 及全量测试用例；更新前端接入示例说明与代码生成器，全模块编译构建与单元测试 100% 通过。
+  → 完成内容（Step 23.16 记账异常整笔流水回滚、红冲原则合规与掉单巡检补偿全链路闭环）：
+    - **记账异常半成品数据自动全额回滚机制（杜绝流水挂起 PROCESSING）**：
+      - 核心痛点治理：业务流水提交记账中途若发生异常（如预开户失败、SpEL执行失败、过账失败），数据库中已存在已生成的凭证或部分已过账分录及预冻结记录；旧逻辑简单捕获异常后将流水置为 FAILED 或未终态化，导致前端执行冲账时被 Reversal 拦截（未完全入账禁止红冲），且无法回滚半成品数据；
+      - 专职领域服务实现：在 `RollbackDomainService` 中落地 `executeFullJournalRollback(traceNo, reason)`：
+        1. 分布式互斥锁 + `TransactionTemplate` 严格编排事务边界；
+        2. 扫描流水关联的全部凭证分录，若存在已过账分录（`POSTED`），按多账户 `account_no` 升序加分布式锁，根据原增减方向严格执行**逆向余额冲销**（`BigDecimal.compareTo` 绝对值运算，严禁负数和 SQL 计算余额）；
+        3. 未过账凭证与分录统一作废置为 `FAILED`；
+        4. 本地消息事务表（Outbox）：批量将关联的待发送消息置为 `FAILED`，阻断 MQ 异步过账二次投递；
+        5. 缓冲入账明细表：作废关联的待处理缓冲明细；
+        6. 资金预冻结联动释放：检测流水关联的预冻结资金，调用 `FreezeDomainService.unfreezeFund` 自动全额解冻；
+        7. 终态流转：事务表状态与业务流水表状态原子性置为 `FAILED`，杜绝流水悬挂在 `PROCESSING`；
+        8. 记账主编排流程（`JournalingApplicationService.submitJournal`）在 `try-catch` 发生任何异常时，自动触发 `executeFullJournalRollback` 全额回滚已产生数据并落终态。
+    - **业务红冲（Reversal）与技术回滚（Rollback）严格分离合规设计**：
+      - 严格遵守财务会计法与审计规范：
+        - **记账成功（SUCCESS）**：严禁技术回滚，只允许走正式「业务红冲」流程（`POST /{traceNo}/reversal`），生成反向红字凭证并留下完整会计审计轨迹；
+        - **中途异常/处理中/失败（FAILED / PROCESSING）**：只允许走「整笔流水回滚」（`POST /{traceNo}/rollback`），全额作废撤销半成品数据；
+      - API 契约扩展（`accounting-api`）：`JournalOverviewResponse` 增加 `canReversal` 字段，配合原有的 `canRollback` 精准下发操作权限；
+      - 前端工作台（`accounting-ui`）：流水列表与总览抽屉中，「业务红冲」按钮与「整笔回滚」按钮根据状态互斥展示，明确业务边界。
+    - **掉单超时自动化巡检与对账自愈体系（Hanging Journal Compensation）**：
+      - 痛点场景应对：节点宕机、网络闪断或异步消费延迟导致流水长时间无异常却持续停留在 `PROCESSING` 处理中；
+      - 补偿编排引擎（`JournalingApplicationService.reconcileHangingJournal`）：
+        - 阶段自愈推进入账：无凭证自动补全凭证生成、有凭证未过账自动推进过账、全部分录过账完成自动联动将流水与事务置为 `SUCCESS`；
+        - 超时强制关单回滚：对于卡死超 30 分钟且无法推进的掉单流水，自动触发 `executeFullJournalRollback`，安全释放资金与作废半成品；
+      - 自动化定时任务（`accounting-job`）：新增 XXL-JOB 任务 `HangingJournalCompensationJobHandler`（`hangingJournalCompensationJobHandler`），定期扫描超过 5 分钟的 PROCESSING 掉单流水逐笔推进与对账补偿；
+      - 前端主动排查：针对 PROCESSING 流水提供「掉单核对」操作按钮，支持运营人员一键手动对账推进。
+    - **重试异常判定策略升级（isRetryable 支持 AsyncRetryException 与 cause 穿透）**：
+      - 核心机制强化：在 `RollbackDomainService.isRetryable(Throwable ex)` 中正式纳入 `AsyncRetryException`（显式声明的异步重试异常），并保留数据库悲观锁冲突（`PessimisticLockingFailureException`）、超时（`TimeoutException`）与瞬态资源异常（`TransientDataAccessResourceException`）；
+      - 异常链穿透（Cause Penetration）：采用 `while (current != null)` 递归排查底层根因，杜绝 Spring 事务包装（如 `TransactionSystemException`、`UndeclaredThrowableException`）掩盖底层重试标志导致误判失败与单边回滚；
+      - 测试覆盖：在 `RollbackDomainServiceTest` 中落地 `testIsRetryable` 单元测试，全面覆盖直接抛出、嵌套包装、可重试与不可重试业务异常断言，测试 100% 通过。
+    - **质量验收与测试保障**：
+      - 后端：`RollbackDomainServiceTest`、`JournalingApplicationServiceTest`、`AsyncPostingDomainServiceTest`、`HangingJournalCompensationJobHandlerTest`、`PostingMessageConsumerTest` 等单测 100% 通过（0 错误，0 失败）；
+      - 前端：`vue-tsc && vite build` 生产构建 0 错误打包通过。
 - [x] **Step 23** · 业务功能页面开发全量交付完毕（100% 完成）
 
 

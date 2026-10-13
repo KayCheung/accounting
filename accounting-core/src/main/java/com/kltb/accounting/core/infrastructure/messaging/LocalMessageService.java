@@ -92,7 +92,9 @@ public class LocalMessageService {
         localMessageMapper.update(
                 null,
                 new LambdaUpdateWrapper<LocalMessagePO>()
-                        .eq(LocalMessagePO::getMessageId, messageId)
+                        .and(w -> w.eq(LocalMessagePO::getMessageId, messageId)
+                                .or()
+                                .eq(LocalMessagePO::getBusinessKey, messageId))
                         .set(LocalMessagePO::getStatus, MessageStatusEnum.SENT)
                         .set(LocalMessagePO::getSendTime, now)
                         .set(LocalMessagePO::getUpdateTime, now)
@@ -263,6 +265,24 @@ public class LocalMessageService {
                 new LambdaQueryWrapper<LocalMessagePO>()
                         .in(LocalMessagePO::getBusinessKey, businessKeys)
                         .eq(LocalMessagePO::getIsDelete, 0));
+    }
+
+    /**
+     * 批量作废本地消息（流水异常回滚使用，防止 MQ 重复消费入账）
+     */
+    public void markFailedByBusinessKeys(List<String> businessKeys, String reason) {
+        if (businessKeys == null || businessKeys.isEmpty()) {
+            return;
+        }
+        log.warn("[LOCAL-MSG] 批量作废本地消息: businessKeys={}, reason={}", businessKeys, reason);
+        localMessageMapper.update(
+                null,
+                new LambdaUpdateWrapper<LocalMessagePO>()
+                        .in(LocalMessagePO::getBusinessKey, businessKeys)
+                        .eq(LocalMessagePO::getStatus, MessageStatusEnum.PENDING)
+                        .set(LocalMessagePO::getStatus, MessageStatusEnum.FAILED)
+                        .set(LocalMessagePO::getUpdateTime, LocalDateTime.now())
+        );
     }
 
     private boolean isBlank(String str) {

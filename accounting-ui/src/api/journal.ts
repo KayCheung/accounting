@@ -174,6 +174,7 @@ export interface JournalOverviewResponse {
   progressPercent: number
   canRetry: boolean
   canRollback: boolean
+  canReversal?: boolean
   postingSummary?: PostingSummaryInfo
 }
 
@@ -239,10 +240,27 @@ export function retryJournal(traceNo: string): Promise<JournalOverviewResponse> 
 }
 
 /**
- * 触发流水冲正与回滚
+ * 触发流水整笔回滚与清理（中途异常或未完成流水）
  */
 export function rollbackJournal(traceNo: string, reason?: string): Promise<JournalOverviewResponse> {
   return request.post<JournalOverviewResponse>(`/journal/${traceNo}/rollback`, null, {
     params: { reason }
   })
 }
+
+/**
+ * 触发记账流水业务红冲（仅限记账成功流水）
+ */
+export function reversalJournal(traceNo: string, reason?: string, bookkeeperName?: string): Promise<JournalOverviewResponse> {
+  return request.post<JournalOverviewResponse>(`/journal/${traceNo}/reversal`, null, {
+    params: { reason, bookkeeperName }
+  })
+}
+
+/**
+ * 触发掉单流水自动对账与推进补偿
+ */
+export function reconcileJournal(traceNo: string): Promise<JournalOverviewResponse> {
+  return request.post<JournalOverviewResponse>(`/journal/${traceNo}/reconcile`)
+}
+

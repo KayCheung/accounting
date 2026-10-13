@@ -97,6 +97,15 @@ class JournalingApplicationServiceTest {
     @Mock
     private ManualVoucherApplyRepository manualVoucherApplyRepository;
 
+    @Mock
+    private BusinessDetailRepository businessDetailRepository;
+
+    @Mock
+    private com.kltb.accounting.core.domain.service.AsyncPostingDomainService asyncPostingDomainService;
+
+    @Mock
+    private com.kltb.accounting.core.domain.service.ReversalDomainService reversalDomainService;
+
     @Spy
     private JournalingAssembler assembler = new JournalingAssembler();
 
@@ -589,16 +598,75 @@ class JournalingApplicationServiceTest {
         record.setStatus(BusinessRecordStatusEnum.FAILED);
         when(businessRecordRepository.selectByTraceNo(traceNo)).thenReturn(record);
 
-        AccountingVoucherPO voucher = new AccountingVoucherPO();
-        voucher.setVoucherNo("VOU_ROLLBACK_001");
-        voucher.setTxnNo("TXN_ROLLBACK_001");
-        when(accountingVoucherRepository.selectByTraceNo(traceNo)).thenReturn(List.of(voucher));
-
         JournalOverviewResponse overview = service.rollbackJournal(traceNo, "用户撤单");
 
         assertThat(overview).isNotNull();
-        verify(rollbackDomainService).executeRollbackForAsyncFailure("VOU_ROLLBACK_001", "TXN_ROLLBACK_001", "用户撤单");
-        verify(businessRecordRepository).updateStatusByTraceNo(traceNo, BusinessRecordStatusEnum.FAILED);
+        verify(rollbackDomainService).executeFullJournalRollback(traceNo, "用户撤单");
+    }
+
+    @Test
+    @DisplayName("rollbackJournal: 记账成功流水禁止技术回滚")
+    void rollbackJournal_shouldFailWhenSuccess() {
+        String traceNo = "TRACE_ROLLBACK_002";
+        BusinessRecordPO record = new BusinessRecordPO();
+        record.setTraceNo(traceNo);
+        record.setTraceSeq(1);
+        record.setStatus(BusinessRecordStatusEnum.SUCCESS);
+        when(businessRecordRepository.selectByTraceNo(traceNo)).thenReturn(record);
+
+        assertThatThrownBy(() -> service.rollbackJournal(traceNo, "用户撤单"))
+                .isInstanceOf(ServiceException.class)
+                .hasMessageContaining("记账成功的流水禁止执行技术回滚");
+    }
+
+    @Test
+    @DisplayName("reversalJournal: 记账成功流水标准红冲成功")
+    void reversalJournal_shouldSucceed() {
+        String traceNo = "TRACE_REV_001";
+        BusinessRecordPO record = new BusinessRecordPO();
+        record.setTraceNo(traceNo);
+        record.setTraceSeq(1);
+        record.setStatus(BusinessRecordStatusEnum.SUCCESS);
+        when(businessRecordRepository.selectByTraceNo(traceNo)).thenReturn(record);
+
+        AccountingVoucherPO voucher = new AccountingVoucherPO();
+        voucher.setVoucherNo("VOU_REV_001");
+        voucher.setStatus(VoucherStatusEnum.POSTED);
+        when(accountingVoucherRepository.selectByTraceNo(traceNo)).thenReturn(List.of(voucher));
+
+        JournalOverviewResponse overview = service.reversalJournal(traceNo, "OPERATOR", "错账冲销");
+
+        assertThat(overview).isNotNull();
+        verify(reversalDomainService).executeReversal("VOU_REV_001", "OPERATOR", "错账冲销");
+    }
+
+    @Test
+    @DisplayName("reconcileHangingJournal: 掉单流水自动对账与推进成功")
+    void reconcileHangingJournal_shouldSucceed() {
+        String traceNo = "TRACE_HANG_001";
+        BusinessRecordPO record = new BusinessRecordPO();
+        record.setTraceNo(traceNo);
+        record.setTraceSeq(1);
+        record.setStatus(BusinessRecordStatusEnum.PROCESSING);
+        record.setBusinessCode("LOAN");
+        record.setTradingCode("DISBURSE");
+        record.setPayChannel("BANK");
+        when(businessRecordRepository.selectByTraceNo(traceNo)).thenReturn(record);
+
+        AccountingVoucherPO voucher = new AccountingVoucherPO();
+        voucher.setVoucherNo("VOU_HANG_001");
+        voucher.setStatus(VoucherStatusEnum.PENDING);
+        when(accountingVoucherRepository.selectByTraceNo(traceNo)).thenReturn(List.of(voucher));
+
+        PostingExecuteResponse postResp = new PostingExecuteResponse();
+        postResp.setVoucherStatus(VoucherStatusEnum.POSTED.getCode());
+        when(postingApplicationService.executePosting(any())).thenReturn(postResp);
+
+        JournalOverviewResponse overview = service.reconcileHangingJournal(traceNo);
+
+        assertThat(overview).isNotNull();
+        verify(postingApplicationService).executePosting(any());
+        verify(businessRecordRepository).updateStatusByTraceNo(traceNo, BusinessRecordStatusEnum.SUCCESS);
     }
 
     @Test

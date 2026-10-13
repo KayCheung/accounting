@@ -2,11 +2,12 @@ package com.kltb.accounting.core.domain.service;
 
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.*;
+import com.aliyun.openservices.ons.api.SendResult;
 import com.kltb.accounting.core.infrastructure.messaging.LocalMessageService;
+import com.kltb.accounting.core.infrastructure.messaging.OnsProducerTemplate;
 import com.kltb.accounting.core.infrastructure.messaging.PostingMessagePayload;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountDetailMapper;
-import com.kltb.accounting.core.infrastructure.persistence.mapper.MessageReceiptMapper;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.SubAccountDetailMapper;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountingVoucherRepository;
@@ -45,8 +46,8 @@ class AsyncPostingDomainServiceTest {
     @Mock private SubAccountRepository subAccountRepository;
     @Mock private AccountDetailMapper accountDetailMapper;
     @Mock private SubAccountDetailMapper subAccountDetailMapper;
-    @Mock private MessageReceiptMapper messageReceiptMapper;
     @Mock private TransactionRepository transactionRepository;
+    @Mock private OnsProducerTemplate onsProducerTemplate;
     @Mock private RollbackDomainService rollbackDomainService;
     @Mock private com.kltb.accounting.core.infrastructure.persistence.repository.BusinessRecordRepository businessRecordRepository;
 
@@ -280,9 +281,109 @@ class AsyncPostingDomainServiceTest {
         assertThat(entry.getStatus()).isEqualTo(VoucherEntryStatusEnum.POSTED);
         verify(accountingVoucherRepository).updateEntryById(entry);
 
-        // 验证本地消息标记已发送与回执写入
+        // 验证本地消息标记已发送
         verify(localMessageService).markSent("E001");
-        verify(messageReceiptMapper).insert(any(MessageReceiptPO.class));
+    }
+
+    @Test
+    @DisplayName("写入异步消息: 正确组装并持久化本地消息，返回持久化对象")
+    void writeAsyncPostingMessage_success() {
+        AccountingVoucherEntryPO entry = new AccountingVoucherEntryPO();
+        entry.setEntryId("ENTRY_999");
+        entry.setAccountNo("ACC_999");
+        entry.setSubjectCode("1001");
+        entry.setDebitCredit(DebitCreditEnum.DEBIT);
+        entry.setChangeDirection(ChangeDirectionEnum.INCREASE);
+        entry.setAmount(new BigDecimal("123.45"));
+        entry.setAccountingDate(LocalDate.of(2026, 10, 8));
+        entry.setCurrency("CNY");
+        entry.setSummary("异步分录测试");
+
+        AccountingVoucherPO voucher = buildVoucher("VOU_999", "TXN_999");
+
+        LocalMessagePO message = asyncPostingDomainService.writeAsyncPostingMessage(entry, voucher);
+
+        assertThat(message).isNotNull();
+        assertThat(message.getMessageId()).isNotBlank();
+        assertThat(message.getTopic()).isEqualTo("posting_topic");
+        assertThat(message.getTag()).isEqualTo("POSTING_ENTRY");
+        assertThat(message.getBusinessKey()).isEqualTo("ENTRY_999");
+        assertThat(message.getStatus()).isEqualTo(MessageStatusEnum.PENDING);
+        assertThat(message.getPayload()).contains("ENTRY_999").contains("VOU_999").contains("123.45");
+
+        verify(localMessageService).save(any(LocalMessagePO.class));
+    }
+
+    @Test
+    @DisplayName("发送异步消息: 发送成功立即标记本地消息为 SENT")
+    void sendAsyncPostingMessage_success() {
+        LocalMessagePO message = new LocalMessagePO();
+        message.setMessageId("MSG_001");
+        message.setTopic("posting_topic");
+        message.setTag("POSTING_ENTRY");
+        message.setBusinessKey("ENTRY_001");
+        message.setPayload("{\"voucherNo\":\"VOU01\"}");
+
+        SendResult sendResult = mock(SendResult.class);
+        when(onsProducerTemplate.send(eq("posting_topic"), eq("POSTING_ENTRY"), eq("MSG_001"), any())).thenReturn(sendResult);
+
+        asyncPostingDomainService.sendAsyncPostingMessage(message);
+
+        verify(onsProducerTemplate).send(eq("posting_topic"), eq("POSTING_ENTRY"), eq("MSG_001"), any());
+        verify(localMessageService).markSent("MSG_001");
+    }
+
+    @Test
+    @DisplayName("发送异步消息: 发送返回 null 时交由 Job 补偿，不标记 SENT")
+    void sendAsyncPostingMessage_nullResult_shouldNotMarkSent() {
+        LocalMessagePO message = new LocalMessagePO();
+        message.setMessageId("MSG_002");
+        message.setTopic("posting_topic");
+        message.setTag("POSTING_ENTRY");
+        message.setBusinessKey("ENTRY_002");
+        message.setPayload("{\"voucherNo\":\"VOU02\"}");
+
+        when(onsProducerTemplate.send(anyString(), anyString(), anyString(), any())).thenReturn(null);
+
+        asyncPostingDomainService.sendAsyncPostingMessage(message);
+
+        verify(onsProducerTemplate).send(eq("posting_topic"), eq("POSTING_ENTRY"), eq("MSG_002"), any());
+        verify(localMessageService, never()).markSent("MSG_002");
+    }
+
+    @Test
+    @DisplayName("发送异步消息: 发送抛出异常时不阻断主流程，捕获并交由 Job 补偿")
+    void sendAsyncPostingMessage_exception_shouldNotThrow() {
+        LocalMessagePO message = new LocalMessagePO();
+        message.setMessageId("MSG_003");
+        message.setTopic("posting_topic");
+        message.setTag("POSTING_ENTRY");
+        message.setBusinessKey("ENTRY_003");
+        message.setPayload("{\"voucherNo\":\"VOU03\"}");
+
+        when(onsProducerTemplate.send(anyString(), anyString(), anyString(), any()))
+                .thenThrow(new RuntimeException("MQ 网络闪断"));
+
+        // 验证不会抛出异常
+        asyncPostingDomainService.sendAsyncPostingMessage(message);
+
+        verify(localMessageService, never()).markSent("MSG_003");
+    }
+
+    @Test
+    @DisplayName("批量发送异步消息: 逐条投递")
+    void sendAsyncPostingMessages_batch() {
+        LocalMessagePO msg1 = new LocalMessagePO().setMessageId("M1").setTopic("T").setPayload("{}");
+        LocalMessagePO msg2 = new LocalMessagePO().setMessageId("M2").setTopic("T").setPayload("{}");
+
+        SendResult res = mock(SendResult.class);
+        when(onsProducerTemplate.send(any(), any(), any(), any())).thenReturn(res);
+
+        asyncPostingDomainService.sendAsyncPostingMessages(List.of(msg1, msg2));
+
+        verify(onsProducerTemplate, times(2)).send(any(), any(), any(), any());
+        verify(localMessageService).markSent("M1");
+        verify(localMessageService).markSent("M2");
     }
 
     private PostingMessagePayload buildPayload(String voucherNo, String entryId, String accountNo,

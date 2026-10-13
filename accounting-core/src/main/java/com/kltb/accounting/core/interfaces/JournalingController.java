@@ -111,12 +111,31 @@ public class JournalingController {
     }
 
     @PostMapping("/{traceNo}/rollback")
-    @Operation(summary = "流水回滚与冲账", description = "对异常或需撤销流水触发回滚，生成反向冲账凭证并恢复账户余额")
+    @Operation(summary = "流水整笔回滚", description = "对未完成、中途异常或掉单挂起的流水触发整笔回滚，清理部分生成数据并置为失败")
     @Parameter(name = "traceNo", description = "系统跟踪号")
     public ApiResponse<JournalOverviewResponse> rollback(
             @PathVariable String traceNo,
             @RequestParam(required = false, defaultValue = "MANUAL_ROLLBACK") String reason) {
         JournalOverviewResponse response = journalingApplicationService.rollbackJournal(traceNo, reason);
+        return ApiResponse.ok(response);
+    }
+
+    @PostMapping("/{traceNo}/reversal")
+    @Operation(summary = "流水业务红冲", description = "对已记账成功的流水执行标准会计红冲，生成红字凭证并反向过账")
+    @Parameter(name = "traceNo", description = "系统跟踪号")
+    public ApiResponse<JournalOverviewResponse> reversal(
+            @PathVariable String traceNo,
+            @RequestParam(required = false, defaultValue = "MANUAL_REVERSAL") String reason,
+            @RequestParam(required = false) String bookkeeperName) {
+        JournalOverviewResponse response = journalingApplicationService.reversalJournal(traceNo, bookkeeperName, reason);
+        return ApiResponse.ok(response);
+    }
+
+    @PostMapping("/{traceNo}/reconcile")
+    @Operation(summary = "掉单流水自动对账与推进", description = "对长时间处于处理中(PROCESSING)的流水主动执行对账与推进补偿")
+    @Parameter(name = "traceNo", description = "系统跟踪号")
+    public ApiResponse<JournalOverviewResponse> reconcile(@PathVariable String traceNo) {
+        JournalOverviewResponse response = journalingApplicationService.reconcileHangingJournal(traceNo);
         return ApiResponse.ok(response);
     }
 }

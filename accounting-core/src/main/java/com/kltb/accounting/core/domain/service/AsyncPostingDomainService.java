@@ -6,11 +6,12 @@ import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.*;
 import com.kltb.accounting.core.infrastructure.account.AccountBalanceCalculator;
 import com.kltb.accounting.core.infrastructure.account.AccountValidator;
+import com.aliyun.openservices.ons.api.SendResult;
 import com.kltb.accounting.core.infrastructure.messaging.LocalMessageService;
+import com.kltb.accounting.core.infrastructure.messaging.OnsProducerTemplate;
 import com.kltb.accounting.core.infrastructure.messaging.PostingMessagePayload;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountDetailMapper;
-import com.kltb.accounting.core.infrastructure.persistence.mapper.MessageReceiptMapper;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.SubAccountDetailMapper;
 import com.kltb.accounting.core.infrastructure.persistence.repository.*;
 import com.kltb.accounting.core.shared.exception.AccountException;
@@ -20,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
@@ -41,12 +43,12 @@ import java.util.UUID;
 public class AsyncPostingDomainService {
 
     private final LocalMessageService localMessageService;
+    private final OnsProducerTemplate onsProducerTemplate;
     private final AccountingVoucherRepository accountingVoucherRepository;
     private final AccountRepository accountRepository;
     private final SubAccountRepository subAccountRepository;
     private final AccountDetailMapper accountDetailMapper;
     private final SubAccountDetailMapper subAccountDetailMapper;
-    private final MessageReceiptMapper messageReceiptMapper;
     private final TransactionRepository transactionRepository;
     private final RollbackDomainService rollbackDomainService;
     private final BusinessRecordRepository businessRecordRepository;
@@ -59,8 +61,9 @@ public class AsyncPostingDomainService {
      *
      * @param entry   分录记录（is_unilateral=0 且 is_buffered=0）
      * @param voucher 凭证记录
+     * @return 写入的本地消息持久化对象
      */
-    public void writeAsyncPostingMessage(AccountingVoucherEntryPO entry, AccountingVoucherPO voucher) {
+    public LocalMessagePO writeAsyncPostingMessage(AccountingVoucherEntryPO entry, AccountingVoucherPO voucher) {
         String payload = JSON.toJSONString(new PostingMessagePayload(
             voucher.getVoucherNo(),
             entry.getEntryId(),
@@ -86,6 +89,55 @@ public class AsyncPostingDomainService {
         message.setNextRetryTime(LocalDateTime.now());
 
         localMessageService.save(message);
+        return message;
+    }
+
+    /**
+     * 发送单条异步过账消息到 MQ（事务提交后调用）
+     * <p>
+     * 遵循 Transactional Outbox Pattern：
+     * 发送成功立即将本地消息标记为已发送；
+     * 发送失败或异常不中断主流程，保持 PENDING 状态，交由 LocalMessageRetryJob 定时补偿重试。
+     *
+     * @param message 本地消息对象
+     */
+    public void sendAsyncPostingMessage(LocalMessagePO message) {
+        if (message == null || StrUtil.isBlank(message.getPayload())) {
+            return;
+        }
+        try {
+            byte[] body = message.getPayload().getBytes(StandardCharsets.UTF_8);
+            SendResult sendResult = onsProducerTemplate.send(
+                message.getTopic(),
+                message.getTag(),
+                message.getMessageId(),
+                body
+            );
+            if (sendResult != null) {
+                localMessageService.markSent(message.getMessageId());
+                log.info("[ASYNC-POSTING] 异步过账消息投递成功: messageId={}, businessKey={}",
+                    message.getMessageId(), message.getBusinessKey());
+            } else {
+                log.warn("[ASYNC-POSTING] 异步过账消息投递返回空结果，交由 Job 补偿: messageId={}", message.getMessageId());
+            }
+        } catch (Exception e) {
+            log.error("[ASYNC-POSTING] 异步过账消息投递异常，交由 Job 补偿: messageId={}, error={}",
+                message.getMessageId(), e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 批量发送异步过账消息到 MQ（事务提交后调用）
+     *
+     * @param messages 本地消息对象列表
+     */
+    public void sendAsyncPostingMessages(List<LocalMessagePO> messages) {
+        if (messages == null || messages.isEmpty()) {
+            return;
+        }
+        for (LocalMessagePO message : messages) {
+            sendAsyncPostingMessage(message);
+        }
     }
 
     /**
@@ -250,15 +302,6 @@ public class AsyncPostingDomainService {
 
         // 15. 更新本地消息状态为已发送
         localMessageService.markSent(payload.getEntryId());
-
-        // 16. 写入消息回执
-        MessageReceiptPO receipt = new MessageReceiptPO();
-        receipt.setMessageId(payload.getEntryId());
-        receipt.setBusinessKey(payload.getEntryId());
-        receipt.setStatus(ReceiptStatusEnum.SUCCESS);
-        receipt.setReceivedTime(LocalDateTime.now());
-        receipt.setProcessedTime(LocalDateTime.now());
-        messageReceiptMapper.insert(receipt);
 
         log.info("[ASYNC-POSTING] 异步过账成功: entryId={}, accountNo={}", payload.getEntryId(), payload.getAccountNo());
     }

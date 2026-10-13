@@ -12,11 +12,9 @@ import com.kltb.accounting.core.domain.enums.*;
 import com.kltb.accounting.core.domain.model.AccountPreCheckResult;
 import com.kltb.accounting.core.domain.model.FreezeRecordCommand;
 import com.kltb.accounting.core.domain.model.JournalCreateCommand;
-import com.kltb.accounting.core.domain.service.AccountPreCheckDomainService;
-import com.kltb.accounting.core.domain.service.FreezeDomainService;
-import com.kltb.accounting.core.domain.service.JournalSubmitResult;
-import com.kltb.accounting.core.domain.service.JournalingDomainService;
+import com.kltb.accounting.core.domain.service.*;
 import com.kltb.accounting.core.infrastructure.config.FreezeProperties;
+import com.kltb.accounting.core.infrastructure.messaging.LocalMessageService;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
 import com.kltb.accounting.core.infrastructure.persistence.repository.*;
 import com.kltb.accounting.core.infrastructure.redis.DistributedLockTemplate;
@@ -60,11 +58,14 @@ public class JournalingApplicationService {
     private final TransactionTemplate transactionTemplate;
     private final VoucheringApplicationService voucheringApplicationService;
     private final PostingApplicationService postingApplicationService;
-    private final com.kltb.accounting.core.domain.service.RollbackDomainService rollbackDomainService;
+    private final RollbackDomainService rollbackDomainService;
     private final BufferPostingDetailRepository bufferPostingDetailRepository;
-    private final com.kltb.accounting.core.infrastructure.messaging.LocalMessageService localMessageService;
+    private final LocalMessageService localMessageService;
     private final ManualVoucherApplyRepository manualVoucherApplyRepository;
     private final FreezeProperties freezeProperties;
+    private final BusinessDetailRepository businessDetailRepository;
+    private final AsyncPostingDomainService asyncPostingDomainService;
+    private final ReversalDomainService reversalDomainService;
 
     /**
      * 提交记账流水（含入口幂等锁控制）
@@ -105,12 +106,14 @@ public class JournalingApplicationService {
             TransactionPO txn = transactionRepository.selectByTraceNo(request.getTraceNo());
             return assembler.toIdempotentResponse(existing, txn);
         } catch (AccountException e) {
-            markJournalFailed(request.getTraceNo(), e.getResultCode().getMessage());
+            log.warn("[Journal] 流水记账业务异常，执行整笔流水回滚: traceNo={} error={}",
+                    request.getTraceNo(), e.getResultCode().getMessage());
+            rollbackDomainService.executeFullJournalRollback(request.getTraceNo(), e.getResultCode().getMessage());
             throw e;
         } catch (RuntimeException e) {
-            log.error("[Journal] 流水入库异常，标记 FAILED: traceNo={} error={}",
+            log.error("[Journal] 流水记账系统异常，执行整笔流水回滚: traceNo={} error={}",
                     request.getTraceNo(), e.getMessage(), e);
-            markJournalFailed(request.getTraceNo(), "系统异常: " + e.getMessage());
+            rollbackDomainService.executeFullJournalRollback(request.getTraceNo(), "系统异常: " + e.getMessage());
             throw e;
         }
     }
@@ -616,31 +619,158 @@ public class JournalingApplicationService {
     }
 
     /**
-     * 回滚记账（对失败或需人工介入冲账的流水执行反向冲账与状态回滚）
+     * 回滚记账（对未完成、中途异常或掉单的流水执行整笔流水级数据回滚与状态清理）
      */
     public JournalOverviewResponse rollbackJournal(String traceNo, String reason) {
         BusinessRecordPO record = businessRecordRepository.selectByTraceNo(traceNo);
         if (record == null) {
             throw new ServiceException(ResultCode.JOURNAL_NOT_FOUND, "未找到流水记录: " + traceNo);
         }
+        if (record.getStatus() == BusinessRecordStatusEnum.SUCCESS) {
+            throw new ServiceException(ResultCode.PARAM_ERROR,
+                    "记账成功的流水禁止执行技术回滚，请使用凭证红冲操作: " + traceNo);
+        }
+
+        rollbackDomainService.executeFullJournalRollback(traceNo, reason);
+        return getJournalOverview(traceNo);
+    }
+
+    /**
+     * 业务流水红冲（对已记账成功的流水执行标准会计红冲）
+     */
+    public JournalOverviewResponse reversalJournal(String traceNo, String bookkeeperName, String reason) {
+        BusinessRecordPO record = businessRecordRepository.selectByTraceNo(traceNo);
+        if (record == null) {
+            throw new ServiceException(ResultCode.JOURNAL_NOT_FOUND, "未找到流水记录: " + traceNo);
+        }
+        if (record.getStatus() != BusinessRecordStatusEnum.SUCCESS) {
+            throw new ServiceException(ResultCode.PARAM_ERROR,
+                    "仅记账成功的流水允许执行红冲，当前状态: " + record.getStatus().getDesc());
+        }
+
+        List<AccountingVoucherPO> vouchers = accountingVoucherRepository.selectByTraceNo(traceNo);
+        if (vouchers == null || vouchers.isEmpty()) {
+            throw new ServiceException(ResultCode.VOUCHER_NOT_FOUND, "未找到该流水关联的记账凭证: " + traceNo);
+        }
+
+        AccountingVoucherPO postedVoucher = vouchers.stream()
+                .filter(v -> v.getStatus() == VoucherStatusEnum.POSTED)
+                .findFirst()
+                .orElse(null);
+
+        if (postedVoucher == null) {
+            throw new ServiceException(ResultCode.REVERSAL_ORIGINAL_NOT_POSTED, "未找到已过账凭证，无法执行红冲: " + traceNo);
+        }
+
+        String effectiveBookkeeper = StrUtil.blankToDefault(bookkeeperName, Constants.SYSTEM_OPERATOR);
+        String effectiveSummary = StrUtil.blankToDefault(reason, "业务流水红冲: " + traceNo);
+
+        reversalDomainService.executeReversal(postedVoucher.getVoucherNo(), effectiveBookkeeper, effectiveSummary);
+        return getJournalOverview(traceNo);
+    }
+
+    /**
+     * 掉单流水自动对账与推进补偿（针对长时间处于 PROCESSING 的无异常流水）
+     */
+    public JournalOverviewResponse reconcileHangingJournal(String traceNo) {
+        BusinessRecordPO record = businessRecordRepository.selectByTraceNo(traceNo);
+        if (record == null) {
+            throw new ServiceException(ResultCode.JOURNAL_NOT_FOUND, "未找到流水记录: " + traceNo);
+        }
+        if (record.getStatus() != BusinessRecordStatusEnum.PROCESSING) {
+            log.info("[RECONCILE] 流水非处理中状态，无需对账补偿: traceNo={}, status={}", traceNo, record.getStatus());
+            return getJournalOverview(traceNo);
+        }
 
         String lockKey = RedisKeyConstants.Lock.Idempotent.trace(traceNo, ObjectUtil.defaultIfNull(record.getTraceSeq(), 1));
         return distributedLockTemplate.execute(lockKey, 3, -1, () -> {
-            List<AccountingVoucherPO> vouchers = accountingVoucherRepository.selectByTraceNo(traceNo);
-            AccountingVoucherPO voucher = (vouchers != null && !vouchers.isEmpty()) ? vouchers.get(0) : null;
-            TransactionPO txn = transactionRepository.selectByTraceNo(traceNo);
-            String txnNo = txn != null ? txn.getTxnNo() : (voucher != null ? voucher.getTxnNo() : null);
-
-            if (voucher != null) {
-                rollbackDomainService.executeRollbackForAsyncFailure(
-                        voucher.getVoucherNo(), txnNo, StrUtil.blankToDefault(reason, "手动申请流水回滚"));
-            } else if (txnNo != null) {
-                rollbackDomainService.markTransactionFailed(txnNo, null, traceNo, reason);
+            BusinessRecordPO curRecord = businessRecordRepository.selectByTraceNo(traceNo);
+            if (curRecord.getStatus() != BusinessRecordStatusEnum.PROCESSING) {
+                return getJournalOverview(traceNo);
             }
 
-            businessRecordRepository.updateStatusByTraceNo(traceNo, BusinessRecordStatusEnum.FAILED);
+            List<AccountingVoucherPO> vouchers = accountingVoucherRepository.selectByTraceNo(traceNo);
+            AccountingVoucherPO voucher = (vouchers != null && !vouchers.isEmpty()) ? vouchers.get(0) : null;
+
+            // 阶段 1：流水已落库，但凭证未生成
+            if (voucher == null) {
+                log.info("[RECONCILE] 凭证未生成，尝试补生成凭证并过账: traceNo={}", traceNo);
+                try {
+                    List<BusinessDetailPO> details = businessDetailRepository.selectByTraceNo(traceNo);
+                    Map<String, CustomerTypeEnum> customerMap = buildCustomerMapFromDetails(details);
+
+                    AccountPreCheckResult preCheckResult = accountPreCheckDomainService.preCheckAndOpenAccounts(
+                            curRecord.getBusinessCode(), curRecord.getTradingCode(), curRecord.getPayChannel(),
+                            customerMap, traceNo);
+
+                    VoucherGenerateRequest voucherReq = new VoucherGenerateRequest();
+                    voucherReq.setTraceNo(traceNo);
+                    voucherReq.setBookkeeperName(Constants.SYSTEM_OPERATOR);
+                    voucherReq.setAccountMapping(preCheckResult != null ? preCheckResult.getAccountMapping() : Collections.emptyMap());
+                    VoucherGenerateResponse voucherResp = voucheringApplicationService.generateVoucher(voucherReq);
+
+                    if (voucherResp != null && StrUtil.isNotBlank(voucherResp.getVoucherNo())) {
+                        voucher = accountingVoucherRepository.selectByVoucherNoSimple(voucherResp.getVoucherNo());
+                    }
+                } catch (Exception ex) {
+                    log.error("[RECONCILE] 补生成凭证失败，执行流水回滚: traceNo={}", traceNo, ex);
+                    rollbackDomainService.executeFullJournalRollback(traceNo, "掉单自动对账失败-凭证生成异常: " + ex.getMessage());
+                    return getJournalOverview(traceNo);
+                }
+            }
+
+            // 阶段 2：凭证已生成，检查过账推进
+            if (voucher != null) {
+                if (voucher.getStatus() == VoucherStatusEnum.PENDING || voucher.getStatus() == VoucherStatusEnum.FAILED) {
+                    log.info("[RECONCILE] 凭证待过账或失败，重新触发过账: voucherNo={}", voucher.getVoucherNo());
+                    try {
+                        PostingExecuteRequest postReq = new PostingExecuteRequest();
+                        postReq.setVoucherNo(voucher.getVoucherNo());
+                        postReq.setOperatorName(Constants.SYSTEM_OPERATOR);
+                        PostingExecuteResponse postResp = postingApplicationService.executePosting(postReq);
+
+                        if (postResp != null && VoucherStatusEnum.isPosted(postResp.getVoucherStatus())) {
+                            businessRecordRepository.updateStatusByTraceNo(traceNo, BusinessRecordStatusEnum.SUCCESS);
+                        }
+                    } catch (Exception ex) {
+                        log.error("[RECONCILE] 补执行过账失败，执行流水回滚: traceNo={}", traceNo, ex);
+                        rollbackDomainService.executeFullJournalRollback(traceNo, "掉单自动对账失败-过账执行异常: " + ex.getMessage());
+                        return getJournalOverview(traceNo);
+                    }
+                } else if (voucher.getStatus() == VoucherStatusEnum.POSTING) {
+                    // 检查是否所有非缓冲分录实际已全部过账
+                    boolean allPosted = asyncPostingDomainService.areAllNonBufferEntriesPosted(voucher.getVoucherNo());
+                    if (allPosted) {
+                        log.info("[RECONCILE] 异步分录均已过账，补齐状态联动: voucherNo={}", voucher.getVoucherNo());
+                        asyncPostingDomainService.updateStatusIfAllNonBufferPosted(voucher.getVoucherNo());
+                    } else {
+                        // 异步过账未完成，检查是否超过超时阈值（如30分钟）
+                        if (curRecord.getCreateTime() != null && curRecord.getCreateTime().isBefore(LocalDateTime.now().minusMinutes(30))) {
+                            log.warn("[RECONCILE] 异步过账超过30分钟未完成，触发超时强制回滚: traceNo={}", traceNo);
+                            rollbackDomainService.executeFullJournalRollback(traceNo, "掉单超时超过30分钟未完成");
+                        }
+                    }
+                } else if (voucher.getStatus() == VoucherStatusEnum.POSTED) {
+                    // 凭证已是 POSTED，流水补更 SUCCESS
+                    businessRecordRepository.updateStatusByTraceNo(traceNo, BusinessRecordStatusEnum.SUCCESS);
+                }
+            }
+
             return getJournalOverview(traceNo);
         });
+    }
+
+    /**
+     * 从 BusinessDetailPO 列表构建 CustomerTypeEnum 映射
+     */
+    private Map<String, CustomerTypeEnum> buildCustomerMapFromDetails(List<BusinessDetailPO> details) {
+        Map<String, CustomerTypeEnum> map = new HashMap<>();
+        if (details != null) {
+            for (BusinessDetailPO detail : details) {
+                map.putIfAbsent(detail.getCustomerId(), detail.getCustomerType());
+            }
+        }
+        return map;
     }
 
     /**

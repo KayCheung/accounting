@@ -208,32 +208,57 @@
 
             <el-table-column prop="tradeTime" label="交易时间" width="170" show-overflow-tooltip />
 
-            <el-table-column label="操作" width="220" fixed="right" align="center">
+            <el-table-column label="操作" width="280" fixed="right" align="center">
               <template #default="{ row }">
                 <el-button link type="primary" size="small" :icon="View" @click="openOverview(row.traceNo)">
                   全景总览
                 </el-button>
 
-                <el-button
-                  v-if="row.status === 3"
-                  link
-                  type="danger"
-                  size="small"
-                  :icon="Refresh"
-                  @click="handleRetry(row.traceNo)"
-                >
-                  重试
-                </el-button>
-
+                <!-- 记账成功：标准业务红冲 -->
                 <el-button
                   v-if="row.status === 2 && row.tradeType !== 3 && row.tradeType !== 6"
                   link
                   type="warning"
                   size="small"
                   :icon="Back"
+                  @click="handleReversal(row.traceNo)"
+                >
+                  业务红冲
+                </el-button>
+
+                <!-- 处理中或失败：整笔回滚 -->
+                <el-button
+                  v-if="(row.status === 1 || row.status === 3) && row.tradeType !== 3 && row.tradeType !== 6"
+                  link
+                  type="danger"
+                  size="small"
+                  :icon="CircleClose"
                   @click="handleRollback(row.traceNo)"
                 >
-                  冲账回滚
+                  整笔回滚
+                </el-button>
+
+                <!-- 处理中：掉单核对 -->
+                <el-button
+                  v-if="row.status === 1"
+                  link
+                  type="info"
+                  size="small"
+                  :icon="RefreshRight"
+                  @click="handleReconcile(row.traceNo)"
+                >
+                  掉单核对
+                </el-button>
+
+                <el-button
+                  v-if="row.status === 3"
+                  link
+                  type="primary"
+                  size="small"
+                  :icon="Refresh"
+                  @click="handleRetry(row.traceNo)"
+                >
+                  重试
                 </el-button>
               </template>
             </el-table-column>
@@ -658,12 +683,28 @@
             重试记账
           </el-button>
           <el-button
+            v-if="overviewData?.record?.status === 1"
+            type="info"
+            :icon="RefreshRight"
+            @click="handleReconcile(overviewData!.record.traceNo)"
+          >
+            掉单核对
+          </el-button>
+          <el-button
+            v-if="overviewData?.canReversal && overviewData?.record?.traceNo"
+            type="warning"
+            :icon="Back"
+            @click="handleReversal(overviewData.record.traceNo)"
+          >
+            业务红冲
+          </el-button>
+          <el-button
             v-if="overviewData?.canRollback && overviewData?.record?.traceNo"
             type="danger"
-            :icon="Back"
+            :icon="CircleClose"
             @click="handleRollback(overviewData.record.traceNo)"
           >
-            冲账回滚
+            整笔回滚
           </el-button>
         </div>
       </template>
@@ -679,6 +720,7 @@ import {
   Refresh,
   View,
   Back,
+  CircleClose,
   Tickets,
   Clock,
   CircleCheckFilled,
@@ -697,6 +739,8 @@ import {
   getJournalOverview,
   retryJournal,
   rollbackJournal,
+  reversalJournal,
+  reconcileJournal,
   JOURNAL_STATUS_OPTIONS,
   TRANSACTION_STATUS_OPTIONS,
   JOURNAL_TRADE_TYPE_OPTIONS,
@@ -916,23 +960,65 @@ async function handleRetry(traceNo: string) {
   }
 }
 
-// 冲账回滚
+// 整笔流水回滚（针对中途异常/处理中/失败流水）
 async function handleRollback(traceNo: string) {
   try {
-    const { value: reason } = await ElMessageBox.prompt(`请输入流水 [${traceNo}] 的冲账回滚原因：`, '流水冲账回滚', {
-      confirmButtonText: '确认冲正',
+    const { value: reason } = await ElMessageBox.prompt(`确认针对流水 [${traceNo}] 执行整笔回滚与数据清理？请输入回滚原因：`, '整笔流水回滚确认', {
+      confirmButtonText: '确认回滚',
       cancelButtonText: '取消',
-      inputPlaceholder: '例如：用户撤销交易 / 业务系统冲正'
+      inputPlaceholder: '例如：中途异常撤销 / 业务系统关单'
     })
     const res = await rollbackJournal(traceNo, reason || 'MANUAL_ROLLBACK')
-    toast.success('流水冲账回滚完成，已生成反向冲销凭证')
+    toast.success('整笔流水回滚完成，已清理生成数据并置为失败')
     if (drawerVisible.value) {
       overviewData.value = res
     }
     loadJournalData()
   } catch (err: any) {
     if (err !== 'cancel') {
-      console.error('冲账回滚失败', err)
+      console.error('整笔流水回滚失败', err)
+    }
+  }
+}
+
+// 业务红冲（针对记账成功流水）
+async function handleReversal(traceNo: string) {
+  try {
+    const { value: reason } = await ElMessageBox.prompt(`流水 [${traceNo}] 已记账成功，将按会计规范生成红字凭证冲销。请输入红冲原因：`, '业务红冲确认', {
+      confirmButtonText: '确认红冲',
+      cancelButtonText: '取消',
+      inputPlaceholder: '例如：业务差错冲销 / 用户全额退款'
+    })
+    const res = await reversalJournal(traceNo, reason || 'MANUAL_REVERSAL', 'ADMIN')
+    toast.success('流水业务红冲成功，已生成红字冲销凭证')
+    if (drawerVisible.value) {
+      overviewData.value = res
+    }
+    loadJournalData()
+  } catch (err: any) {
+    if (err !== 'cancel') {
+      console.error('业务红冲失败', err)
+    }
+  }
+}
+
+// 掉单核对与推进
+async function handleReconcile(traceNo: string) {
+  try {
+    await ElMessageBox.confirm(`确认针对流水 [${traceNo}] 触发掉单状态核对？将自动检查凭证与分录推进最新入账状态。`, '掉单核对确认', {
+      type: 'info',
+      confirmButtonText: '立即核对',
+      cancelButtonText: '取消'
+    })
+    const res = await reconcileJournal(traceNo)
+    toast.success('掉单核对推进完成')
+    if (drawerVisible.value) {
+      overviewData.value = res
+    }
+    loadJournalData()
+  } catch (err: any) {
+    if (err !== 'cancel') {
+      console.error('掉单核对失败', err)
     }
   }
 }

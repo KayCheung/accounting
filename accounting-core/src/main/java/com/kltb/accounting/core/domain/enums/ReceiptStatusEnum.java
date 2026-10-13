@@ -23,4 +23,16 @@ public enum ReceiptStatusEnum {
     private final Integer code;
 
     private final String desc;
+
+    public static ReceiptStatusEnum fromCode(Integer code) {
+        if (code == null) {
+            return null;
+        }
+        for (ReceiptStatusEnum status : values()) {
+            if (status.code.equals(code)) {
+                return status;
+            }
+        }
+        return null;
+    }
 }

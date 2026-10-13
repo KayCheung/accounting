@@ -13,6 +13,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 业务记账流水持久化仓储
@@ -99,5 +101,19 @@ public class BusinessRecordRepository {
                 .eq(BusinessRecordPO::getIsDelete, 0)
                 .orderByDesc(BusinessRecordPO::getCreateTime);
         return businessRecordMapper.selectPage(page, wrapper);
+    }
+
+    /**
+     * 查询超时处于处理中的流水列表（掉单巡检使用）
+     */
+    public List<BusinessRecordPO> selectTimeoutProcessingRecords(LocalDateTime beforeTime, int limit) {
+        return businessRecordMapper.selectList(
+                new LambdaQueryWrapper<BusinessRecordPO>()
+                        .eq(BusinessRecordPO::getStatus, BusinessRecordStatusEnum.PROCESSING)
+                        .le(BusinessRecordPO::getCreateTime, beforeTime)
+                        .eq(BusinessRecordPO::getIsDelete, 0)
+                        .orderByAsc(BusinessRecordPO::getCreateTime)
+                        .last("LIMIT " + Math.min(Math.max(limit, 1), 100))
+        );
     }
 }

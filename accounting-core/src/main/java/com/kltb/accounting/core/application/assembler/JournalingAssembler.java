@@ -7,6 +7,7 @@ import com.kltb.accounting.core.domain.enums.BusinessRecordStatusEnum;
 import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
 import com.kltb.accounting.core.domain.enums.TransactionStatusEnum;
 import com.kltb.accounting.core.domain.enums.VoucherEntryStatusEnum;
+import com.kltb.accounting.core.domain.enums.VoucherStatusEnum;
 import com.kltb.accounting.core.domain.service.JournalSubmitResult;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
 import org.springframework.stereotype.Component;
@@ -349,11 +350,14 @@ public class JournalingAssembler {
         }
         response.setPostingSummary(summaryInfo);
 
-        // 6. 当前记账流程阶段、进度百分比及重试/回滚操作可用性判定
+        // 6. 当前记账流程阶段、进度百分比及重试/回滚/红冲操作可用性判定
         boolean isFailed = (record != null && record.getStatus() == BusinessRecordStatusEnum.FAILED)
                 || (txn != null && txn.getStatus() == TransactionStatusEnum.FAILED);
         boolean isSuccess = (record != null && record.getStatus() == BusinessRecordStatusEnum.SUCCESS)
                 || (txn != null && txn.getStatus() == TransactionStatusEnum.SUCCESS);
+
+        boolean hasReversedVoucher = vouchers != null && vouchers.stream()
+                .anyMatch(v -> v.getStatus() != null && v.getStatus() == VoucherStatusEnum.REVERSED);
 
         if (isFailed) {
             response.setProcessStage("FAILED");
@@ -361,30 +365,36 @@ public class JournalingAssembler {
             response.setProgressPercent(100);
             response.setCanRetry(record != null && record.getId() != null);
             response.setCanRollback(true);
+            response.setCanReversal(false);
         } else if (isSuccess) {
             response.setProcessStage("SUCCESS");
-            response.setStageDesc("记账完成");
+            response.setStageDesc(hasReversedVoucher ? "记账已冲销" : "记账完成");
             response.setProgressPercent(100);
             response.setCanRetry(false);
-            response.setCanRollback(true);
+            // 记账成功严禁技术回滚，只允许红冲（且未被红冲过）
+            response.setCanRollback(false);
+            response.setCanReversal(!hasReversedVoucher);
         } else if (vouchers != null && !vouchers.isEmpty()) {
             response.setProcessStage("POSTING");
             response.setStageDesc("过账处理中");
             response.setProgressPercent(75);
             response.setCanRetry(false);
             response.setCanRollback(true);
+            response.setCanReversal(false);
         } else if (txn != null) {
             response.setProcessStage("VOUCHERED");
             response.setStageDesc("凭证已生成");
             response.setProgressPercent(50);
             response.setCanRetry(false);
-            response.setCanRollback(false);
+            response.setCanRollback(true);
+            response.setCanReversal(false);
         } else {
             response.setProcessStage("RECORDED");
             response.setStageDesc("流水已登记");
             response.setProgressPercent(25);
             response.setCanRetry(false);
-            response.setCanRollback(false);
+            response.setCanRollback(true);
+            response.setCanReversal(false);
         }
 
         return response;

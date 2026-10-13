@@ -16,6 +16,7 @@ import com.kltb.accounting.core.infrastructure.account.AccountValidator;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherEntryPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherPO;
+import com.kltb.accounting.core.infrastructure.persistence.entity.LocalMessagePO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.TransactionPO;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountingVoucherRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountRepository;
@@ -149,8 +150,10 @@ public class PostingApplicationService {
         String lockKey = RedisKeyConstants.Lock.Voucher.voucherMutex(voucherNo);
 
         return distributedLockTemplate.execute(lockKey, 0, 60, () -> {
+            List<LocalMessagePO> pendingMessages = new ArrayList<>();
+
             // 5. 在事务中执行过账
-            return transactionTemplate.execute(status -> {
+            PostingExecuteResponse response = transactionTemplate.execute(status -> {
                 // a. 更新凭证状态为过账中
                 voucher.setStatus(VoucherStatusEnum.POSTING);
                 accountingVoucherRepository.updateById(voucher);
@@ -178,7 +181,8 @@ public class PostingApplicationService {
 
                 // d. 异步过账：写入本地消息
                 for (AccountingVoucherEntryPO entry : asyncEntries) {
-                    asyncPostingDomainService.writeAsyncPostingMessage(entry, voucher);
+                    LocalMessagePO message = asyncPostingDomainService.writeAsyncPostingMessage(entry, voucher);
+                    pendingMessages.add(message);
                 }
 
                 // e. 状态联动
@@ -219,6 +223,13 @@ public class PostingApplicationService {
 
                 return assembler.toResponse(voucher, allNonBufferEntries, txn);
             });
+
+            // 6. 事务成功提交后，立即主动投递 MQ 消息（Transactional Outbox 模式）
+            if (!pendingMessages.isEmpty()) {
+                asyncPostingDomainService.sendAsyncPostingMessages(pendingMessages);
+            }
+
+            return response;
         });
     }
 

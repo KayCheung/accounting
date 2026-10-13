@@ -42,8 +42,11 @@ public class JournalOverviewResponse {
     /** 是否支持失败重试 */
     private Boolean canRetry;
 
-    /** 是否支持撤销/回滚 */
+    /** 是否支持撤销/回滚（中途异常或掉单） */
     private Boolean canRollback;
+
+    /** 是否支持业务红冲（记账成功凭证） */
+    private Boolean canReversal;
 
     /** 并行记账、异步记账、缓冲记账综合结果统计 */
     private PostingSummaryInfo postingSummary;

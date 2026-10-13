@@ -6,27 +6,30 @@ import java.time.LocalDateTime;
 /**
  * 消息回执存储接口
  *
- * <p>职责：解耦 AbstractMqConsumer 与持久层，Step 3 完成后由
+ * <p>职责：解耦 AbstractMqConsumer 与持久层，由
  * MessageReceiptRepositoryImpl 实现，注入 MessageReceiptMapper。
  *
- * <p>此接口在 Step 4.1 中定义，Step 3 完成后实现，两步可并行推进。
- *
- * <p>⚠️ 当前状态：仅接口定义，无实现类。消费幂等功能在实现类注入前不可用。
- * 需在 Step 5（Domain Alignment）中补上 MessageReceiptRepositoryImpl 实现。
+ * <p>用于 MQ 消费幂等校验（t_message_receipt）与消费回执全生命周期追踪。
  */
 public interface MessageReceiptRepository {
 
     /**
-     * 检查消息是否已被指定消费者组消费过
+     * 检查消息是否已被指定消费者组【成功消费】过
+     * <p>
+     * 幂等防重准则：仅当且仅当 status=1 (SUCCESS) 时返回 true（触发幂等跳过）；
+     * 若无记录或此前消费失败（status=2），返回 false，允许重试。
      *
      * @param messageId     ONS 消息 ID
      * @param consumerGroup 消费者组
-     * @return true 表示已消费，应幂等跳过
+     * @return true 表示已成功消费，应幂等跳过；false 表示未消费或消费失败需重试
      */
-    boolean existsByMessageIdAndConsumerGroup(String messageId, String consumerGroup);
+    boolean isSuccessConsumed(String messageId, String consumerGroup);
 
     /**
-     * 写入消息回执记录
+     * 写入或更新消息回执记录（SaveOrUpdate 语义）
+     * <p>
+     * 若 (message_id, consumer_group) 不存在则新增；
+     * 若已存在（如上次重试失败后本次重试成功或再次失败），则更新其状态、错误信息与时间戳。
      *
      * @param messageId     ONS 消息 ID
      * @param businessKey   业务唯一键
