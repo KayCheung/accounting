@@ -11,4 +11,7 @@ public class AuxiliaryMatrixCellBO {
     private String subjectCode;
     private String auxCode;
     private BigDecimal amount;
+    private BigDecimal debitAmount;
+    private BigDecimal creditAmount;
+    private BigDecimal netAmount;
 }

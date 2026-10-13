@@ -12,5 +12,6 @@ public class AuxiliarySubjectBreakdownBO {
     private BigDecimal debitAmount;
     private BigDecimal creditAmount;
     private BigDecimal totalAmount;
+    private BigDecimal netAmount;
     private Integer entryCount;
 }

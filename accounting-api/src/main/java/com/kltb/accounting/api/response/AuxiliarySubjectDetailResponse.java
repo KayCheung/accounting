@@ -44,6 +44,12 @@ public class AuxiliarySubjectDetailResponse implements Serializable {
     @Schema(description = "累计发生总额", example = "312000.00")
     private BigDecimal totalAmount;
 
+    @Schema(description = "净发生额(借-贷，成本核算净额)", example = "0.00")
+    private BigDecimal netAmount;
+
+    @Schema(description = "净发生额方向描述：平/借/贷", example = "平")
+    private String netDirectionDesc;
+
     @Schema(description = "发生分录笔数", example = "18")
     private Integer entryCount;
 

@@ -46,6 +46,9 @@ public class AuxiliaryLedgerQueryRequest implements Serializable {
     @Schema(description = "凭证状态过滤：3-仅已过账, 5-仅已冲销, 不传或空表示包含已过账与已冲销", example = "3")
     private Integer voucherStatus;
 
+    @Schema(description = "金额统计口径：NET-净额口径(借-贷，成本核算/红冲归零，默认)，GROSS-发生额口径(借+贷，流水总活跃度)", example = "NET")
+    private String amountMode = "NET";
+
     @Schema(description = "页码（分页查询凭证流水时生效，默认 1）", example = "1")
     private Integer pageNo = 1;
 

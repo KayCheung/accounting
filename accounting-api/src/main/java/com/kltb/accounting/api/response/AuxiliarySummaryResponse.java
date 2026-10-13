@@ -33,6 +33,12 @@ public class AuxiliarySummaryResponse implements Serializable {
     @Schema(description = "贷方发生额合计", example = "0.00")
     private BigDecimal creditAmount;
 
+    @Schema(description = "本期核算净发生额(成本/费用净额 = 借方发生额 - 贷方发生额)", example = "0.00")
+    private BigDecimal netAmount;
+
+    @Schema(description = "净发生额方向描述：平(已对冲0.00)、借(净发生)、贷(净冲销)", example = "平")
+    private String netDirectionDesc;
+
     @Schema(description = "涉及核算项目数", example = "6")
     private Integer itemCount;
 

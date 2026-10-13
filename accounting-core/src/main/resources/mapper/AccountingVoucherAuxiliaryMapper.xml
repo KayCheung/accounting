@@ -21,7 +21,9 @@
             a.aux_code AS auxCode,
             a.aux_name AS auxName,
             COUNT(1) AS recordCount,
-            COALESCE(SUM(a.amount), 0) AS totalAmount
+            COALESCE(SUM(a.amount), 0) AS totalAmount,
+            COALESCE(SUM(CASE WHEN e.debit_credit = 1 OR (e.debit_credit IS NULL AND a.change_direction = 1) THEN a.amount ELSE 0 END), 0) AS debitAmount,
+            COALESCE(SUM(CASE WHEN e.debit_credit = 2 OR (e.debit_credit IS NULL AND a.change_direction = 2) THEN a.amount ELSE 0 END), 0) AS creditAmount
         FROM t_accounting_voucher_auxiliary a
         INNER JOIN t_accounting_voucher v ON a.voucher_no = v.voucher_no AND v.is_delete = 0
         <choose>
@@ -32,6 +34,7 @@
                 AND v.status IN (3, 5)
             </otherwise>
         </choose>
+        LEFT JOIN t_accounting_voucher_entry e ON a.entry_id = e.entry_id AND e.is_delete = 0
         WHERE a.aux_type = #{auxType}
           AND a.is_delete = 0
           <if test="startDate != null">
@@ -96,7 +99,9 @@
         SELECT
             a.subject_code AS subjectCode,
             a.aux_code AS auxCode,
-            COALESCE(SUM(a.amount), 0) AS amount
+            COALESCE(SUM(a.amount), 0) AS amount,
+            COALESCE(SUM(CASE WHEN e.debit_credit = 1 OR (e.debit_credit IS NULL AND a.change_direction = 1) THEN a.amount ELSE 0 END), 0) AS debitAmount,
+            COALESCE(SUM(CASE WHEN e.debit_credit = 2 OR (e.debit_credit IS NULL AND a.change_direction = 2) THEN a.amount ELSE 0 END), 0) AS creditAmount
         FROM t_accounting_voucher_auxiliary a
         INNER JOIN t_accounting_voucher v ON a.voucher_no = v.voucher_no AND v.is_delete = 0
         <choose>

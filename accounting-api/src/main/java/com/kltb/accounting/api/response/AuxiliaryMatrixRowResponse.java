@@ -36,11 +36,23 @@ public class AuxiliaryMatrixRowResponse implements Serializable {
     @Schema(description = "科目账类名称", example = "损益类")
     private String subjectCategoryDesc;
 
-    @Schema(description = "各核算项对应发生额映射（key为auxCode，value为金额）")
+    @Schema(description = "当前口径展示金额映射（根据amountMode计算，key为auxCode，value为金额）")
     private Map<String, BigDecimal> amounts;
 
-    @Schema(description = "科目行发生合计", example = "312000.00")
+    @Schema(description = "各核算项对应发生额映射（发生额口径 借+贷）")
+    private Map<String, BigDecimal> grossAmounts;
+
+    @Schema(description = "各核算项对应净额映射（成本净额口径 借-贷）")
+    private Map<String, BigDecimal> netAmounts;
+
+    @Schema(description = "当前口径展示合计金额", example = "312000.00")
     private BigDecimal totalAmount;
+
+    @Schema(description = "科目行发生总额(借+贷)", example = "624000.00")
+    private BigDecimal grossTotalAmount;
+
+    @Schema(description = "科目行净额总额(借-贷)", example = "0.00")
+    private BigDecimal netTotalAmount;
 
     @Schema(description = "行合计占全表总计百分比(%)", example = "35.43")
     private BigDecimal percentage;

@@ -51,7 +51,19 @@
                 <span class="node-code mono">{{ item.auxCode }}</span>
               </div>
             </div>
-            <span class="node-amt mono">{{ formatMoney(item.totalAmount) }}</span>
+            <div class="node-amt-box">
+              <span class="node-amt mono" :title="'累计发生额：' + formatMoney(item.totalAmount)">
+                {{ formatMoney(item.totalAmount) }}
+              </span>
+              <span
+                v-if="item.netAmount !== undefined"
+                class="node-net-amt mono"
+                :class="{ 'is-zero': Number(item.netAmount) === 0 }"
+                :title="'成本/净发生额(借-贷)：' + formatMoney(item.netAmount)"
+              >
+                净: {{ formatMoney(item.netAmount) }}
+              </span>
+            </div>
           </div>
 
           <el-empty
@@ -155,6 +167,20 @@
 
         <!-- 财务 KPI 统计卡片 -->
         <div class="kpi-grid">
+          <div class="kpi-card teal">
+            <div class="kpi-label">成本/费用净额 (净发生)</div>
+            <div class="kpi-value mono" :class="getNetTextColor(summaryData?.netAmount)">
+              {{ formatMoney(summaryData?.netAmount) }}
+              <span class="kpi-unit">元</span>
+            </div>
+            <div class="kpi-sub">
+              <span>方向：</span>
+              <el-tag size="small" :type="getNetTagType(summaryData?.netDirectionDesc)">
+                {{ summaryData?.netDirectionDesc === '平' ? '平 (已对冲归零)' : (summaryData?.netDirectionDesc || '平') }}
+              </el-tag>
+            </div>
+          </div>
+
           <div class="kpi-card blue">
             <div class="kpi-label">本期核算发生总额</div>
             <div class="kpi-value mono text-primary">
@@ -244,11 +270,24 @@
             <el-tab-pane label="各核算项汇总对比" name="matrix">
               <div class="tab-pane-content">
                 <div class="table-toolbar">
-                  <span class="tb-title">
-                    {{ currentAuxTypeName }}交叉发生额对比表
-                    <el-tag size="small" type="info" class="period-tag">{{ currentPeriodDesc }}</el-tag>
-                  </span>
-                  <span class="tb-hint">金额单位：元</span>
+                  <div class="tb-left">
+                    <span class="tb-title">
+                      {{ currentAuxTypeName }}交叉汇总矩阵表
+                      <el-tag size="small" type="info" class="period-tag">{{ currentPeriodDesc }}</el-tag>
+                    </span>
+                    <span class="tb-hint">金额单位：元</span>
+                  </div>
+                  <div class="tb-right">
+                    <el-radio-group v-model="amountMode" size="small" @change="handleAmountModeChange">
+                      <el-radio-button value="NET">
+                        <el-icon style="vertical-align: middle; margin-right: 4px;"><CircleCheck /></el-icon>
+                        成本净额口径 (借-贷/红冲归零)
+                      </el-radio-button>
+                      <el-radio-button value="GROSS">
+                        发生额口径 (借+贷/流水活跃度)
+                      </el-radio-button>
+                    </el-radio-group>
+                  </div>
                 </div>
 
                 <el-table
@@ -283,24 +322,46 @@
                     :key="col.auxCode"
                     :prop="'amounts.' + col.auxCode"
                     :label="col.auxName"
-                    min-width="125"
+                    min-width="135"
                     align="right"
                   >
                     <template #default="{ row }">
-                      <span
-                        v-if="row.amounts && row.amounts[col.auxCode]"
-                        class="mono text-amount"
+                      <el-tooltip
+                        v-if="row.amounts && row.amounts[col.auxCode] !== undefined && row.amounts[col.auxCode] !== null"
+                        placement="top"
+                        :content="`成本净额: ${formatMoney(row.netAmounts?.[col.auxCode])} 元 | 发生总额: ${formatMoney(row.grossAmounts?.[col.auxCode])} 元`"
                       >
-                        {{ formatMoney(row.amounts[col.auxCode]) }}
-                      </span>
+                        <span
+                          class="mono text-amount"
+                          :class="{ 'text-zero': amountMode === 'NET' && Number(row.amounts[col.auxCode]) === 0 }"
+                        >
+                          {{ formatMoney(row.amounts[col.auxCode]) }}
+                        </span>
+                      </el-tooltip>
                       <span v-else class="text-placeholder">-</span>
                     </template>
                   </el-table-column>
 
                   <!-- 固定合计与占比列 -->
-                  <el-table-column prop="totalAmount" label="科目合计" width="140" align="right" fixed="right">
+                  <el-table-column
+                    prop="totalAmount"
+                    :label="amountMode === 'NET' ? '科目净额合计' : '科目发生合计'"
+                    width="145"
+                    align="right"
+                    fixed="right"
+                  >
                     <template #default="{ row }">
-                      <b class="mono highlight-money">{{ formatMoney(row.totalAmount) }}</b>
+                      <el-tooltip
+                        placement="top"
+                        :content="`成本净额: ${formatMoney(row.netTotalAmount)} 元 | 发生总额: ${formatMoney(row.grossTotalAmount)} 元`"
+                      >
+                        <b
+                          class="mono highlight-money"
+                          :class="{ 'text-zero': amountMode === 'NET' && Number(row.totalAmount) === 0 }"
+                        >
+                          {{ formatMoney(row.totalAmount) }}
+                        </b>
+                      </el-tooltip>
                     </template>
                   </el-table-column>
 
@@ -361,6 +422,25 @@
                     <template #default="{ row }">
                       <span v-if="row.creditAmount > 0" class="mono text-credit">{{ formatMoney(row.creditAmount) }}</span>
                       <span v-else class="text-placeholder">-</span>
+                    </template>
+                  </el-table-column>
+
+                  <el-table-column prop="netAmount" label="成本净额 (借-贷)" width="160" align="right">
+                    <template #default="{ row }">
+                      <span
+                        class="mono"
+                        :class="row.netAmount === 0 ? 'text-zero' : (row.netAmount > 0 ? 'text-debit' : 'text-credit')"
+                      >
+                        {{ formatMoney(row.netAmount) }}
+                      </span>
+                      <el-tag
+                        size="small"
+                        :type="row.netDirectionDesc === '平' ? 'info' : (row.netDirectionDesc === '借' ? 'danger' : 'success')"
+                        effect="plain"
+                        style="margin-left: 6px;"
+                      >
+                        {{ row.netDirectionDesc === '平' ? '平/已冲销' : row.netDirectionDesc }}
+                      </el-tag>
                     </template>
                   </el-table-column>
 
@@ -639,7 +719,8 @@ import {
   Download,
   Printer,
   CollectionTag,
-  DataBoard
+  DataBoard,
+  CircleCheck
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import {
@@ -682,6 +763,7 @@ const queryForm = reactive({
 })
 
 const activeTab = ref<string>('matrix')
+const amountMode = ref<'NET' | 'GROSS'>('NET')
 
 // 报表与统计状态
 const loading = ref(false)
@@ -789,8 +871,13 @@ function buildQueryParams() {
     endDate: dateRange.value ? dateRange.value[1] : undefined,
     subjectCategory: queryForm.subjectCategory,
     voucherStatus: queryForm.voucherStatus,
+    amountMode: amountMode.value,
     keyword: queryForm.keyword ? queryForm.keyword.trim() : undefined
   }
+}
+
+function handleAmountModeChange() {
+  fetchMatrix()
 }
 
 async function loadAuxTypes() {
@@ -908,7 +995,7 @@ function getMatrixSummary(param: SummaryMethodProps) {
 
   columns.forEach((column, index) => {
     if (index === 0) {
-      sums[index] = '本期发生合计'
+      sums[index] = amountMode.value === 'NET' ? '本期净额合计' : '本期发生合计'
       return
     }
     if (index === 1) {
@@ -920,7 +1007,7 @@ function getMatrixSummary(param: SummaryMethodProps) {
     if (prop && prop.startsWith('amounts.')) {
       const colAuxCode = prop.replace('amounts.', '')
       const colAmt = matrixData.value?.columnTotals?.[colAuxCode]
-      sums[index] = colAmt ? formatMoney(colAmt) : '-'
+      sums[index] = colAmt !== undefined && colAmt !== null ? formatMoney(colAmt) : '-'
       return
     }
     if (prop === 'totalAmount') {
@@ -935,6 +1022,16 @@ function getMatrixSummary(param: SummaryMethodProps) {
   })
 
   return sums
+}
+
+function getNetTextColor(val?: number): string {
+  if (val === undefined || val === null || Number(val) === 0) return 'text-zero'
+  return Number(val) > 0 ? 'text-debit' : 'text-credit'
+}
+
+function getNetTagType(dir?: string): 'info' | 'danger' | 'success' {
+  if (!dir || dir === '平') return 'info'
+  return dir === '借' ? 'danger' : 'success'
 }
 
 function getProgressColor(pct?: number): string {
@@ -1115,9 +1212,25 @@ onMounted(async () => {
   color: #8c8c8c;
 }
 
+.node-amt-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
 .node-amt {
   font-size: 11px;
   color: #595959;
+}
+
+.node-net-amt {
+  font-size: 10px;
+  color: #1890ff;
+
+  &.is-zero {
+    color: #8c8c8c;
+  }
 }
 
 /* 右侧主内容区 */
@@ -1136,8 +1249,12 @@ onMounted(async () => {
 /* KPI 卡片 */
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 12px;
+
+  @media (max-width: 1440px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
 .kpi-card {
@@ -1147,6 +1264,7 @@ onMounted(async () => {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
   border-left: 4px solid #d9d9d9;
 
+  &.teal { border-left-color: #13c2c2; }
   &.blue { border-left-color: #1890ff; }
   &.green { border-left-color: #52c41a; }
   &.orange { border-left-color: #fa8c16; }
@@ -1260,6 +1378,17 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
 
+  .tb-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .tb-right {
+    display: flex;
+    align-items: center;
+  }
+
   .tb-title {
     font-size: 13px;
     font-weight: 600;
@@ -1310,6 +1439,7 @@ onMounted(async () => {
 .text-purple { color: #722ed1; }
 .text-dark { color: #262626; }
 .text-placeholder { color: #bfbfbf; }
+.text-zero { color: #8c8c8c !important; font-weight: normal; }
 
 .highlight-money {
   color: #1890ff;

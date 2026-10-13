@@ -11,6 +11,10 @@ export interface AuxiliaryItemResponse {
   auxName: string
   recordCount: number
   totalAmount: number
+  debitAmount?: number
+  creditAmount?: number
+  netAmount?: number
+  netDirectionDesc?: string
 }
 
 /**
@@ -30,6 +34,8 @@ export interface AuxiliarySummaryResponse {
   totalAmount: number
   debitAmount: number
   creditAmount: number
+  netAmount?: number
+  netDirectionDesc?: string
   itemCount: number
   subjectCount: number
   voucherCount: number
@@ -45,7 +51,11 @@ export interface AuxiliaryMatrixRowResponse {
   subjectCategory?: number
   subjectCategoryDesc?: string
   amounts: Record<string, number>
+  grossAmounts?: Record<string, number>
+  netAmounts?: Record<string, number>
   totalAmount: number
+  grossTotalAmount?: number
+  netTotalAmount?: number
   percentage: number
 }
 
@@ -56,7 +66,10 @@ export interface AuxiliaryMatrixResponse {
   columns: AuxiliaryItemResponse[]
   rows: AuxiliaryMatrixRowResponse[]
   columnTotals: Record<string, number>
+  columnNetTotals?: Record<string, number>
   grandTotal: number
+  grandNetTotal?: number
+  amountMode?: string
 }
 
 /**
@@ -69,6 +82,8 @@ export interface AuxiliarySubjectDetailResponse {
   subjectCategoryDesc?: string
   debitAmount: number
   creditAmount: number
+  netAmount?: number
+  netDirectionDesc?: string
   totalAmount: number
   entryCount: number
   percentage: number
@@ -113,6 +128,7 @@ export interface AuxiliaryLedgerQueryParams {
   subjectCode?: string
   subjectCategory?: number
   voucherStatus?: number
+  amountMode?: 'NET' | 'GROSS'
   keyword?: string
   pageNo?: number
   pageSize?: number

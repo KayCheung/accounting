@@ -12,4 +12,7 @@ public class AuxiliaryItemStatBO {
     private String auxName;
     private Long recordCount;
     private BigDecimal totalAmount;
+    private BigDecimal debitAmount;
+    private BigDecimal creditAmount;
+    private BigDecimal netAmount;
 }

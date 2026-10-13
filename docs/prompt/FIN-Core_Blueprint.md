@@ -1021,6 +1021,36 @@
         - `AuxiliaryLedgerApplicationServiceTest` 5 个单测全部通过，覆盖红冲记录映射断言；
         - 全工程 377 个自动化单元测试 100% 通过（0 失败 0 错误）；
         - 前端 `vue-tsc` + `vite build` 生产构建 0 错误通过。
+    - **辅助核算台账成本净额与发生额双口径核算改造（REQ261013-002）**：
+      - **业务痛点与需求背景**：
+        - 辅助核算台账此前仅从“发生额口径（借+贷发生额绝对值累加）”进行统计展现。在业务流水记账后发起红冲的场景中，借方发生额为 500 元，红冲贷方发生额为 500 元，台账展示累计发生额为 1000 元；
+        - 从审计跟踪与流水交易活跃度视角看，1000 元展示清晰完备；但从“成本归集/项目损益核算”视角看，红冲后实际成本净支出已被冲销清零，若只有 1000 元发生额将导致成本被严重虚增，缺少真实的成本净额核算视角。
+      - **端到端双口径架构设计与落地**：
+        1. **双口径分离原则**：
+           - **发生额口径（Gross Amount = 借 + 贷）**：完整反映资金/流水交易活跃度与审计轨迹（如 1000 元）；
+           - **成本净额口径（Net Amount = 借 - 贷）**：真实反映部门/项目实际成本净归集（红冲后归零为 0.00 元，方向标记为“平”）；
+        2. **财务律法严格贯彻与绝对值法则闭环**：
+           - 严禁在数据库 SQL 中做负数运算或余额相减。SQL 仅通过正数条件聚合提取 `debitAmount` 与 `creditAmount`；
+           - 净额严格遵守**绝对值法则**：在 Java 内存中采用 `BigDecimal` 高精度计算绝对值差额 `debitAmount.subtract(creditAmount).abs()`，金额恒为非负数；
+           - 彻底清除魔法字符串：扩展 `BalanceDirectionEnum` 补齐 `FLAT(0, "平")` 枚举项，提供内聚领域方法 `BalanceDirectionEnum.determineDirection(debit, credit)`，统一通过枚举原生 `getDesc()` 返回方向描述，杜绝在应用层手写 "借"/"贷"/"平" 魔法值及通过正负号猜测借贷的反模式；
+        3. **契约层扩展（accounting-api）**：
+           - `AuxiliaryLedgerQueryRequest` 增加 `amountMode`（NET 净额口径默认，GROSS 发生额口径）；
+           - `AuxiliarySummaryResponse` 增加 `netAmount`、`netDirectionDesc`；
+           - `AuxiliaryItemResponse` 增加 `debitAmount`、`creditAmount`、`netAmount`、`netDirectionDesc`；
+           - `AuxiliarySubjectDetailResponse` 增加 `netAmount`、`netDirectionDesc`；
+           - `AuxiliaryMatrixResponse` 增加 `amountMode`、`columnNetTotals`、`grandNetTotal`；
+           - `AuxiliaryMatrixRowResponse` 增加 `grossAmounts`、`netAmounts`、`grossTotalAmount`、`netTotalAmount`；
+        4. **持久层与领域应用层（accounting-core）**：
+           - `AccountingVoucherAuxiliaryMapper.xml`：扩展 `selectDistinctAuxItems` 关联分录表提取借贷金额；扩展 `selectMatrixCellAmounts` 同步返回借贷发生额；
+           - `AuxiliaryLedgerApplicationService`：矩阵透视表支持按 `amountMode` 动态切换，同时计算并输出全套发生额与净额矩阵；科目分布与概览卡片全链路注入绝对值净额与枚举方向；
+        5. **前端管理台交互（accounting-ui）**：
+           - **KPI 统计看板**：新增高亮【成本/费用净额 (净发生)】卡片，清晰呈现净额与冲销方向标签（红冲时展示“平 (已对冲归零)”）；
+           - **左侧导航列表**：核算项节点同步展示累计发生额与“净: 0.00”标签；
+           - **Tab 1 交叉透视表**：工具栏新增单选按钮组支持【成本净额口径】与【发生额口径】一键切换，单元格提供 Tooltip 双口径悬浮比较，红冲归零时优雅显示；
+           - **Tab 2 科目分布表**：新增【成本净额 (借-贷)】列，红冲归零明确打上【平/已冲销】Tag。
+      - **质量保障与单测验证**：
+        - `AuxiliaryLedgerApplicationServiceTest` 增补双口径切换、红冲净额归零及贷方大于借方的绝对值断言，单测全部 100% 通过；
+        - 前端通过 `vue-tsc` 类型检查与 `vite build` 生产构建 0 错误。
 - [x] **Step 23** · 业务功能页面开发全量交付完毕（100% 完成）
 
 

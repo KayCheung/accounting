@@ -34,4 +34,16 @@ public class AuxiliaryItemResponse implements Serializable {
 
     @Schema(description = "累计发生总金额", example = "186000.00")
     private BigDecimal totalAmount;
+
+    @Schema(description = "借方累计发生额", example = "93000.00")
+    private BigDecimal debitAmount;
+
+    @Schema(description = "贷方累计发生额", example = "93000.00")
+    private BigDecimal creditAmount;
+
+    @Schema(description = "净发生额(借-贷，反映成本净支出)", example = "0.00")
+    private BigDecimal netAmount;
+
+    @Schema(description = "净发生额方向描述：平/借/贷", example = "平")
+    private String netDirectionDesc;
 }

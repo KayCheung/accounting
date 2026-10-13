@@ -6,6 +6,7 @@ import com.kltb.accounting.api.request.AuxiliaryLedgerQueryRequest;
 import com.kltb.accounting.api.response.*;
 import com.kltb.accounting.core.application.converter.DictConverter;
 import com.kltb.accounting.core.application.dto.DictResponse;
+import com.kltb.accounting.core.domain.enums.BalanceDirectionEnum;
 import com.kltb.accounting.core.domain.enums.ChangeDirectionEnum;
 import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
 import com.kltb.accounting.core.domain.enums.TradeTypeEnum;
@@ -73,12 +74,22 @@ public class AuxiliaryLedgerApplicationService {
         }
         List<AuxiliaryItemStatBO> statList = auxiliaryRepository.selectDistinctItems(auxType, startDate, endDate, voucherStatus);
         return statList.stream()
-                .map(stat -> AuxiliaryItemResponse.builder()
-                        .auxCode(stat.getAuxCode())
-                        .auxName(stat.getAuxName())
-                        .recordCount(stat.getRecordCount())
-                        .totalAmount(stat.getTotalAmount() != null ? stat.getTotalAmount() : BigDecimal.ZERO)
-                        .build())
+                .map(stat -> {
+                    BigDecimal debit = stat.getDebitAmount() != null ? stat.getDebitAmount() : BigDecimal.ZERO;
+                    BigDecimal credit = stat.getCreditAmount() != null ? stat.getCreditAmount() : BigDecimal.ZERO;
+                    BigDecimal net = debit.subtract(credit).abs();
+                    String netDirection = BalanceDirectionEnum.determineDirection(debit, credit).getDesc();
+                    return AuxiliaryItemResponse.builder()
+                            .auxCode(stat.getAuxCode())
+                            .auxName(stat.getAuxName())
+                            .recordCount(stat.getRecordCount())
+                            .totalAmount(stat.getTotalAmount() != null ? stat.getTotalAmount() : BigDecimal.ZERO)
+                            .debitAmount(debit)
+                            .creditAmount(credit)
+                            .netAmount(net)
+                            .netDirectionDesc(netDirection)
+                            .build();
+                })
                 .collect(Collectors.toList());
     }
 
@@ -88,6 +99,10 @@ public class AuxiliaryLedgerApplicationService {
     public AuxiliarySummaryResponse getAuxiliarySummary(AuxiliaryLedgerQueryRequest request) {
         AuxiliarySummaryBO bo = auxiliaryRepository.selectSummary(request);
         BigDecimal grandTotal = bo.getTotalAmount() != null ? bo.getTotalAmount() : BigDecimal.ZERO;
+        BigDecimal debitTotal = bo.getDebitAmount() != null ? bo.getDebitAmount() : BigDecimal.ZERO;
+        BigDecimal creditTotal = bo.getCreditAmount() != null ? bo.getCreditAmount() : BigDecimal.ZERO;
+        BigDecimal netTotal = debitTotal.subtract(creditTotal).abs();
+        String netDirection = BalanceDirectionEnum.determineDirection(debitTotal, creditTotal).getDesc();
 
         // 计算排名前列的核算项分布（Top 5）
         List<AuxiliaryItemStatBO> allItems = auxiliaryRepository.selectDistinctItems(
@@ -115,8 +130,10 @@ public class AuxiliaryLedgerApplicationService {
 
         return AuxiliarySummaryResponse.builder()
                 .totalAmount(grandTotal)
-                .debitAmount(bo.getDebitAmount() != null ? bo.getDebitAmount() : BigDecimal.ZERO)
-                .creditAmount(bo.getCreditAmount() != null ? bo.getCreditAmount() : BigDecimal.ZERO)
+                .debitAmount(debitTotal)
+                .creditAmount(creditTotal)
+                .netAmount(netTotal)
+                .netDirectionDesc(netDirection)
                 .itemCount(bo.getItemCount() != null ? bo.getItemCount() : 0)
                 .subjectCount(bo.getSubjectCount() != null ? bo.getSubjectCount() : 0)
                 .voucherCount(bo.getVoucherCount() != null ? bo.getVoucherCount() : 0)
@@ -128,6 +145,10 @@ public class AuxiliaryLedgerApplicationService {
      * 查询科目 × 核算项目的二维交叉汇总对比矩阵
      */
     public AuxiliaryMatrixResponse getAuxiliaryMatrix(AuxiliaryLedgerQueryRequest request) {
+        String amountMode = (request.getAmountMode() != null && !request.getAmountMode().isBlank())
+                ? request.getAmountMode().toUpperCase() : "NET";
+        boolean isGrossMode = "GROSS".equals(amountMode);
+
         // 1. 获取动态列（该核算类别下所有的核算项）
         List<AuxiliaryItemResponse> columns = getAuxiliaryItems(
                 request.getAuxType(), request.getStartDate(), request.getEndDate(), request.getVoucherStatus());
@@ -139,7 +160,10 @@ public class AuxiliaryLedgerApplicationService {
                     .columns(columns)
                     .rows(Collections.emptyList())
                     .columnTotals(Collections.emptyMap())
+                    .columnNetTotals(Collections.emptyMap())
                     .grandTotal(BigDecimal.ZERO)
+                    .grandNetTotal(BigDecimal.ZERO)
+                    .amountMode(amountMode)
                     .build();
         }
 
@@ -147,32 +171,48 @@ public class AuxiliaryLedgerApplicationService {
         Map<String, AccountSubjectPO> subjectMap = subjectRepository.selectAllSubjects().stream()
                 .collect(Collectors.toMap(AccountSubjectPO::getSubjectCode, Function.identity(), (a, b) -> a));
 
-        // 4. 按科目分组聚合行数据
-        Map<String, Map<String, BigDecimal>> subjectAuxAmountMap = new LinkedHashMap<>();
+        // 4. 按科目分组聚合行数据（分别聚合发生额 gross 与净额 net）
+        Map<String, Map<String, BigDecimal>> subjectGrossMap = new LinkedHashMap<>();
+        Map<String, Map<String, BigDecimal>> subjectNetMap = new LinkedHashMap<>();
+
         for (AuxiliaryMatrixCellBO cell : cells) {
-            subjectAuxAmountMap
-                    .computeIfAbsent(cell.getSubjectCode(), k -> new HashMap<>())
-                    .put(cell.getAuxCode(), cell.getAmount());
+            String subject = cell.getSubjectCode();
+            String aux = cell.getAuxCode();
+            BigDecimal cellGross = cell.getAmount() != null ? cell.getAmount() : BigDecimal.ZERO;
+            BigDecimal cellDebit = cell.getDebitAmount() != null ? cell.getDebitAmount() : BigDecimal.ZERO;
+            BigDecimal cellCredit = cell.getCreditAmount() != null ? cell.getCreditAmount() : BigDecimal.ZERO;
+            BigDecimal cellNet = cellDebit.subtract(cellCredit).abs();
+
+            subjectGrossMap.computeIfAbsent(subject, k -> new HashMap<>()).put(aux, cellGross);
+            subjectNetMap.computeIfAbsent(subject, k -> new HashMap<>()).put(aux, cellNet);
         }
 
         // 5. 计算全表总计与列合计
-        BigDecimal grandTotal = BigDecimal.ZERO;
-        Map<String, BigDecimal> columnTotals = new HashMap<>();
+        BigDecimal grandGrossTotal = BigDecimal.ZERO;
+        BigDecimal grandNetTotal = BigDecimal.ZERO;
+        Map<String, BigDecimal> columnGrossTotals = new HashMap<>();
+        Map<String, BigDecimal> columnNetTotals = new HashMap<>();
         List<AuxiliaryMatrixRowResponse> rows = new ArrayList<>();
 
-        for (Map.Entry<String, Map<String, BigDecimal>> entry : subjectAuxAmountMap.entrySet()) {
-            String subjectCode = entry.getKey();
-            Map<String, BigDecimal> auxAmtMap = entry.getValue();
+        for (String subjectCode : subjectGrossMap.keySet()) {
+            Map<String, BigDecimal> grossMap = subjectGrossMap.getOrDefault(subjectCode, Collections.emptyMap());
+            Map<String, BigDecimal> netMap = subjectNetMap.getOrDefault(subjectCode, Collections.emptyMap());
 
-            BigDecimal rowTotal = BigDecimal.ZERO;
-            for (Map.Entry<String, BigDecimal> auxEntry : auxAmtMap.entrySet()) {
-                BigDecimal amt = auxEntry.getValue() != null ? auxEntry.getValue() : BigDecimal.ZERO;
-                rowTotal = rowTotal.add(amt);
-
-                // 累加列合计
-                columnTotals.merge(auxEntry.getKey(), amt, BigDecimal::add);
+            BigDecimal rowGrossTotal = BigDecimal.ZERO;
+            for (Map.Entry<String, BigDecimal> entry : grossMap.entrySet()) {
+                BigDecimal amt = entry.getValue() != null ? entry.getValue() : BigDecimal.ZERO;
+                rowGrossTotal = rowGrossTotal.add(amt);
+                columnGrossTotals.merge(entry.getKey(), amt, BigDecimal::add);
             }
-            grandTotal = grandTotal.add(rowTotal);
+            grandGrossTotal = grandGrossTotal.add(rowGrossTotal);
+
+            BigDecimal rowNetTotal = BigDecimal.ZERO;
+            for (Map.Entry<String, BigDecimal> entry : netMap.entrySet()) {
+                BigDecimal amt = entry.getValue() != null ? entry.getValue() : BigDecimal.ZERO;
+                rowNetTotal = rowNetTotal.add(amt);
+                columnNetTotals.merge(entry.getKey(), amt, BigDecimal::add);
+            }
+            grandNetTotal = grandNetTotal.add(rowNetTotal);
 
             AccountSubjectPO subjectPO = subjectMap.get(subjectCode);
             String subjectName = subjectPO != null ? subjectPO.getSubjectName() : subjectCode;
@@ -181,23 +221,30 @@ public class AuxiliaryLedgerApplicationService {
             String categoryDesc = subjectPO != null && subjectPO.getSubjectCategory() != null
                     ? subjectPO.getSubjectCategory().getDesc() : "";
 
+            Map<String, BigDecimal> displayAmounts = isGrossMode ? grossMap : netMap;
+            BigDecimal displayTotal = isGrossMode ? rowGrossTotal : rowNetTotal;
+
             rows.add(AuxiliaryMatrixRowResponse.builder()
                     .subjectCode(subjectCode)
                     .subjectName(subjectName)
                     .subjectCategory(categoryCode)
                     .subjectCategoryDesc(categoryDesc)
-                    .amounts(auxAmtMap)
-                    .totalAmount(rowTotal)
-                    .percentage(BigDecimal.ZERO) // 下方统一按 grandTotal 算百分比
+                    .amounts(displayAmounts)
+                    .grossAmounts(grossMap)
+                    .netAmounts(netMap)
+                    .totalAmount(displayTotal)
+                    .grossTotalAmount(rowGrossTotal)
+                    .netTotalAmount(rowNetTotal)
+                    .percentage(BigDecimal.ZERO)
                     .build());
         }
 
-        // 6. 补充各行占全表总计的百分比
-        if (grandTotal.compareTo(BigDecimal.ZERO) > 0) {
+        // 6. 补充各行占全表总计的百分比（发生额基准）
+        if (grandGrossTotal.compareTo(BigDecimal.ZERO) > 0) {
             for (AuxiliaryMatrixRowResponse row : rows) {
-                if (row.getTotalAmount() != null && row.getTotalAmount().compareTo(BigDecimal.ZERO) > 0) {
-                    row.setPercentage(row.getTotalAmount().multiply(HUNDRED)
-                            .divide(grandTotal, 2, RoundingMode.HALF_UP));
+                if (row.getGrossTotalAmount() != null && row.getGrossTotalAmount().compareTo(BigDecimal.ZERO) > 0) {
+                    row.setPercentage(row.getGrossTotalAmount().multiply(HUNDRED)
+                            .divide(grandGrossTotal, 2, RoundingMode.HALF_UP));
                 }
             }
         }
@@ -205,11 +252,17 @@ public class AuxiliaryLedgerApplicationService {
         // 7. 按科目编码排序
         rows.sort(Comparator.comparing(AuxiliaryMatrixRowResponse::getSubjectCode));
 
+        Map<String, BigDecimal> displayColumnTotals = isGrossMode ? columnGrossTotals : columnNetTotals;
+        BigDecimal displayGrandTotal = isGrossMode ? grandGrossTotal : grandNetTotal;
+
         return AuxiliaryMatrixResponse.builder()
                 .columns(columns)
                 .rows(rows)
-                .columnTotals(columnTotals)
-                .grandTotal(grandTotal)
+                .columnTotals(displayColumnTotals)
+                .columnNetTotals(columnNetTotals)
+                .grandTotal(displayGrandTotal)
+                .grandNetTotal(grandNetTotal)
+                .amountMode(amountMode)
                 .build();
     }
 
@@ -239,6 +292,10 @@ public class AuxiliaryLedgerApplicationService {
                     ? subjectPO.getSubjectCategory().getDesc() : "";
 
             BigDecimal amt = bo.getTotalAmount() != null ? bo.getTotalAmount() : BigDecimal.ZERO;
+            BigDecimal debit = bo.getDebitAmount() != null ? bo.getDebitAmount() : BigDecimal.ZERO;
+            BigDecimal credit = bo.getCreditAmount() != null ? bo.getCreditAmount() : BigDecimal.ZERO;
+            BigDecimal net = debit.subtract(credit).abs();
+            String netDirection = BalanceDirectionEnum.determineDirection(debit, credit).getDesc();
             BigDecimal pct = BigDecimal.ZERO;
             if (totalSum.compareTo(BigDecimal.ZERO) > 0 && amt.compareTo(BigDecimal.ZERO) > 0) {
                 pct = amt.multiply(HUNDRED).divide(totalSum, 2, RoundingMode.HALF_UP);
@@ -249,8 +306,10 @@ public class AuxiliaryLedgerApplicationService {
                     .subjectName(subjectName)
                     .subjectCategory(categoryCode)
                     .subjectCategoryDesc(categoryDesc)
-                    .debitAmount(bo.getDebitAmount() != null ? bo.getDebitAmount() : BigDecimal.ZERO)
-                    .creditAmount(bo.getCreditAmount() != null ? bo.getCreditAmount() : BigDecimal.ZERO)
+                    .debitAmount(debit)
+                    .creditAmount(credit)
+                    .netAmount(net)
+                    .netDirectionDesc(netDirection)
                     .totalAmount(amt)
                     .entryCount(bo.getEntryCount() != null ? bo.getEntryCount() : 0)
                     .percentage(pct)

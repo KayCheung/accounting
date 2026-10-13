@@ -34,6 +34,15 @@ public class AuxiliaryMatrixResponse implements Serializable {
     @Schema(description = "各核算项列合计金额映射（key为auxCode，value为列合计金额）")
     private Map<String, BigDecimal> columnTotals;
 
+    @Schema(description = "各核算项列净额合计映射（key为auxCode，value为列净额合计）")
+    private Map<String, BigDecimal> columnNetTotals;
+
     @Schema(description = "全表总计发生额", example = "880600.00")
     private BigDecimal grandTotal;
+
+    @Schema(description = "全表总计净发生额(借-贷)", example = "0.00")
+    private BigDecimal grandNetTotal;
+
+    @Schema(description = "当前统计口径模式：NET-净额口径，GROSS-发生额口径", example = "NET")
+    private String amountMode;
 }
