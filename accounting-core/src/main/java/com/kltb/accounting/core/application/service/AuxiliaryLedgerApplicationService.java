@@ -6,7 +6,10 @@ import com.kltb.accounting.api.request.AuxiliaryLedgerQueryRequest;
 import com.kltb.accounting.api.response.*;
 import com.kltb.accounting.core.application.converter.DictConverter;
 import com.kltb.accounting.core.application.dto.DictResponse;
-import com.kltb.accounting.core.domain.enums.SubjectCategoryEnum;
+import com.kltb.accounting.core.domain.enums.ChangeDirectionEnum;
+import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
+import com.kltb.accounting.core.domain.enums.TradeTypeEnum;
+import com.kltb.accounting.core.domain.enums.VoucherStatusEnum;
 import com.kltb.accounting.core.infrastructure.persistence.bo.*;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountSubjectPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.DictionaryPO;
@@ -58,10 +61,17 @@ public class AuxiliaryLedgerApplicationService {
      * 查询指定核算类别下有凭证入账记录的核算项目列表
      */
     public List<AuxiliaryItemResponse> getAuxiliaryItems(String auxType, LocalDate startDate, LocalDate endDate) {
+        return getAuxiliaryItems(auxType, startDate, endDate, null);
+    }
+
+    /**
+     * 查询指定核算类别与凭证状态下有凭证入账记录的核算项目列表
+     */
+    public List<AuxiliaryItemResponse> getAuxiliaryItems(String auxType, LocalDate startDate, LocalDate endDate, Integer voucherStatus) {
         if (auxType == null || auxType.isBlank()) {
             return Collections.emptyList();
         }
-        List<AuxiliaryItemStatBO> statList = auxiliaryRepository.selectDistinctItems(auxType, startDate, endDate);
+        List<AuxiliaryItemStatBO> statList = auxiliaryRepository.selectDistinctItems(auxType, startDate, endDate, voucherStatus);
         return statList.stream()
                 .map(stat -> AuxiliaryItemResponse.builder()
                         .auxCode(stat.getAuxCode())
@@ -81,7 +91,7 @@ public class AuxiliaryLedgerApplicationService {
 
         // 计算排名前列的核算项分布（Top 5）
         List<AuxiliaryItemStatBO> allItems = auxiliaryRepository.selectDistinctItems(
-                request.getAuxType(), request.getStartDate(), request.getEndDate());
+                request.getAuxType(), request.getStartDate(), request.getEndDate(), request.getVoucherStatus());
 
         List<AuxiliaryItemShareResponse> topItems = new ArrayList<>();
         int count = 0;
@@ -120,7 +130,7 @@ public class AuxiliaryLedgerApplicationService {
     public AuxiliaryMatrixResponse getAuxiliaryMatrix(AuxiliaryLedgerQueryRequest request) {
         // 1. 获取动态列（该核算类别下所有的核算项）
         List<AuxiliaryItemResponse> columns = getAuxiliaryItems(
-                request.getAuxType(), request.getStartDate(), request.getEndDate());
+                request.getAuxType(), request.getStartDate(), request.getEndDate(), request.getVoucherStatus());
 
         // 2. 获取单元格金额列表
         List<AuxiliaryMatrixCellBO> cells = auxiliaryRepository.selectMatrixCellAmounts(request);
@@ -273,14 +283,16 @@ public class AuxiliaryLedgerApplicationService {
     }
 
     private AuxiliaryEntryRecordResponse toEntryRecordResponse(AuxiliaryEntryRecordBO bo) {
-        Integer dc = bo.getDebitCredit();
-        if (dc == null) {
-            dc = (bo.getChangeDirection() != null && bo.getChangeDirection() == 2) ? 2 : 1;
+        // 1. 确定借贷方向：优先取分录自身借贷方向，若为空则由辅助核算增减方向推导（增 -> 借，减 -> 贷）
+        DebitCreditEnum dcEnum = DebitCreditEnum.fromCode(bo.getDebitCredit());
+        if (dcEnum == null) {
+            ChangeDirectionEnum cdEnum = ChangeDirectionEnum.fromCode(bo.getChangeDirection());
+            dcEnum = DebitCreditEnum.fromChangeDirection(cdEnum);
         }
 
         BigDecimal amt = bo.getAmount() != null ? bo.getAmount() : BigDecimal.ZERO;
-        BigDecimal debitAmt = Integer.valueOf(1).equals(dc) ? amt : BigDecimal.ZERO;
-        BigDecimal creditAmt = Integer.valueOf(2).equals(dc) ? amt : BigDecimal.ZERO;
+        BigDecimal debitAmt = (DebitCreditEnum.DEBIT == dcEnum) ? amt : BigDecimal.ZERO;
+        BigDecimal creditAmt = (DebitCreditEnum.CREDIT == dcEnum) ? amt : BigDecimal.ZERO;
 
         String digits = bo.getVoucherNo() != null ? bo.getVoucherNo().replaceAll("[^0-9]", "") : "";
         String voucherWord = "记 " + (digits.isEmpty() ? bo.getVoucherNo() : digits);
@@ -298,12 +310,16 @@ public class AuxiliaryLedgerApplicationService {
                 .subjectCode(bo.getSubjectCode())
                 .subjectName(bo.getSubjectName() != null ? bo.getSubjectName() : bo.getSubjectCode())
                 .changeDirection(bo.getChangeDirection())
-                .changeDirectionDesc(bo.getChangeDirection() != null && bo.getChangeDirection() == 2 ? "减少" : "增加")
-                .debitCredit(dc)
-                .debitCreditDesc(Integer.valueOf(2).equals(dc) ? "贷" : "借")
+                .changeDirectionDesc(ChangeDirectionEnum.getDescByCode(bo.getChangeDirection()))
+                .debitCredit(dcEnum.getCode())
+                .debitCreditDesc(dcEnum.getDesc())
                 .debitAmount(debitAmt)
                 .creditAmount(creditAmt)
                 .amount(amt)
+                .voucherStatus(bo.getVoucherStatus())
+                .voucherStatusDesc(VoucherStatusEnum.getDescByCode(bo.getVoucherStatus()))
+                .tradeType(bo.getTradeType())
+                .tradeTypeDesc(TradeTypeEnum.getDescByCode(bo.getTradeType()))
                 .build();
     }
 }

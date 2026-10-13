@@ -29,12 +29,16 @@ public class AccountingVoucherAuxiliaryRepository {
     /**
      * 查询指定辅助核算类别下的去重项目列表与发生统计
      */
-    public List<AuxiliaryItemStatBO> selectDistinctItems(String auxType, LocalDate startDate, LocalDate endDate) {
+    public List<AuxiliaryItemStatBO> selectDistinctItems(String auxType, LocalDate startDate, LocalDate endDate, Integer voucherStatus) {
         if (auxType == null || auxType.isBlank()) {
             return Collections.emptyList();
         }
-        List<AuxiliaryItemStatBO> list = auxiliaryMapper.selectDistinctAuxItems(auxType, startDate, endDate);
+        List<AuxiliaryItemStatBO> list = auxiliaryMapper.selectDistinctAuxItems(auxType, startDate, endDate, voucherStatus);
         return list != null ? list : Collections.emptyList();
+    }
+
+    public List<AuxiliaryItemStatBO> selectDistinctItems(String auxType, LocalDate startDate, LocalDate endDate) {
+        return selectDistinctItems(auxType, startDate, endDate, null);
     }
 
     /**
@@ -51,7 +55,8 @@ public class AccountingVoucherAuxiliaryRepository {
                 request.getEndDate(),
                 request.getSubjectCode(),
                 request.getSubjectCategory(),
-                request.getKeyword()
+                request.getKeyword(),
+                request.getVoucherStatus()
         );
         return summary != null ? summary : new AuxiliarySummaryBO();
     }
@@ -69,7 +74,8 @@ public class AccountingVoucherAuxiliaryRepository {
                 request.getEndDate(),
                 request.getSubjectCode(),
                 request.getSubjectCategory(),
-                request.getKeyword()
+                request.getKeyword(),
+                request.getVoucherStatus()
         );
         return list != null ? list : Collections.emptyList();
     }
@@ -88,7 +94,8 @@ public class AccountingVoucherAuxiliaryRepository {
                 request.getEndDate(),
                 request.getSubjectCode(),
                 request.getSubjectCategory(),
-                request.getKeyword()
+                request.getKeyword(),
+                request.getVoucherStatus()
         );
         return list != null ? list : Collections.emptyList();
     }
@@ -108,7 +115,8 @@ public class AccountingVoucherAuxiliaryRepository {
                 request.getEndDate(),
                 request.getSubjectCode(),
                 request.getSubjectCategory(),
-                request.getKeyword()
+                request.getKeyword(),
+                request.getVoucherStatus()
         );
     }
 

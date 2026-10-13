@@ -28,7 +28,8 @@ public interface AccountingVoucherAuxiliaryMapper extends BaseMapper<AccountingV
     List<AuxiliaryItemStatBO> selectDistinctAuxItems(
             @Param("auxType") String auxType,
             @Param("startDate") LocalDate startDate,
-            @Param("endDate") LocalDate endDate);
+            @Param("endDate") LocalDate endDate,
+            @Param("voucherStatus") Integer voucherStatus);
 
     /**
      * 查询辅助核算账簿统计 KPI 概览指标
@@ -40,7 +41,8 @@ public interface AccountingVoucherAuxiliaryMapper extends BaseMapper<AccountingV
             @Param("endDate") LocalDate endDate,
             @Param("subjectCode") String subjectCode,
             @Param("subjectCategory") Integer subjectCategory,
-            @Param("keyword") String keyword);
+            @Param("keyword") String keyword,
+            @Param("voucherStatus") Integer voucherStatus);
 
     /**
      * 查询辅助核算交叉对比矩阵单元格金额
@@ -51,7 +53,8 @@ public interface AccountingVoucherAuxiliaryMapper extends BaseMapper<AccountingV
             @Param("endDate") LocalDate endDate,
             @Param("subjectCode") String subjectCode,
             @Param("subjectCategory") Integer subjectCategory,
-            @Param("keyword") String keyword);
+            @Param("keyword") String keyword,
+            @Param("voucherStatus") Integer voucherStatus);
 
     /**
      * 查询辅助核算科目分布明细
@@ -63,7 +66,8 @@ public interface AccountingVoucherAuxiliaryMapper extends BaseMapper<AccountingV
             @Param("endDate") LocalDate endDate,
             @Param("subjectCode") String subjectCode,
             @Param("subjectCategory") Integer subjectCategory,
-            @Param("keyword") String keyword);
+            @Param("keyword") String keyword,
+            @Param("voucherStatus") Integer voucherStatus);
 
     /**
      * 分页查询辅助核算凭证分录流水明细
@@ -76,5 +80,6 @@ public interface AccountingVoucherAuxiliaryMapper extends BaseMapper<AccountingV
             @Param("endDate") LocalDate endDate,
             @Param("subjectCode") String subjectCode,
             @Param("subjectCategory") Integer subjectCategory,
-            @Param("keyword") String keyword);
+            @Param("keyword") String keyword,
+            @Param("voucherStatus") Integer voucherStatus);
 }

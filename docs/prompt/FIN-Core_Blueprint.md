@@ -160,6 +160,12 @@
   → 完成内容（错误码）：ResultCode 补充 2023~2025（BUFFER_POSTING_BALANCE_MISMATCH/BUFFER_POSTING_LOCK_UPGRADE_FAILED/BUFFER_POSTING_RETRY_EXHAUSTED）
   → 完成内容（Java-C）：BufferPostingAsyncJobHandler（每1分钟）/ BufferPostingBatchJobHandler（每30分钟，支持分片）/ BufferPostingEodJobHandler（23:50 + Running Balance 校验）
   → 完成内容（Java-E）：4 个 Response DTO + 1 个 Request DTO + BufferPostingAssembler + BufferPostingApplicationService + BufferPostingController（3 个接口：POST /execute, GET /pending-stats, GET /monitor）
+  → 功能增强与缺陷修复（2026-10-13）：
+    - 缓冲记账明细列表查询：新增 `BufferDetailQueryRequest` + `BufferDetailResponse`，Repository/Mapper 增加 `selectPageByCondition`，Controller 新增 `GET /accounting/buffer/detail/page`；
+    - 前端监控与明细联动：`buffer-monitor/index.vue` 增加“缓冲记账明细列表”卡片（支持账户/凭证/模式/状态分页检索）与“缓冲明细详情”抽屉；
+    - 过账引擎主账户与流水补齐修复：修复 `BufferPostingEngineDomainService` 逐条与批量入账时只更新 `t_sub_account` 而遗漏 `t_account` 与 `t_account_detail` 的缺陷，实现主子账户同步更新与双明细流水落库；
+    - Running Balance 校验算法纠正：修复 `RunningBalanceValidator` 原逻辑将动账变动量误判为差额的算法倒置缺陷，实现“总分核对（主账户 vs 子账户）+ 末态流水对齐（最后一条 post_balance vs 当前余额）+ 缺失流水排查”三重防护机制；
+    - 单元测试：新增 `BufferPostingEngineDomainServiceTest` 与 `RunningBalanceValidatorTest`，全部通过。
   → Key Features: 三种缓冲模式（逐条/日间批量/日终批量）+ 余额方向计算（balance_direction + debit_credit → changeDirection）+ 锁升级（乐观 3 次 → 悲观 FOR UPDATE → 告警）+ 子账户明细快照（preBalance/postBalance）+ 凭证状态联动（全部POSTED → 3, 否则 → 2）+ 分布式锁（account:buffer:{accountNo}）+ TransactionTemplate 事务边界 + 分片扫描（按 sharding 字段）
 
 - [X] **Step 17** · EOD & Trial Balance｜日切与试算平衡（主体）
@@ -970,6 +976,51 @@
         1. 后端幂等防重：在 `RollbackDomainService` 中新增 `hasPendingRollbackData` 检测，若流水处于 `FAILED` 且关联的所有凭证、分录均已作废、预冻结已释放且辅助核算已清理（无待回滚脏数据），再次执行回滚时精准拦截并提示“该业务流水已完成全额回滚清理，无需重复回滚”，彻底消除重复操作；
         2. 总览权限与前端收敛：在 `JournalingAssembler.java` 中将 `canRollback` 与 `hasPendingRollbackData` 联动，回滚完毕后总览数据的 `canRollback` 立即变为 `false`；在 `accounting-ui` 流水列表操作列中仅对处理中（`row.status === 1`）显示【整笔回滚】，彻底杜绝列表与详情抽屉反复触发回滚的体验问题；
       - **测试与验证**：`RollbackDomainServiceTest`、`JournalingApplicationServiceTest`、`AuxiliaryLedgerApplicationServiceTest` 等单元测试 100% 通过（29 个用例 0 失败），前端生产构建 0 错误打包通过。
+    - **记账规则分录明细单边更新及全字段更新持久化与回显全链路治理（BUG261013-001）**：
+      - **全链路根因剖析**：
+        1. **原生 XML SQL 属性名不一致致使映射丢失**：`t_accounting_rule_detail` 表中字段为 `is_unilateral`，实体类 `AccountingRuleDetailPO` 命名为 `unilateral`（带 `@TableField("is_unilateral")`）。但 `AccountingRuleDetailMapper.xml` 中的 `selectWithAuxiliary` 采用手写 SQL 且以 `resultType="...AccountingRuleDetailPO"` 返回，在开启 `map-underscore-to-camel-case: true` 时，MyBatis 会自动将 `is_unilateral` 转为驼峰 `isUnilateral`，因 PO 仅包含 `unilateral` 导致设值静默失败，查询出的 `po.getUnilateral()` 恒为 `null`；
+        2. **Jackson non_null 过滤致使回显丢失**：全局 Jackson 配置了 `default-property-inclusion: non_null`，因后端查出的 `isUnilateral` 为 `null`，序列化返回给前端的 JSON 中直接剔除了该字段；前端读取为 `undefined`，不论用户编辑保存什么值，界面刷新后永远回显为“否”；
+        3. **凭证生成引擎连锁穿透失效**：`VoucheringDomainService.matchRule` 内部同样依赖 `selectWithAuxiliary`，导致规则设定的实时单边记账标志在流水生成凭证阶段永远被降级为 `false`；
+      - **全字段地毯式治理落地**：
+        1. **持久层手写 XML 规范化**：在 `AccountingRuleDetailMapper.xml` 显式配置 `<resultMap id="RuleDetailResultMap">`，精准建立 `<result property="unilateral" column="is_unilateral"/>` 映射，彻底消除原生 MyBatis 与 MyBatis-Plus 注解失配；
+        2. **PO 兼容性与双向 Getter/Setter**：`AccountingRuleDetailPO` 补齐 `getIsUnilateral()` / `setIsUnilateral(Boolean)` 与原 `getUnilateral()` / `setUnilateral(Boolean)` 双向访问接口；
+        3. **契约层严格命名与防丢失注解**：在 `RuleEntryRequest` 与 `RuleEntryResponse` 显式声明 `@JsonProperty("isUnilateral")` 与 `@JsonAlias({"unilateral", "isUnilateral"})`，杜绝任何 Jackson 命名推断混淆；
+        4. **应用转换层双向防空保全**：`RuleConverter.toDetailPO` 与 `RuleConverter.toEntryResponse` 双向进行 `isUnilateral` 防空提取与布尔保全；
+        5. **前端提交参数标准化清洗**：`accounting-ui/src/views/config/rule/index.vue` 在 `cleanEntries` 中显式固化分录行各字段与 `Boolean(entry.isUnilateral)`，防止冗余属性污染与状态漂移；
+      - **验证与测试保障**：在 `RuleApplicationServiceTest` 增补持久化与回显断言，全套 63 个核心规则/凭证用例 100% 通过，前端 `vue-tsc` 类型检查 0 错误。
+    - **子账户变动明细全景查询能力补齐（REQ261013-001）**：
+      - **背景与痛点**：原余额与明细查询模块仅开放了主账户交易明细（`t_account_detail`）与资金冻结工单（`t_account_freeze_detail`）。在资金冻结/解冻与内部划转等核心场景中，主账户总余额并未改变，系统仅在 `t_sub_account_detail` 记录子账户可用与冻结余额流转，前端缺失对应查询 Tab 导致排查账务问题时必须直查数据库分析；
+      - **端到端实现落地**：
+        1. **契约层（accounting-api）**：新增 `SubAccountDetailQueryRequest` 与 `SubAccountDetailResponse`，严格与核心实现层解耦；
+        2. **持久层与仓储守门（accounting-core）**：`SubAccountDetailMapper` 与 `SubAccountDetailRepository` 扩充 `selectPageByCondition` 与 `countByCondition`，支持按账户号、子账户类型（可用/冻结）、会计日期范围、交易类别、借贷方向进行条件组合过滤；
+        3. **领域服务与装配层**：`BalanceQueryDomainService` 补充 `querySubAccountDetails` 纯查询用例，`BalanceQueryAssembler` 实现状态描述字典解析，`BalanceQueryApplicationService` 统一编排；
+        4. **接口层**：`BalanceQueryController` 暴露 `GET /accounting/account/balance/sub-details` 接口；
+        5. **前端管理台（accounting-ui）**：在 `business/balance/index.vue` 中新增【子账户明细】Tab，配备子账户类型/日期/类别/借贷方向多维过滤栏、自适应流水表格、金额颜色区分、分页器与全景审计抽屉无缝联动；
+      - **测试与验证**：`BalanceQueryApplicationServiceTest` 新增子账户分页与转换测试用例，全套测试 100% 通过，前端生产构建 `vue-tsc` + `vite build` 0 报错。
+    - **红冲业务辅助核算记录丢失治理与凭证状态穿透优化（BUG261013-002）**：
+      - **全链路根因剖析（Root Cause）**：
+        1. 业务流水入账成功后触发业务红冲时，系统正确生成了红冲记账凭证（反向分录及反向辅助核算项 `t_accounting_voucher_auxiliary`）并置为 `3-已过账（POSTED）`，原凭证状态按财务规范正确更新为 `5-已冲销（REVERSED）`，两笔凭证及其辅助核算记录在数据库物理层面均完好保留（`is_delete = 0`）；
+        2. 但在辅助核算账簿报表底表查询 SQL（`AccountingVoucherAuxiliaryMapper.xml` 中的 5 大方法：`selectDistinctAuxItems`、`selectAuxiliarySummary`、`selectMatrixCellAmounts`、`selectSubjectBreakdown`、`selectEntryRecords`）中，硬编码了 `INNER JOIN t_accounting_voucher v ON a.voucher_no = v.voucher_no AND v.is_delete = 0 AND v.status = 3`；
+        3. 一旦原凭证状态变更为 `5`（已冲销），在报表统计、交叉矩阵及分录流水查询中直接被该过滤条件丢弃，导致界面上原凭证的辅助核算记录“凭空消失”，最终只展示 1 条红冲凭证的单边记录，破坏了“红蓝字并存、同时反映、相互冲销”的会计审计完整性。
+      - **全维度加固治理落地**：
+        1. **持久层手写 SQL 动态松绑**：将 XML 中硬编码的 `v.status = 3` 重构为 `<choose><when test="voucherStatus != null">AND v.status = #{voucherStatus}</when><otherwise>AND v.status IN (3, 5)</otherwise></choose>`，默认同时包含正式入账凭证（已过账 3 与已冲销 5），并支持根据调用方需求灵活筛选指定状态；在分录流水明细 SQL 中补充投影 `v.status AS voucherStatus, v.trade_type AS tradeType`；
+        2. **契约层与数据模型扩充（accounting-api / accounting-core）**：
+           - `AuxiliaryLedgerQueryRequest` 增设 `voucherStatus` 筛选条件；
+           - `AuxiliaryEntryRecordResponse` / `AuxiliaryEntryRecordBO` 补充 `voucherStatus`、`voucherStatusDesc`、`tradeType`、`tradeTypeDesc`；
+        3. **服务编排层适配（AuxiliaryLedgerApplicationService / AuxiliaryReportController）**：
+           - 重载 `getAuxiliaryItems`，全链路透传 `voucherStatus`，在组装响应时安全映射凭证状态与红蓝字交易类型中文描述；
+        4. **前端交互与全景展示（accounting-ui）**：
+           - 搜索栏新增【凭证状态】下拉筛选器（全部含冲销、仅已过账、仅已冲销）；
+           - Tab 3「辅助凭证记录」表格新增【凭证状态】列，直观展示【已过账】/【已冲销】及【红字】标签；
+           - 凭证穿透档案抽屉支持动态反映实际状态与红字标识；
+        5. **枚举全景封装与魔法值/硬编码地毯式肃清**：
+           - 彻底清除业务类中散落的 `2`、`1`、`"减少"`、`"增加"`、`"贷"`、`"借"` 等魔法值与三元表达式；
+           - 在 `DebitCreditEnum`、`ChangeDirectionEnum`、`VoucherStatusEnum`、`TradeTypeEnum` 全量建立不可变 `CODE_MAP` 缓存，统一暴露空安全与 O(1) 性能的 `fromCode(code)`、`getDescByCode(code)`、`matches(code)` 基础工具能力；
+           - 在 `DebitCreditEnum` 中内聚 `fromChangeDirection(ChangeDirectionEnum)` 领域推导规则，杜绝应用服务层私自进行数字魔法值换算。
+      - **测试保障与回归验证**：
+        - `AuxiliaryLedgerApplicationServiceTest` 5 个单测全部通过，覆盖红冲记录映射断言；
+        - 全工程 377 个自动化单元测试 100% 通过（0 失败 0 错误）；
+        - 前端 `vue-tsc` + `vite build` 生产构建 0 错误通过。
 - [x] **Step 23** · 业务功能页面开发全量交付完毕（100% 完成）
 
 

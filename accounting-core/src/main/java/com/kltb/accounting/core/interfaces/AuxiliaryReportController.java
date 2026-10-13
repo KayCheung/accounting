@@ -44,8 +44,10 @@ public class AuxiliaryReportController {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @Parameter(description = "会计截止日期")
             @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
-        return ApiResponse.ok(auxiliaryService.getAuxiliaryItems(auxType, startDate, endDate));
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @Parameter(description = "凭证状态：3-已过账，5-已冲销，不传则包含两者")
+            @RequestParam(required = false) Integer voucherStatus) {
+        return ApiResponse.ok(auxiliaryService.getAuxiliaryItems(auxType, startDate, endDate, voucherStatus));
     }
 
     @GetMapping("/summary")

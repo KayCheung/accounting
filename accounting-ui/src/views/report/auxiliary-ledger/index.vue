@@ -114,6 +114,19 @@
               </el-select>
             </el-form-item>
 
+            <el-form-item label="凭证状态">
+              <el-select
+                v-model="queryForm.voucherStatus"
+                placeholder="全部凭证"
+                clearable
+                style="width: 130px;"
+              >
+                <el-option label="全部(含冲销)" :value="undefined" />
+                <el-option label="仅已过账" :value="3" />
+                <el-option label="仅已冲销" :value="5" />
+              </el-select>
+            </el-form-item>
+
             <el-form-item label="关键字">
               <el-input
                 v-model="queryForm.keyword"
@@ -415,6 +428,44 @@
                     </template>
                   </el-table-column>
 
+                  <el-table-column label="凭证状态" width="130" align="center">
+                    <template #default="{ row }">
+                      <el-tag
+                        v-if="row.voucherStatus === 5"
+                        size="small"
+                        type="danger"
+                        effect="light"
+                      >
+                        已冲销
+                      </el-tag>
+                      <el-tag
+                        v-else-if="row.voucherStatus === 3"
+                        size="small"
+                        type="success"
+                        effect="light"
+                      >
+                        已过账
+                      </el-tag>
+                      <el-tag
+                        v-else
+                        size="small"
+                        type="info"
+                        effect="plain"
+                      >
+                        {{ row.voucherStatusDesc || '正常' }}
+                      </el-tag>
+                      <el-tag
+                        v-if="row.tradeType === 3"
+                        size="small"
+                        type="danger"
+                        effect="plain"
+                        style="margin-left: 4px;"
+                      >
+                        红字
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+
                   <el-table-column prop="summary" label="摘要" min-width="180" show-overflow-tooltip />
 
                   <el-table-column prop="auxName" :label="'归属' + currentAuxTypeName" width="140">
@@ -503,7 +554,10 @@
               {{ voucherDetail.voucherTypeName || voucherDetail.voucherType }}
             </el-descriptions-item>
             <el-descriptions-item label="凭证状态">
-              <el-tag size="small" type="success">已过账</el-tag>
+              <el-tag v-if="voucherDetail.status === 5" size="small" type="danger">已冲销</el-tag>
+              <el-tag v-else-if="voucherDetail.status === 3" size="small" type="success">已过账</el-tag>
+              <el-tag v-else size="small" type="info">{{ voucherDetail.statusDesc || '未过账' }}</el-tag>
+              <el-tag v-if="voucherDetail.tradeType === 3" size="small" type="danger" effect="plain" style="margin-left: 6px;">红字凭证</el-tag>
             </el-descriptions-item>
             <el-descriptions-item label="入账模式">
               {{ voucherDetail.postingTypeDesc || '机制凭证' }}
@@ -623,6 +677,7 @@ const itemSearchKeyword = ref<string>('')
 const queryForm = reactive({
   auxType: 'DEPARTMENT',
   subjectCategory: undefined as number | undefined,
+  voucherStatus: undefined as number | undefined,
   keyword: ''
 })
 
@@ -710,6 +765,7 @@ function handleSearch() {
 function handleReset() {
   dateRange.value = [startStr, endStr]
   queryForm.subjectCategory = undefined
+  queryForm.voucherStatus = undefined
   queryForm.keyword = ''
   selectedAuxCode.value = 'ALL'
   loadAllData()
@@ -732,6 +788,7 @@ function buildQueryParams() {
     startDate: dateRange.value ? dateRange.value[0] : undefined,
     endDate: dateRange.value ? dateRange.value[1] : undefined,
     subjectCategory: queryForm.subjectCategory,
+    voucherStatus: queryForm.voucherStatus,
     keyword: queryForm.keyword ? queryForm.keyword.trim() : undefined
   }
 }
@@ -753,7 +810,8 @@ async function loadAuxItems() {
     const items = await getAuxiliaryItems({
       auxType: queryForm.auxType,
       startDate: dateRange.value ? dateRange.value[0] : undefined,
-      endDate: dateRange.value ? dateRange.value[1] : undefined
+      endDate: dateRange.value ? dateRange.value[1] : undefined,
+      voucherStatus: queryForm.voucherStatus
     })
     auxItems.value = items || []
   } catch (err: any) {

@@ -23,7 +23,15 @@
             COUNT(1) AS recordCount,
             COALESCE(SUM(a.amount), 0) AS totalAmount
         FROM t_accounting_voucher_auxiliary a
-        INNER JOIN t_accounting_voucher v ON a.voucher_no = v.voucher_no AND v.is_delete = 0 AND v.status = 3
+        INNER JOIN t_accounting_voucher v ON a.voucher_no = v.voucher_no AND v.is_delete = 0
+        <choose>
+            <when test="voucherStatus != null">
+                AND v.status = #{voucherStatus}
+            </when>
+            <otherwise>
+                AND v.status IN (3, 5)
+            </otherwise>
+        </choose>
         WHERE a.aux_type = #{auxType}
           AND a.is_delete = 0
           <if test="startDate != null">
@@ -46,7 +54,15 @@
             COUNT(DISTINCT a.subject_code) AS subjectCount,
             COUNT(DISTINCT a.voucher_no) AS voucherCount
         FROM t_accounting_voucher_auxiliary a
-        INNER JOIN t_accounting_voucher v ON a.voucher_no = v.voucher_no AND v.is_delete = 0 AND v.status = 3
+        INNER JOIN t_accounting_voucher v ON a.voucher_no = v.voucher_no AND v.is_delete = 0
+        <choose>
+            <when test="voucherStatus != null">
+                AND v.status = #{voucherStatus}
+            </when>
+            <otherwise>
+                AND v.status IN (3, 5)
+            </otherwise>
+        </choose>
         LEFT JOIN t_accounting_voucher_entry e ON a.entry_id = e.entry_id AND e.is_delete = 0
         LEFT JOIN t_account_subject s ON a.subject_code = s.subject_code AND s.is_delete = 0
         WHERE a.aux_type = #{auxType}
@@ -82,7 +98,15 @@
             a.aux_code AS auxCode,
             COALESCE(SUM(a.amount), 0) AS amount
         FROM t_accounting_voucher_auxiliary a
-        INNER JOIN t_accounting_voucher v ON a.voucher_no = v.voucher_no AND v.is_delete = 0 AND v.status = 3
+        INNER JOIN t_accounting_voucher v ON a.voucher_no = v.voucher_no AND v.is_delete = 0
+        <choose>
+            <when test="voucherStatus != null">
+                AND v.status = #{voucherStatus}
+            </when>
+            <otherwise>
+                AND v.status IN (3, 5)
+            </otherwise>
+        </choose>
         LEFT JOIN t_account_subject s ON a.subject_code = s.subject_code AND s.is_delete = 0
         LEFT JOIN t_accounting_voucher_entry e ON a.entry_id = e.entry_id AND e.is_delete = 0
         WHERE a.aux_type = #{auxType}
@@ -119,7 +143,15 @@
             COALESCE(SUM(a.amount), 0) AS totalAmount,
             COUNT(1) AS entryCount
         FROM t_accounting_voucher_auxiliary a
-        INNER JOIN t_accounting_voucher v ON a.voucher_no = v.voucher_no AND v.is_delete = 0 AND v.status = 3
+        INNER JOIN t_accounting_voucher v ON a.voucher_no = v.voucher_no AND v.is_delete = 0
+        <choose>
+            <when test="voucherStatus != null">
+                AND v.status = #{voucherStatus}
+            </when>
+            <otherwise>
+                AND v.status IN (3, 5)
+            </otherwise>
+        </choose>
         LEFT JOIN t_account_subject s ON a.subject_code = s.subject_code AND s.is_delete = 0
         LEFT JOIN t_accounting_voucher_entry e ON a.entry_id = e.entry_id AND e.is_delete = 0
         WHERE a.aux_type = #{auxType}
@@ -165,9 +197,19 @@
             s.subject_name AS subjectName,
             a.change_direction AS changeDirection,
             e.debit_credit AS debitCredit,
-            a.amount AS amount
+            a.amount AS amount,
+            v.status AS voucherStatus,
+            v.trade_type AS tradeType
         FROM t_accounting_voucher_auxiliary a
-        INNER JOIN t_accounting_voucher v ON a.voucher_no = v.voucher_no AND v.is_delete = 0 AND v.status = 3
+        INNER JOIN t_accounting_voucher v ON a.voucher_no = v.voucher_no AND v.is_delete = 0
+        <choose>
+            <when test="voucherStatus != null">
+                AND v.status = #{voucherStatus}
+            </when>
+            <otherwise>
+                AND v.status IN (3, 5)
+            </otherwise>
+        </choose>
         LEFT JOIN t_accounting_voucher_entry e ON a.entry_id = e.entry_id AND e.is_delete = 0
         LEFT JOIN t_account_subject s ON a.subject_code = s.subject_code AND s.is_delete = 0
         WHERE a.aux_type = #{auxType}

@@ -35,6 +35,24 @@ public interface AccountingRuleMapper extends BaseMapper<AccountingRulePO> {
     }
 
     /**
+     * 按业务键查询任意状态的记账规则（用于防重与冲突校验）
+     *
+     * @param businessCode 业务线编码
+     * @param tradingCode 交易编码
+     * @param payChannel 支付渠道
+     * @return 记账规则PO，不存在时返回null
+     */
+    default AccountingRulePO selectAnyByBusinessKey(String businessCode,
+                                                    String tradingCode,
+                                                    String payChannel) {
+        return this.selectOne(new LambdaQueryWrapper<AccountingRulePO>()
+                .eq(AccountingRulePO::getBusinessCode, businessCode)
+                .eq(AccountingRulePO::getTradingCode, tradingCode)
+                .eq(AccountingRulePO::getPayChannel, payChannel)
+                .eq(AccountingRulePO::getIsDelete, 0));
+    }
+
+    /**
      * 查询已启用的记账规则
      *
      * @return 已启用的规则列表

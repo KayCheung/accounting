@@ -194,23 +194,44 @@ class RuleApplicationServiceTest {
     }
 
     @Test
-    @DisplayName("停用规则: 存在关联凭证报 OPERATION_NOT_ALLOWED")
-    void disable_hasVouchers_shouldThrow() {
+    @DisplayName("创建规则: 业务键已存在报 PARAM_ERROR")
+    void create_duplicateBusinessKey_shouldThrow() {
+        AccountingRulePO existing = new AccountingRulePO()
+                .setStatus(RuleStatusEnum.DISABLED);
+        when(accountingRuleRepository.selectAnyByBusinessKey("PAYMENT", "CASH_PAY", "CASH")).thenReturn(existing);
+        doAnswer(invocation -> {
+            ((org.springframework.transaction.support.TransactionCallback<?>) invocation.getArgument(0)).doInTransaction(null);
+            return null;
+        }).when(transactionTemplate).execute(any());
+
+        RuleCreateRequest request = buildRequestWithEntries(List.of(
+                buildEntry("101001", 1),
+                buildEntry("201001", 2)
+        ));
+
+        assertThatThrownBy(() -> ruleApplicationService.create(request))
+                .isInstanceOf(ServiceException.class)
+                .hasMessageContaining("已存在记账规则");
+    }
+
+    @Test
+    @DisplayName("停用规则: 成功将规则状态变更为 DISABLED（解耦历史凭证）")
+    void disable_success() {
         AccountingRulePO rule = new AccountingRulePO()
                 .setBusinessCode("PAYMENT")
                 .setTradingCode("CASH_PAY")
                 .setPayChannel("CASH")
                 .setStatus(RuleStatusEnum.ENABLED);
         when(accountingRuleRepository.selectRuleById(1L)).thenReturn(rule);
-        when(accountingVoucherRepository.countByBusinessKey("PAYMENT", "CASH_PAY", "CASH")).thenReturn(3L);
         doAnswer(invocation -> {
             ((org.springframework.transaction.support.TransactionCallback<?>) invocation.getArgument(0)).doInTransaction(null);
             return null;
         }).when(transactionTemplate).execute(any());
 
-        assertThatThrownBy(() -> ruleApplicationService.disable(1L))
-                .isInstanceOf(ServiceException.class)
-                .hasMessageContaining("关联凭证");
+        ruleApplicationService.disable(1L);
+
+        org.assertj.core.api.Assertions.assertThat(rule.getStatus()).isEqualTo(RuleStatusEnum.DISABLED);
+        verify(accountingRuleRepository).updateRuleById(rule);
     }
 
     @Test
@@ -256,6 +277,61 @@ class RuleApplicationServiceTest {
 
         verify(accountingRuleRepository).deleteRuleDetailByRuleId(2L);
         verify(accountingRuleRepository, times(2)).insertRuleDetail(any());
+    }
+
+    @Test
+    @DisplayName("更新规则: 分录明细单边更新状态正确持久化")
+    void update_shouldPreserveIsUnilateral() {
+        AccountingRulePO rule = new AccountingRulePO().setStatus(RuleStatusEnum.DISABLED);
+        when(accountingRuleRepository.selectRuleById(3L)).thenReturn(rule);
+        when(subjectRepository.selectByCode("1001")).thenReturn(new AccountSubjectPO());
+        when(subjectRepository.selectByCode("2001")).thenReturn(new AccountSubjectPO());
+        doAnswer(invocation -> {
+            ((org.springframework.transaction.support.TransactionCallback<?>) invocation.getArgument(0)).doInTransaction(null);
+            return null;
+        }).when(transactionTemplate).execute(any());
+
+        RuleEntryRequest entry1 = buildEntry("1001", 1).setIsUnilateral(true);
+        RuleEntryRequest entry2 = buildEntry("2001", 2).setIsUnilateral(false);
+
+        com.kltb.accounting.api.request.RuleUpdateRequest request = new com.kltb.accounting.api.request.RuleUpdateRequest()
+                .setRuleName("更新单边状态")
+                .setEntries(List.of(entry1, entry2));
+
+        ruleApplicationService.update(3L, request);
+
+        org.mockito.ArgumentCaptor<com.kltb.accounting.core.infrastructure.persistence.entity.AccountingRuleDetailPO> captor =
+                org.mockito.ArgumentCaptor.forClass(com.kltb.accounting.core.infrastructure.persistence.entity.AccountingRuleDetailPO.class);
+        verify(accountingRuleRepository, times(2)).insertRuleDetail(captor.capture());
+
+        List<com.kltb.accounting.core.infrastructure.persistence.entity.AccountingRuleDetailPO> captured = captor.getAllValues();
+        org.assertj.core.api.Assertions.assertThat(captured.get(0).getIsUnilateral()).isTrue();
+        org.assertj.core.api.Assertions.assertThat(captured.get(0).getUnilateral()).isTrue();
+        org.assertj.core.api.Assertions.assertThat(captured.get(1).getIsUnilateral()).isFalse();
+    }
+
+    @Test
+    @DisplayName("查询规则: 单边更新状态正确回显到 Response DTO")
+    void getById_shouldMapIsUnilateral() {
+        AccountingRulePO rule = new AccountingRulePO();
+        rule.setId(5L);
+        rule.setRuleName("测试规则");
+        when(accountingRuleRepository.selectRuleById(5L)).thenReturn(rule);
+
+        com.kltb.accounting.core.infrastructure.persistence.entity.AccountingRuleDetailPO detail =
+                new com.kltb.accounting.core.infrastructure.persistence.entity.AccountingRuleDetailPO();
+        detail.setId(101L);
+        detail.setRowNum(1)
+                .setFundsType("PRINCIPAL")
+                .setSubjectCode("1001")
+                .setUnilateral(true);
+        when(accountingRuleRepository.selectDetailsWithAuxiliary(5L)).thenReturn(List.of(detail));
+        when(accountingRuleRepository.selectAuxiliariesByRuleId(5L)).thenReturn(java.util.Collections.emptyMap());
+
+        com.kltb.accounting.core.application.dto.RuleResponse response = ruleApplicationService.getById(5L);
+
+        org.assertj.core.api.Assertions.assertThat(response.getEntries()).hasSize(1);
+        org.assertj.core.api.Assertions.assertThat(response.getEntries().get(0).getIsUnilateral()).isTrue();
     }
 
     // ===== 辅助方法 =====

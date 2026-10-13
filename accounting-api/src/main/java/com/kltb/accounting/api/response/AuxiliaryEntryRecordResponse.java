@@ -80,4 +80,16 @@ public class AuxiliaryEntryRecordResponse implements Serializable {
 
     @Schema(description = "核算发生金额", example = "186000.00")
     private BigDecimal amount;
+
+    @Schema(description = "凭证状态：3-已过账, 5-已冲销", example = "3")
+    private Integer voucherStatus;
+
+    @Schema(description = "凭证状态描述", example = "已过账")
+    private String voucherStatusDesc;
+
+    @Schema(description = "交易类型：1-普通, 2-红冲", example = "1")
+    private Integer tradeType;
+
+    @Schema(description = "交易类型描述", example = "正常")
+    private String tradeTypeDesc;
 }

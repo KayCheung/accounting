@@ -1,5 +1,6 @@
 package com.kltb.accounting.core.domain.service;
 
+import cn.hutool.core.util.StrUtil;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.*;
 import com.kltb.accounting.core.infrastructure.account.AccountBalanceCalculator;
@@ -18,6 +19,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -41,7 +44,9 @@ public class BufferPostingEngineDomainService {
     private static final int MAX_OPTIMISTIC_RETRIES = 3;
 
     private final BufferPostingDetailRepository bufferPostingDetailRepository;
+    private final AccountRepository accountRepository;
     private final SubAccountRepository subAccountRepository;
+    private final AccountDetailRepository accountDetailRepository;
     private final SubAccountDetailRepository subAccountDetailRepository;
     private final AccountingVoucherRepository accountingVoucherRepository;
     private final DistributedLockTemplate distributedLockTemplate;
@@ -274,7 +279,12 @@ public class BufferPostingEngineDomainService {
     private void executePostingInTransaction(BufferPostingDetailPO detail, boolean usePessimistic) {
         transactionTemplate.execute(status -> {
             try {
-                // 1. 查询子账户
+                // 1. 查询主账户与子账户
+                AccountPO account = getAccount(detail.getAccountNo(), usePessimistic);
+                if (account == null) {
+                    throw new AccountException(ResultCode.ACCOUNT_NOT_FOUND,
+                            "主账户不存在: accountNo=" + detail.getAccountNo());
+                }
                 SubAccountPO subAccount = getSubAccount(detail.getAccountNo(), usePessimistic);
                 if (subAccount == null) {
                     throw new AccountException(ResultCode.ACCOUNT_NOT_FOUND,
@@ -282,22 +292,55 @@ public class BufferPostingEngineDomainService {
                 }
 
                 // 2. 余额计算
-                BigDecimal oldBalance = subAccount.getBalance();
+                BigDecimal oldAccountBalance = account.getBalance();
+                BigDecimal oldSubBalance = subAccount.getBalance();
                 BalanceDirectionEnum balanceDirection = subAccount.getBalanceDirection();
                 DebitCreditEnum debitCredit = detail.getDebitCredit();
                 BigDecimal amount = detail.getAmount();
 
                 int changeDirection = calculateChangeDirection(balanceDirection, debitCredit);
+                ChangeDirectionEnum changeDirectionEnum = (changeDirection == 1
+                        ? ChangeDirectionEnum.INCREASE
+                        : ChangeDirectionEnum.DECREASE);
 
-                // 3. 计算新余额
-                BigDecimal newBalance = AccountBalanceCalculator.calculateNewBalance(
-                        oldBalance, amount, changeDirection);
+                // 3. 计算新余额（遵循绝对值法则）
+                BigDecimal newAccountBalance = AccountBalanceCalculator.calculateNewBalance(
+                        oldAccountBalance, amount, changeDirection);
+                BigDecimal newSubBalance = AccountBalanceCalculator.calculateNewBalance(
+                        oldSubBalance, amount, changeDirection);
 
-                // 4. 更新子账户余额
-                subAccount.setBalance(newBalance);
+                // 4. 更新主账户与子账户余额
+                account.setBalance(newAccountBalance);
+                accountRepository.updateById(account);
+
+                subAccount.setBalance(newSubBalance);
                 subAccountRepository.updateById(subAccount);
 
-                // 5. 写入子账户明细快照
+                // 5. 写入主账户明细流水（t_account_detail）
+                AccountDetailPO accountDetail = new AccountDetailPO();
+                accountDetail.setVoucherNo(detail.getVoucherNo())
+                        .setEntryId(detail.getEntryId())
+                        .setTxnNo(StrUtil.isNotBlank(detail.getTxnNo()) ? detail.getTxnNo() : "")
+                        .setTraceNo(StrUtil.isNotBlank(detail.getTraceNo()) ? detail.getTraceNo() : detail.getVoucherNo())
+                        .setTraceSeq(detail.getTraceSeq() != null ? detail.getTraceSeq() : 0)
+                        .setSubjectCode(account.getSubjectCode())
+                        .setAccountNo(detail.getAccountNo())
+                        .setBusinessCode(StrUtil.isNotBlank(detail.getBusinessCode()) ? detail.getBusinessCode() : "")
+                        .setTradingCode(StrUtil.isNotBlank(detail.getTradingCode()) ? detail.getTradingCode() : "")
+                        .setPayChannel(StrUtil.isNotBlank(detail.getPayChannel()) ? detail.getPayChannel() : "")
+                        .setTradeType(detail.getTradeType())
+                        .setTradeTime(detail.getTradeTime() != null ? detail.getTradeTime() : LocalDateTime.now())
+                        .setDebitCredit(debitCredit)
+                        .setChangeDirection(changeDirectionEnum)
+                        .setCurrency(detail.getCurrency() != null ? detail.getCurrency() : "CNY")
+                        .setPreBalance(oldAccountBalance)
+                        .setAmount(amount)
+                        .setPostBalance(newAccountBalance)
+                        .setAccountingDate(detail.getAccountingDate())
+                        .setSummary(StrUtil.isNotBlank(detail.getSummary()) ? detail.getSummary() : "缓冲记账(异步逐条)");
+                accountDetailRepository.insert(accountDetail);
+
+                // 6. 写入子账户明细快照（t_sub_account_detail）
                 SubAccountDetailPO subDetail = new SubAccountDetailPO();
                 subDetail.setVoucherNo(detail.getVoucherNo())
                         .setEntryId(detail.getEntryId())
@@ -308,20 +351,18 @@ public class BufferPostingEngineDomainService {
                         .setBalanceType(BalanceTypeEnum.AVAILABLE)
                         .setTradingCode(detail.getTradingCode())
                         .setTradeType(detail.getTradeType())
-                        .setTradeTime(detail.getTradeTime())
+                        .setTradeTime(detail.getTradeTime() != null ? detail.getTradeTime() : LocalDateTime.now())
                         .setDebitCredit(debitCredit)
-                        .setChangeDirection(changeDirection == 1
-                                ? ChangeDirectionEnum.INCREASE
-                                : ChangeDirectionEnum.DECREASE)
+                        .setChangeDirection(changeDirectionEnum)
                         .setCurrency(detail.getCurrency())
-                        .setPreBalance(oldBalance)
+                        .setPreBalance(oldSubBalance)
                         .setAmount(amount)
-                        .setPostBalance(newBalance)
+                        .setPostBalance(newSubBalance)
                         .setAccountingDate(detail.getAccountingDate())
-                        .setSummary(detail.getSummary() != null ? detail.getSummary() : "缓冲记账");
+                        .setSummary(StrUtil.isNotBlank(detail.getSummary()) ? detail.getSummary() : "缓冲记账(异步逐条)");
                 subAccountDetailRepository.insert(subDetail);
 
-                // 6. 更新分录状态为已过账（P1-4: 直接查询单条分录）
+                // 7. 更新分录状态为已过账
                 AccountingVoucherEntryPO entry = accountingVoucherRepository
                         .selectEntryByVoucherNoAndEntryId(detail.getVoucherNo(), detail.getEntryId());
                 if (entry != null) {
@@ -330,16 +371,17 @@ public class BufferPostingEngineDomainService {
                     accountingVoucherRepository.updateEntryById(entry);
                 }
 
-                // 7. 更新凭证状态
+                // 8. 更新凭证状态
                 updateVoucherStatus(detail.getVoucherNo());
 
-                // 8. 更新缓冲明细状态为成功
+                // 9. 更新缓冲明细状态为成功
                 LocalDateTime completeTime = LocalDateTime.now();
                 bufferPostingDetailRepository.updateToSuccess(detail.getId(), completeTime);
 
-                log.info("[BUFFER-POSTING] 过账成功: detailId={}, accountNo={}, amount={}, " +
-                                "oldBalance={}, newBalance={}",
-                        detail.getId(), detail.getAccountNo(), amount, oldBalance, newBalance);
+                log.info("[BUFFER-POSTING] 逐条过账成功: detailId={}, accountNo={}, amount={}, " +
+                                "account: {}->{}, subAccount: {}->{}",
+                        detail.getId(), detail.getAccountNo(), amount,
+                        oldAccountBalance, newAccountBalance, oldSubBalance, newSubBalance);
 
                 return true;
             } catch (Exception e) {
@@ -351,13 +393,21 @@ public class BufferPostingEngineDomainService {
 
     /**
      * 批量过账事务逻辑（按账户汇总，buffer_mode=2/3 专用）
+     * <p>
+     * 遵循设计规范：按时间序排序缓冲明细，运用 Running Balance 逐笔推导每笔的 Pre/Post 余额，
+     * 一次性更新主账户和子账户余额，并逐笔落库 t_account_detail 与 t_sub_account_detail。
      */
     private void executeBatchPostingForAccount(
             String accountNo, LocalDate accountingDate, List<BufferPostingDetailPO> details) {
 
         transactionTemplate.execute(status -> {
             try {
-                // 1. 查询子账户
+                // 1. 查询主账户和子账户
+                AccountPO account = accountRepository.selectByAccountNo(accountNo);
+                if (account == null) {
+                    throw new AccountException(ResultCode.ACCOUNT_NOT_FOUND,
+                            "主账户不存在: accountNo=" + accountNo);
+                }
                 SubAccountPO subAccount = subAccountRepository.selectByAccountNoAndType(
                         accountNo, BalanceTypeEnum.AVAILABLE.getCode());
                 if (subAccount == null) {
@@ -365,71 +415,96 @@ public class BufferPostingEngineDomainService {
                             "子账户不存在: accountNo=" + accountNo);
                 }
 
-                BigDecimal oldBalance = subAccount.getBalance();
+                // 2. 按时间升序排序明细，执行 Running Balance 逐笔推导
+                List<BufferPostingDetailPO> sortedDetails = new ArrayList<>(details);
+                sortedDetails.sort(Comparator.comparing(
+                        (BufferPostingDetailPO d) -> d.getTradeTime() != null ? d.getTradeTime() : LocalDateTime.MIN)
+                        .thenComparing(BufferPostingDetailPO::getId));
+
+                BigDecimal runningAccountBalance = account.getBalance();
+                BigDecimal runningSubBalance = subAccount.getBalance();
                 BalanceDirectionEnum balanceDirection = subAccount.getBalanceDirection();
 
-                // 2. 按借贷方向汇总净额
-                BigDecimal netDebit = BigDecimal.ZERO;
-                BigDecimal netCredit = BigDecimal.ZERO;
-                for (BufferPostingDetailPO detail : details) {
-                    if (detail.getDebitCredit() == DebitCreditEnum.DEBIT) {
-                        netDebit = netDebit.add(detail.getAmount());
-                    } else {
-                        netCredit = netCredit.add(detail.getAmount());
-                    }
-                }
+                List<AccountDetailPO> accountDetailsToInsert = new ArrayList<>(sortedDetails.size());
+                List<SubAccountDetailPO> subDetailsToInsert = new ArrayList<>(sortedDetails.size());
 
-                // 3. 计算净方向和净额
-                BigDecimal netAmount;
-                int changeDirection;
-                if (netDebit.compareTo(netCredit) > 0) {
-                    netAmount = netDebit.subtract(netCredit);
-                    changeDirection = calculateChangeDirection(balanceDirection, DebitCreditEnum.DEBIT);
-                } else if (netCredit.compareTo(netDebit) > 0) {
-                    netAmount = netCredit.subtract(netDebit);
-                    changeDirection = calculateChangeDirection(balanceDirection, DebitCreditEnum.CREDIT);
-                } else {
-                    netAmount = BigDecimal.ZERO;
-                    changeDirection = 1;
-                }
+                for (BufferPostingDetailPO detail : sortedDetails) {
+                    DebitCreditEnum debitCredit = detail.getDebitCredit();
+                    BigDecimal amount = detail.getAmount();
+                    int changeDirection = calculateChangeDirection(balanceDirection, debitCredit);
+                    ChangeDirectionEnum changeDirectionEnum = (changeDirection == 1
+                            ? ChangeDirectionEnum.INCREASE
+                            : ChangeDirectionEnum.DECREASE);
 
-                BigDecimal newBalance = oldBalance;
-                if (netAmount.compareTo(BigDecimal.ZERO) > 0) {
-                    // 4. 计算新余额
-                    newBalance = AccountBalanceCalculator.calculateNewBalance(
-                            oldBalance, netAmount, changeDirection);
+                    BigDecimal preAccount = runningAccountBalance;
+                    BigDecimal postAccount = AccountBalanceCalculator.calculateNewBalance(
+                            preAccount, amount, changeDirection);
+                    runningAccountBalance = postAccount;
 
-                    // 5. 更新子账户余额
-                    subAccount.setBalance(newBalance);
-                    subAccountRepository.updateById(subAccount);
+                    BigDecimal preSub = runningSubBalance;
+                    BigDecimal postSub = AccountBalanceCalculator.calculateNewBalance(
+                            preSub, amount, changeDirection);
+                    runningSubBalance = postSub;
 
-                    // 6. 写入子账户明细快照（汇总）
-                    SubAccountDetailPO subDetail = new SubAccountDetailPO();
-                    subDetail.setVoucherNo(details.get(0).getVoucherNo())
-                            .setEntryId("")
-                            .setTxnNo("")
-                            .setTraceNo("")
-                            .setTraceSeq(null)
+                    // 组装 t_account_detail
+                    AccountDetailPO ad = new AccountDetailPO();
+                    ad.setVoucherNo(detail.getVoucherNo())
+                            .setEntryId(detail.getEntryId())
+                            .setTxnNo(StrUtil.isNotBlank(detail.getTxnNo()) ? detail.getTxnNo() : "")
+                            .setTraceNo(StrUtil.isNotBlank(detail.getTraceNo()) ? detail.getTraceNo() : detail.getVoucherNo())
+                            .setTraceSeq(detail.getTraceSeq() != null ? detail.getTraceSeq() : 0)
+                            .setSubjectCode(account.getSubjectCode())
+                            .setAccountNo(accountNo)
+                            .setBusinessCode(StrUtil.isNotBlank(detail.getBusinessCode()) ? detail.getBusinessCode() : "")
+                            .setTradingCode(StrUtil.isNotBlank(detail.getTradingCode()) ? detail.getTradingCode() : "")
+                            .setPayChannel(StrUtil.isNotBlank(detail.getPayChannel()) ? detail.getPayChannel() : "")
+                            .setTradeType(detail.getTradeType())
+                            .setTradeTime(detail.getTradeTime() != null ? detail.getTradeTime() : LocalDateTime.now())
+                            .setDebitCredit(debitCredit)
+                            .setChangeDirection(changeDirectionEnum)
+                            .setCurrency(detail.getCurrency() != null ? detail.getCurrency() : "CNY")
+                            .setPreBalance(preAccount)
+                            .setAmount(amount)
+                            .setPostBalance(postAccount)
+                            .setAccountingDate(accountingDate)
+                            .setSummary(StrUtil.isNotBlank(detail.getSummary()) ? detail.getSummary() : "缓冲记账(批量入账)");
+                    accountDetailsToInsert.add(ad);
+
+                    // 组装 t_sub_account_detail
+                    SubAccountDetailPO sad = new SubAccountDetailPO();
+                    sad.setVoucherNo(detail.getVoucherNo())
+                            .setEntryId(detail.getEntryId())
+                            .setTxnNo(detail.getTxnNo())
+                            .setTraceNo(detail.getTraceNo())
+                            .setTraceSeq(detail.getTraceSeq())
                             .setAccountNo(accountNo)
                             .setBalanceType(BalanceTypeEnum.AVAILABLE)
-                            .setTradingCode("")
-                            .setTradeType(null)
-                            .setTradeTime(LocalDateTime.now())
-                            .setDebitCredit(netDebit.compareTo(netCredit) > 0
-                                    ? DebitCreditEnum.DEBIT : DebitCreditEnum.CREDIT)
-                            .setChangeDirection(changeDirection == 1
-                                    ? ChangeDirectionEnum.INCREASE
-                                    : ChangeDirectionEnum.DECREASE)
-                            .setCurrency(details.get(0).getCurrency())
-                            .setPreBalance(oldBalance)
-                            .setAmount(netAmount)
-                            .setPostBalance(newBalance)
+                            .setTradingCode(detail.getTradingCode())
+                            .setTradeType(detail.getTradeType())
+                            .setTradeTime(detail.getTradeTime() != null ? detail.getTradeTime() : LocalDateTime.now())
+                            .setDebitCredit(debitCredit)
+                            .setChangeDirection(changeDirectionEnum)
+                            .setCurrency(detail.getCurrency())
+                            .setPreBalance(preSub)
+                            .setAmount(amount)
+                            .setPostBalance(postSub)
                             .setAccountingDate(accountingDate)
-                            .setSummary("日间批量汇总");
-                    subAccountDetailRepository.insert(subDetail);
+                            .setSummary(StrUtil.isNotBlank(detail.getSummary()) ? detail.getSummary() : "缓冲记账(批量入账)");
+                    subDetailsToInsert.add(sad);
                 }
 
-                // 7. 逐条更新缓冲明细状态和凭证
+                // 3. 一次性更新主账户和子账户余额
+                account.setBalance(runningAccountBalance);
+                accountRepository.updateById(account);
+
+                subAccount.setBalance(runningSubBalance);
+                subAccountRepository.updateById(subAccount);
+
+                // 4. 批量落库明细流水
+                accountDetailRepository.batchInsert(accountDetailsToInsert);
+                subAccountDetailRepository.batchInsert(subDetailsToInsert);
+
+                // 5. 逐条更新分录和凭证状态及缓冲明细
                 for (BufferPostingDetailPO detail : details) {
                     AccountingVoucherEntryPO entry = accountingVoucherRepository
                             .selectEntryByVoucherNoAndEntryId(detail.getVoucherNo(), detail.getEntryId());
@@ -440,13 +515,12 @@ public class BufferPostingEngineDomainService {
                     }
 
                     updateVoucherStatus(detail.getVoucherNo());
-
                     bufferPostingDetailRepository.updateToSuccess(detail.getId(), LocalDateTime.now());
                 }
 
                 log.info("[BUFFER-POSTING] 批量过账成功: accountNo={}, details={}, " +
-                                "oldBalance={}, newBalance={}",
-                        accountNo, details.size(), oldBalance, newBalance);
+                                "accountEnd={}, subAccountEnd={}",
+                        accountNo, details.size(), runningAccountBalance, runningSubBalance);
 
                 return true;
             } catch (Exception e) {
@@ -467,6 +541,17 @@ public class BufferPostingEngineDomainService {
 
     private String buildLockKey(String accountNo) {
         return RedisKeyConstants.Lock.Account.accountMutex(accountNo);
+    }
+
+    /**
+     * 查询主账户（悲观锁/普通查询）
+     */
+    private AccountPO getAccount(String accountNo, boolean usePessimistic) {
+        if (usePessimistic) {
+            List<AccountPO> accounts = accountRepository.selectForUpdateBatch(Collections.singletonList(accountNo));
+            return (accounts != null && !accounts.isEmpty()) ? accounts.get(0) : null;
+        }
+        return accountRepository.selectByAccountNo(accountNo);
     }
 
     /**

@@ -3,6 +3,9 @@ package com.kltb.accounting.core.infrastructure.persistence.mapper;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import cn.hutool.core.util.StrUtil;
 import com.kltb.accounting.core.infrastructure.persistence.entity.BufferPostingDetailPO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -125,4 +128,24 @@ public interface BufferPostingDetailMapper extends BaseMapper<BufferPostingDetai
     List<Map<String, Object>> sumByAccountNo(
             @Param("accountingDate") LocalDate accountingDate,
             @Param("status") Integer status);
+
+    /**
+     * 分页多条件查询缓冲记账明细
+     */
+    default IPage<BufferPostingDetailPO> selectPageByCondition(
+            LocalDate accountingDate, String accountNo, String voucherNo,
+            Integer bufferMode, Integer status, LocalDate startDate, LocalDate endDate,
+            long pageNo, long pageSize) {
+        LambdaQueryWrapper<BufferPostingDetailPO> wrapper = new LambdaQueryWrapper<BufferPostingDetailPO>()
+                .eq(BufferPostingDetailPO::getIsDelete, 0)
+                .eq(accountingDate != null, BufferPostingDetailPO::getAccountingDate, accountingDate)
+                .eq(StrUtil.isNotBlank(accountNo), BufferPostingDetailPO::getAccountNo, accountNo)
+                .eq(StrUtil.isNotBlank(voucherNo), BufferPostingDetailPO::getVoucherNo, voucherNo)
+                .eq(bufferMode != null, BufferPostingDetailPO::getBufferMode, bufferMode)
+                .eq(status != null, BufferPostingDetailPO::getStatus, status)
+                .ge(startDate != null, BufferPostingDetailPO::getAccountingDate, startDate)
+                .le(endDate != null, BufferPostingDetailPO::getAccountingDate, endDate)
+                .orderByDesc(BufferPostingDetailPO::getId);
+        return this.selectPage(new Page<>(pageNo, pageSize), wrapper);
+    }
 }

@@ -1,5 +1,7 @@
 package com.kltb.accounting.api.request;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -51,8 +53,28 @@ public class RuleEntryRequest implements Serializable {
     @Schema(description = "币种", example = "CNY")
     private String currency;
 
+    @JsonProperty("isUnilateral")
+    @JsonAlias({"unilateral", "isUnilateral"})
     @Schema(description = "是否单边更新", example = "false")
     private Boolean isUnilateral;
+
+    public Boolean getIsUnilateral() {
+        return this.isUnilateral;
+    }
+
+    public RuleEntryRequest setIsUnilateral(Boolean isUnilateral) {
+        this.isUnilateral = isUnilateral;
+        return this;
+    }
+
+    public Boolean getUnilateral() {
+        return this.isUnilateral;
+    }
+
+    public RuleEntryRequest setUnilateral(Boolean unilateral) {
+        this.isUnilateral = unilateral;
+        return this;
+    }
 
     @Size(max = 2000, message = "扩展脚本长度不能超过2000")
     @Schema(description = "SpEL扩展脚本")

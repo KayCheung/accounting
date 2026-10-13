@@ -1,15 +1,18 @@
 package com.kltb.accounting.core.domain.service;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.BalanceTypeEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountDetailPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountFreezeDetailPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountPO;
+import com.kltb.accounting.core.infrastructure.persistence.entity.SubAccountDetailPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.SubAccountPO;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountDetailRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.BufferPostingDetailRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.FreezeDetailRepository;
+import com.kltb.accounting.core.infrastructure.persistence.repository.SubAccountDetailRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.SubAccountRepository;
 import com.kltb.accounting.core.shared.exception.AccountException;
 import lombok.Data;
@@ -30,6 +33,7 @@ import java.util.List;
  * 1. 聚合余额查询（主账户 + 可用子账户 + 冻结子账户 + 缓冲预估）
  * 2. 账户明细分页查询
  * 3. 冻结记录分页查询
+ * 4. 子账户明细分页查询
  * <p>
  * 是否记账：否，纯查询操作
  * 异常处理：
@@ -45,6 +49,7 @@ public class BalanceQueryDomainService {
     private final BufferPostingDetailRepository bufferPostingDetailRepository;
     private final AccountDetailRepository accountDetailRepository;
     private final FreezeDetailRepository freezeDetailRepository;
+    private final SubAccountDetailRepository subAccountDetailRepository;
 
     /**
      * 聚合余额查询（主账户 + 可用 + 冻结 + 缓冲预估）
@@ -165,6 +170,37 @@ public class BalanceQueryDomainService {
         return new FreezeRecordPageResult(total, pages, pageNo, records != null ? records : Collections.emptyList());
     }
 
+    /**
+     * 子账户明细分页查询
+     * <p>
+     * 功能描述：按账户编号、子账户类型、日期范围、交易类别、借贷方向等条件分页查询子账户变动明细。
+     * <p>
+     * 是否记账：否，纯查询操作。
+     * <p>
+     * 异常处理：无特殊异常处理，无数据时返回空列表。
+     *
+     * @param accountNo   账户编号
+     * @param balanceType 子账户类型（可选：1-可用余额, 2-冻结余额）
+     * @param startDate   起始日期
+     * @param endDate     结束日期
+     * @param tradeType   交易类别
+     * @param debitCredit 借贷方向
+     * @param pageNo      页码
+     * @param pageSize    每页条数
+     * @return 分页结果
+     */
+    public SubAccountDetailPageResult querySubAccountDetails(
+            String accountNo, Integer balanceType, LocalDate startDate, LocalDate endDate,
+            Integer tradeType, Integer debitCredit, int pageNo, int pageSize) {
+        long offset = (long) (pageNo - 1) * pageSize;
+        IPage<SubAccountDetailPO> page = subAccountDetailRepository.selectPageByCondition(
+                        accountNo, balanceType, startDate, endDate, tradeType, debitCredit, offset, pageSize);
+        Long total = page != null ? page.getTotal() : 0L;
+        long pages = page != null ? page.getPages() : 0L;
+        List<SubAccountDetailPO> records = page != null ? page.getRecords() : Collections.emptyList();
+        return new SubAccountDetailPageResult(total, pages, pageNo, records != null ? records : Collections.emptyList());
+    }
+
     // ==================== DTO ====================
 
     /**
@@ -216,6 +252,24 @@ public class BalanceQueryDomainService {
         private final List<AccountFreezeDetailPO> list;
 
         public FreezeRecordPageResult(Long total, Long pages, Integer current, List<AccountFreezeDetailPO> list) {
+            this.total = total;
+            this.pages = pages;
+            this.current = current;
+            this.list = list;
+        }
+    }
+
+    /**
+     * 子账户明细分页结果
+     */
+    @Data
+    public static class SubAccountDetailPageResult {
+        private final Long total;
+        private final Long pages;
+        private final Integer current;
+        private final List<SubAccountDetailPO> list;
+
+        public SubAccountDetailPageResult(Long total, Long pages, Integer current, List<SubAccountDetailPO> list) {
             this.total = total;
             this.pages = pages;
             this.current = current;

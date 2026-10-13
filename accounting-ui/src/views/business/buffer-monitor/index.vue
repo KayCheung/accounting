@@ -371,6 +371,207 @@
       </el-col>
     </el-row>
 
+    <!-- ==================== 卡片 5: 缓冲记账明细列表 ==================== -->
+    <div class="fin-card detail-list-card" style="margin-top: 16px;">
+      <div class="card-header-bar">
+        <div class="header-title-box">
+          <el-icon class="header-icon"><Document /></el-icon>
+          <span class="header-title">缓冲记账明细列表</span>
+          <span class="header-subtitle">多维检索缓冲分录流转详情，支持单笔重试与穿透追踪</span>
+        </div>
+        <div class="header-meta-box">
+          <el-button size="small" :icon="Refresh" :loading="loadingDetail" @click="fetchDetailPage">
+            刷新明细
+          </el-button>
+        </div>
+      </div>
+
+      <!-- 检索表单 -->
+      <el-form :inline="true" :model="detailQuery" class="detail-query-form" style="margin-top: 14px;">
+        <el-form-item label="账户编号">
+          <el-input
+            v-model="detailQuery.accountNo"
+            placeholder="输入账户号"
+            clearable
+            style="width: 150px;"
+            @keyup.enter="handleSearchDetail"
+          />
+        </el-form-item>
+
+        <el-form-item label="凭证号">
+          <el-input
+            v-model="detailQuery.voucherNo"
+            placeholder="输入凭证号"
+            clearable
+            style="width: 160px;"
+            @keyup.enter="handleSearchDetail"
+          />
+        </el-form-item>
+
+        <el-form-item label="缓冲模式">
+          <el-select
+            v-model="detailQuery.bufferMode"
+            placeholder="全部模式"
+            clearable
+            style="width: 130px;"
+            @change="handleSearchDetail"
+          >
+            <el-option
+              v-for="item in BUFFER_MODE_OPTIONS"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+        </el-form-item>
+
+        <el-form-item label="缓冲状态">
+          <el-select
+            v-model="detailQuery.status"
+            placeholder="全部状态"
+            clearable
+            style="width: 120px;"
+            @change="handleSearchDetail"
+          >
+            <el-option
+              v-for="item in BUFFER_STATUS_OPTIONS"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+        </el-form-item>
+
+        <el-form-item>
+          <el-button type="primary" :icon="Search" :loading="loadingDetail" @click="handleSearchDetail">
+            查询
+          </el-button>
+          <el-button :icon="Refresh" @click="handleResetDetailQuery">
+            重置
+          </el-button>
+        </el-form-item>
+      </el-form>
+
+      <!-- 明细表格 -->
+      <el-table
+        v-loading="loadingDetail"
+        :data="detailList"
+        border
+        stripe
+        size="small"
+        class="fin-table"
+        empty-text="暂无缓冲明细数据"
+      >
+        <el-table-column prop="id" label="明细ID" width="90" align="center">
+          <template #default="{ row }">
+            <span class="mono">{{ row.id }}</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="accountingDate" label="会计日期" width="105" align="center">
+          <template #default="{ row }">
+            <span class="mono">{{ row.accountingDate }}</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="voucherNo" label="凭证号 / 分录" min-width="160" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span class="mono">{{ row.voucherNo }}</span>
+            <span v-if="row.entryId" class="mono text-muted" style="margin-left: 4px;">#{{ row.entryId }}</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="accountNo" label="账户编号" min-width="150" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span class="mono code-link" @click="copyText(row.accountNo, '账户编号')">
+              {{ row.accountNo }}
+            </span>
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="debitCredit" label="方向" width="70" align="center">
+          <template #default="{ row }">
+            <el-tag :type="row.debitCredit === 1 ? 'primary' : 'warning'" size="small">
+              {{ row.debitCredit === 1 ? '借' : '贷' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="amount" label="金额" width="120" align="right">
+          <template #default="{ row }">
+            <AmountDisplay :value="row.amount" align="right" />
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="bufferMode" label="缓冲模式" width="110" align="center">
+          <template #default="{ row }">
+            <el-tag :type="getBufferModeTagType(row.bufferMode)" size="small" effect="plain">
+              {{ getBufferModeLabel(row.bufferMode) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="status" label="状态" width="90" align="center">
+          <template #default="{ row }">
+            <el-tag :type="getStatusTagType(row.status)" size="small">
+              {{ getStatusLabel(row.status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="retryCount" label="重试" width="60" align="center">
+          <template #default="{ row }">
+            <span :class="{ 'text-danger font-bold': (row.retryCount || 0) > 0 }">
+              {{ row.retryCount || 0 }}
+            </span>
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="failReason" label="失败原因" min-width="140" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="row.failReason" class="text-danger">{{ row.failReason }}</span>
+            <span v-else class="text-muted">--</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="createTime" label="创建时间" width="150" align="center">
+          <template #default="{ row }">
+            <span class="mono">{{ formatDateTime(row.createTime) }}</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="操作" width="120" align="center" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" size="small" @click="openDetailDrawer(row)">
+              详情
+            </el-button>
+            <el-button
+              v-if="row.status === 1 || row.status === 4"
+              link
+              type="danger"
+              size="small"
+              @click="openExecuteDialog(row.bufferMode, row.accountNo)"
+            >
+              入账
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <!-- 分页区域 -->
+      <div class="pagination-box" style="margin-top: 14px; display: flex; justify-content: flex-end;">
+        <el-pagination
+          v-model:current-page="detailQuery.pageNo"
+          v-model:page-size="detailQuery.pageSize"
+          :total="detailTotal"
+          :page-sizes="[10, 20, 50, 100]"
+          layout="total, sizes, prev, pager, next, jumper"
+          @size-change="fetchDetailPage"
+          @current-change="fetchDetailPage"
+        />
+      </div>
+    </div>
+
     <!-- ==================== 对话框: 手动触发缓冲记账 ==================== -->
     <el-dialog
       v-model="executeDialogVisible"
@@ -490,6 +691,116 @@
         </div>
       </div>
     </el-drawer>
+
+    <!-- ==================== 抽屉: 单笔缓冲明细详情 ==================== -->
+    <el-drawer
+      v-model="singleDetailDrawerVisible"
+      title="缓冲记账明细详情"
+      size="560px"
+      destroy-on-close
+    >
+      <div v-if="selectedDetail" class="detail-drawer-body">
+        <el-descriptions :column="2" border size="small">
+          <el-descriptions-item label="明细 ID" :span="1">
+            <span class="mono">{{ selectedDetail.id }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="缓冲规则 ID" :span="1">
+            <span class="mono">{{ selectedDetail.ruleId || '--' }}</span>
+          </el-descriptions-item>
+
+          <el-descriptions-item label="会计日期" :span="1">
+            <span class="mono">{{ selectedDetail.accountingDate }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="缓冲模式" :span="1">
+            <el-tag :type="getBufferModeTagType(selectedDetail.bufferMode)" size="small">
+              {{ getBufferModeLabel(selectedDetail.bufferMode) }}
+            </el-tag>
+          </el-descriptions-item>
+
+          <el-descriptions-item label="凭证号" :span="2">
+            <span class="mono code-link" @click="copyText(selectedDetail.voucherNo, '凭证号')">
+              {{ selectedDetail.voucherNo }}
+            </span>
+          </el-descriptions-item>
+
+          <el-descriptions-item label="分录流水号" :span="2">
+            <span class="mono">{{ selectedDetail.entryId }}</span>
+          </el-descriptions-item>
+
+          <el-descriptions-item label="事务编号 (txnNo)" :span="2">
+            <span class="mono">{{ selectedDetail.txnNo || '--' }}</span>
+          </el-descriptions-item>
+
+          <el-descriptions-item label="跟踪号 (traceNo)" :span="2">
+            <span class="mono">{{ selectedDetail.traceNo || '--' }}</span>
+          </el-descriptions-item>
+
+          <el-descriptions-item label="账户编号" :span="2">
+            <span class="mono code-link" @click="copyText(selectedDetail.accountNo, '账户编号')">
+              {{ selectedDetail.accountNo }}
+            </span>
+          </el-descriptions-item>
+
+          <el-descriptions-item label="借贷方向" :span="1">
+            <el-tag :type="selectedDetail.debitCredit === 1 ? 'primary' : 'warning'" size="small">
+              {{ selectedDetail.debitCredit === 1 ? '借方 (Dr)' : '贷方 (Cr)' }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="入账金额" :span="1">
+            <AmountDisplay :value="selectedDetail.amount" align="right" />
+          </el-descriptions-item>
+
+          <el-descriptions-item label="业务线编码" :span="1">
+            <span>{{ selectedDetail.businessCode || '--' }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="交易编码" :span="1">
+            <span>{{ selectedDetail.tradingCode || '--' }}</span>
+          </el-descriptions-item>
+
+          <el-descriptions-item label="交易类别" :span="1">
+            <span>{{ selectedDetail.tradeTypeDesc || selectedDetail.tradeType || '--' }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="交易时间" :span="1">
+            <span class="mono">{{ formatDateTime(selectedDetail.tradeTime) }}</span>
+          </el-descriptions-item>
+
+          <el-descriptions-item label="当前状态" :span="1">
+            <el-tag :type="getStatusTagType(selectedDetail.status)" size="small">
+              {{ getStatusLabel(selectedDetail.status) }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="重试次数" :span="1">
+            <span class="mono">{{ selectedDetail.retryCount || 0 }}</span>
+          </el-descriptions-item>
+
+          <el-descriptions-item label="开始时间" :span="1">
+            <span class="mono">{{ formatDateTime(selectedDetail.startTime) }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="完成时间" :span="1">
+            <span class="mono">{{ formatDateTime(selectedDetail.completeTime) }}</span>
+          </el-descriptions-item>
+
+          <el-descriptions-item label="摘要" :span="2">
+            <span>{{ selectedDetail.summary || '--' }}</span>
+          </el-descriptions-item>
+
+          <el-descriptions-item v-if="selectedDetail.failReason" label="失败原因" :span="2">
+            <el-alert type="error" :closable="false" :title="selectedDetail.failReason" />
+          </el-descriptions-item>
+        </el-descriptions>
+
+        <div style="margin-top: 20px; text-align: right;">
+          <el-button
+            v-if="selectedDetail.status === 1 || selectedDetail.status === 4"
+            type="danger"
+            @click="openExecuteDialog(selectedDetail.bufferMode, selectedDetail.accountNo)"
+          >
+            立即触发该账户入账
+          </el-button>
+          <el-button @click="singleDetailDrawerVisible = false">关闭</el-button>
+        </div>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
@@ -505,7 +816,8 @@ import {
   InfoFilled,
   Odometer,
   TopRight,
-  Histogram
+  Histogram,
+  Document
 } from '@element-plus/icons-vue'
 import { toast } from '@/utils/toast'
 import { getEodStatus } from '@/api/eod'
@@ -513,12 +825,15 @@ import {
   getBufferPendingStats,
   getBufferMonitor,
   executeBufferPosting,
+  getBufferDetailPage,
   BUFFER_MODE_OPTIONS,
   BUFFER_STATUS_OPTIONS,
   type BufferPendingStatsResponse,
   type BufferMonitorResponse,
   type BufferStatusCount,
-  type BufferExecuteResponse
+  type BufferExecuteResponse,
+  type BufferDetailItem,
+  type BufferDetailQueryRequest
 } from '@/api/buffer-monitor'
 
 // ==================== 响应式状态 ====================
@@ -533,6 +848,24 @@ const executingPosting = ref<boolean>(false)
 const pendingStats = ref<BufferPendingStatsResponse | null>(null)
 const monitorData = ref<BufferMonitorResponse | null>(null)
 const executeResult = ref<BufferExecuteResponse | null>(null)
+
+// 缓冲明细列表状态
+const loadingDetail = ref<boolean>(false)
+const detailList = ref<BufferDetailItem[]>([])
+const detailTotal = ref<number>(0)
+const detailQuery = ref<BufferDetailQueryRequest>({
+  pageNo: 1,
+  pageSize: 10,
+  accountingDate: '',
+  accountNo: '',
+  voucherNo: '',
+  bufferMode: undefined,
+  status: undefined,
+  startDate: '',
+  endDate: ''
+})
+const singleDetailDrawerVisible = ref<boolean>(false)
+const selectedDetail = ref<BufferDetailItem | null>(null)
 
 // 弹窗与抽屉
 const executeDialogVisible = ref<boolean>(false)
@@ -599,6 +932,23 @@ function getStatusTagType(status: number): '' | 'primary' | 'success' | 'warning
     case 4: return 'danger'
     default: return 'info'
   }
+}
+
+function getBufferModeLabel(mode?: number): string {
+  return BUFFER_MODE_OPTIONS.find(m => m.value === mode)?.label || `模式${mode || '--'}`
+}
+
+function getBufferModeTagType(mode?: number): '' | 'primary' | 'success' | 'warning' | 'info' | 'danger' {
+  switch (mode) {
+    case 1: return 'primary'
+    case 2: return 'success'
+    case 3: return 'warning'
+    default: return 'info'
+  }
+}
+
+function getStatusLabel(st?: number): string {
+  return BUFFER_STATUS_OPTIONS.find(s => s.value === st)?.label || `状态${st || '--'}`
 }
 
 function formatDuration(ms?: number): string {
@@ -669,12 +1019,54 @@ async function fetchMonitorData() {
   }
 }
 
+async function fetchDetailPage() {
+  loadingDetail.value = true
+  try {
+    const res = await getBufferDetailPage({
+      ...detailQuery.value,
+      accountingDate: detailQuery.value.accountingDate || currentAccountingDate.value || undefined
+    })
+    detailList.value = res.list || []
+    detailTotal.value = res.total || 0
+  } catch {
+    // 拦截器处理
+  } finally {
+    loadingDetail.value = false
+  }
+}
+
+function handleSearchDetail() {
+  detailQuery.value.pageNo = 1
+  fetchDetailPage()
+}
+
+function handleResetDetailQuery() {
+  detailQuery.value = {
+    pageNo: 1,
+    pageSize: 10,
+    accountingDate: currentAccountingDate.value,
+    accountNo: '',
+    voucherNo: '',
+    bufferMode: undefined,
+    status: undefined,
+    startDate: '',
+    endDate: ''
+  }
+  fetchDetailPage()
+}
+
+function openDetailDrawer(row: BufferDetailItem) {
+  selectedDetail.value = row
+  singleDetailDrawerVisible.value = true
+}
+
 async function fetchAllData() {
-  await Promise.all([fetchStats(), fetchMonitorData()])
+  await Promise.all([fetchStats(), fetchMonitorData(), fetchDetailPage()])
 }
 
 function handleDateChange(newDate: string) {
   if (newDate) {
+    detailQuery.value.accountingDate = newDate
     fetchAllData()
   }
 }
@@ -736,6 +1128,7 @@ onMounted(async () => {
     currentAccountingDate.value = new Date().toISOString().split('T')[0]
   }
 
+  detailQuery.value.accountingDate = currentAccountingDate.value
   fetchAllData()
 })
 </script>

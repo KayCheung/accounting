@@ -4,8 +4,11 @@ import com.kltb.accounting.core.domain.enums.BalanceDirectionEnum;
 import com.kltb.accounting.core.domain.enums.BalanceTypeEnum;
 import com.kltb.accounting.core.domain.enums.BufferStatusEnum;
 import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
+import com.kltb.accounting.core.infrastructure.persistence.entity.AccountPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.BufferPostingDetailPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.SubAccountPO;
+import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountDetailMapper;
+import com.kltb.accounting.core.infrastructure.persistence.repository.AccountRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.BufferPostingDetailRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.SubAccountRepository;
 import lombok.Data;
@@ -15,19 +18,18 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 
 /**
  * Running Balance 校验器
  * <p>
- * 职责：在日终批量缓冲记账完成后，校验账户实际余额与缓冲明细累计余额是否一致。
+ * 职责：校验账户实际余额与明细流水连续性及总分一致性。
  * <p>
  * 校验逻辑：
- * 1. 查询账户实际余额（SubAccountRepository）
- * 2. 查询该账户当日全部已入账缓冲明细（status=SUCCESS），按 trade_time 排序
- * 3. 计算理论变动 = Σ(同向金额) - Σ(反向金额)
- * 4. 比较差额，超阈值则告警
+ * 1. 总分一致性：主账户余额 vs 子账户(可用+冻结)余额合计
+ * 2. 流水末态核对：实际动账余额 vs 当日最后一条动账明细 t_account_detail 的 post_balance
  * <p>
  * 是否记账：否（仅校验）
  * 异常处理：差额超阈值时记录告警日志，不阻断后续流程
@@ -39,8 +41,10 @@ public class RunningBalanceValidator {
 
     private static final BigDecimal BALANCE_DIFF_THRESHOLD = new BigDecimal("0.000001");
 
+    private final AccountRepository accountRepository;
     private final SubAccountRepository subAccountRepository;
     private final BufferPostingDetailRepository bufferPostingDetailRepository;
+    private final AccountDetailMapper accountDetailMapper;
 
     /**
      * 校验 Running Balance
@@ -50,24 +54,23 @@ public class RunningBalanceValidator {
      * @return 校验结果
      */
     public ValidationResult validateRunningBalance(String accountNo, LocalDate accountingDate) {
-        // 1. 查询账户实际余额
+        // 1. 查询账户与子账户
+        AccountPO account = accountRepository.selectByAccountNo(accountNo);
         SubAccountPO subAccount = subAccountRepository.selectByAccountNoAndType(
                 accountNo, BalanceTypeEnum.AVAILABLE.getCode());
-        if (subAccount == null) {
-            log.warn("[RUNNING-BALANCE] 子账户不存在，跳过校验: accountNo={}", accountNo);
-            return ValidationResult.skip(accountNo, "子账户不存在");
+        if (subAccount == null && account == null) {
+            log.warn("[RUNNING-BALANCE] 账户不存在，跳过校验: accountNo={}", accountNo);
+            return ValidationResult.skip(accountNo, "账户不存在");
         }
 
-        BigDecimal actualBalance = subAccount.getBalance();
-        BalanceDirectionEnum balanceDirection = subAccount.getBalanceDirection();
+        BigDecimal actualBalance = (subAccount != null) ? subAccount.getBalance() : account.getBalance();
 
-        // 2. 查询该账户当日全部已入账缓冲明细（status=SUCCESS），按 trade_time 排序
-        // P1-6: 使用语义更清晰的 selectSuccessByDate 方法
+        // 2. 检查当日是否有已入账缓冲明细
         List<BufferPostingDetailPO> successDetails = bufferPostingDetailRepository
                 .selectSuccessByDate(accountingDate, 10000)
                 .stream()
                 .filter(d -> d.getAccountNo().equals(accountNo))
-                .sorted(Comparator.comparing(BufferPostingDetailPO::getTradeTime)
+                .sorted(Comparator.comparing((BufferPostingDetailPO d) -> d.getTradeTime() != null ? d.getTradeTime() : LocalDateTime.MIN)
                         .thenComparing(BufferPostingDetailPO::getId))
                 .toList();
 
@@ -77,59 +80,42 @@ public class RunningBalanceValidator {
             return ValidationResult.skip(accountNo, "无已入账缓冲明细");
         }
 
-        // 3. 通过累加方式校验
-        return validateByAccumulation(accountNo, actualBalance, balanceDirection, successDetails);
-    }
-
-    /**
-     * 通过累加方式校验
-     * <p>
-     * P0-2 修复：实际计算差额并与阈值比较，不再硬编码 diff=0。
-     */
-    private ValidationResult validateByAccumulation(
-            String accountNo, BigDecimal actualBalance,
-            BalanceDirectionEnum balanceDirection,
-            List<BufferPostingDetailPO> successDetails) {
-
-        BigDecimal calculatedChange = BigDecimal.ZERO;
-
-        for (BufferPostingDetailPO detail : successDetails) {
-            DebitCreditEnum debitCredit = detail.getDebitCredit();
-            BigDecimal amount = detail.getAmount();
-
-            int changeDirection = calculateChangeDirection(balanceDirection, debitCredit);
-            if (changeDirection == 1) {
-                calculatedChange = calculatedChange.add(amount);
-            } else {
-                calculatedChange = calculatedChange.subtract(amount);
+        // 3. 维度一：总分一致性核对（主账户 vs 子账户合计）
+        if (account != null) {
+            List<SubAccountPO> subs = subAccountRepository.selectByAccountNo(accountNo);
+            BigDecimal subTotal = subs.stream()
+                    .map(SubAccountPO::getBalance)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal accountSubDiff = account.getBalance().subtract(subTotal).abs();
+            if (accountSubDiff.compareTo(BALANCE_DIFF_THRESHOLD) > 0) {
+                log.error("[RUNNING-BALANCE-ALERT] accountNo={}, 主账户余额({})与子账户合计余额({})不一致，总分失衡！",
+                        accountNo, account.getBalance(), subTotal);
+                return ValidationResult.alert(accountNo, account.getBalance(), subTotal, accountSubDiff);
             }
         }
 
-        // 计算差额 = |calculatedChange|
-        // 注：由于无法获取期初余额，这里校验的是「当日变动合计是否为 0」
-        // 如果账户当日有缓冲记账但 calculatedChange 为 0，说明数据可能有问题
-        BigDecimal diff = calculatedChange.abs();
-        if (diff.compareTo(BALANCE_DIFF_THRESHOLD) > 0) {
-            BigDecimal calculatedBalance = actualBalance.subtract(calculatedChange);
-            log.error("[RUNNING-BALANCE-ALERT] accountNo={}, actualBalance={}, " +
-                            "calculatedChange={}, calculatedBalance={}, diff={}",
-                    accountNo, actualBalance, calculatedChange, calculatedBalance, diff);
-            return ValidationResult.alert(accountNo, actualBalance, calculatedBalance, diff);
+        // 4. 维度二：流水末态核对（Running Balance 核心校验）
+        // 查询该账户在当日的最后一条动账流水 post_balance
+        BigDecimal lastPostBalance = accountDetailMapper.selectLastPostBalance(accountNo, accountingDate);
+        if (lastPostBalance == null) {
+            // 当日存在 SUCCESS 的缓冲明细，但 t_account_detail 中却没有任何动账流水（流水遗漏）
+            BigDecimal diff = actualBalance.abs();
+            log.error("[RUNNING-BALANCE-ALERT] accountNo={}, 当日存在 {} 条已成功缓冲明细，但未生成账户明细流水(t_account_detail)！",
+                    accountNo, successDetails.size());
+            return ValidationResult.alert(accountNo, actualBalance, BigDecimal.ZERO, diff);
         }
 
-        log.info("[RUNNING-BALANCE] 校验通过: accountNo={}, calculatedChange={}, actualBalance={}",
-                accountNo, calculatedChange, actualBalance);
+        BigDecimal diff = actualBalance.subtract(lastPostBalance).abs();
+        if (diff.compareTo(BALANCE_DIFF_THRESHOLD) > 0) {
+            log.error("[RUNNING-BALANCE-ALERT] accountNo={}, actualBalance={}, lastPostBalance={}, diff={}",
+                    accountNo, actualBalance, lastPostBalance, diff);
+            return ValidationResult.alert(accountNo, actualBalance, lastPostBalance, diff);
+        }
 
-        return ValidationResult.pass(accountNo, actualBalance, calculatedChange, BigDecimal.ZERO);
-    }
+        log.info("[RUNNING-BALANCE] 校验通过: accountNo={}, actualBalance={}, lastPostBalance={}",
+                accountNo, actualBalance, lastPostBalance);
 
-    /**
-     * 计算增减方向（与 BufferPostingEngineDomainService 保持一致）
-     */
-    private int calculateChangeDirection(BalanceDirectionEnum balanceDirection, DebitCreditEnum debitCredit) {
-        int bd = balanceDirection != null ? balanceDirection.getCode() : 1;
-        int dc = debitCredit != null ? debitCredit.getCode() : 1;
-        return (bd == dc) ? 1 : 2;
+        return ValidationResult.pass(accountNo, actualBalance, lastPostBalance, BigDecimal.ZERO);
     }
 
     /**

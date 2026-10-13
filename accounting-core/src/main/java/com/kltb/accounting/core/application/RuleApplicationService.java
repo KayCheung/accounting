@@ -67,12 +67,13 @@ public class RuleApplicationService {
     public void create(RuleCreateRequest request) {
         transactionTemplate.execute(status -> {
             try {
-                // 1. 唯一键校验
-                AccountingRulePO existing = accountingRuleRepository.selectByBusinessKey(
+                // 1. 唯一键防重校验（不限状态，避免底层唯一索引冲突）
+                AccountingRulePO existing = accountingRuleRepository.selectAnyByBusinessKey(
                         request.getBusinessCode(), request.getTradingCode(), request.getPayChannel());
                 if (existing != null) {
+                    String statusDesc = existing.getStatus() == RuleStatusEnum.ENABLED ? "已启用" : "已停用/待启用";
                     throw new ServiceException(ResultCode.PARAM_ERROR,
-                            "业务线+交易编码+支付渠道组合已存在记账规则");
+                            "业务线+交易编码+支付渠道组合已存在记账规则（当前状态：" + statusDesc + "），请直接修改或启用现有规则");
                 }
 
                 // 2. 明细校验
@@ -182,15 +183,7 @@ public class RuleApplicationService {
                     throw new ServiceException(ResultCode.RULE_NOT_FOUND, "记账规则不存在");
                 }
 
-                // 停用联动校验：检查无关联凭证引用（按业务键匹配，
-                // 凭证表增加 rule_id 字段后可改为按 rule_id 精准校验）
-                long voucherCount = accountingVoucherRepository.countByBusinessKey(
-                        po.getBusinessCode(), po.getTradingCode(), po.getPayChannel());
-                if (voucherCount > 0) {
-                    throw new ServiceException(ResultCode.OPERATION_NOT_ALLOWED,
-                            "该规则存在关联凭证（" + voucherCount + "条），无法停用");
-                }
-
+                // 规则停用不影响已生成的历史凭证（凭证分录已固化物化），停用后新交易将无法匹配该规则
                 po.setStatus(RuleStatusEnum.DISABLED);
                 po.setUpdateId(Constants.SYSTEM_OPERATOR);
                 po.setUpdateName(Constants.SYSTEM_OPERATOR);

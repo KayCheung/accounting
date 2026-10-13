@@ -2,6 +2,7 @@ package com.kltb.accounting.core.infrastructure.persistence.repository;
 
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.BufferStatusEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.BufferPostingDetailPO;
@@ -180,5 +181,16 @@ public class BufferPostingDetailRepository {
                 updateToFailed(detail.getId(), reason);
             }
         }
+    }
+
+    /**
+     * 分页多条件查询缓冲记账明细
+     */
+    public IPage<BufferPostingDetailPO> selectPageByCondition(
+            LocalDate accountingDate, String accountNo, String voucherNo,
+            Integer bufferMode, Integer status, LocalDate startDate, LocalDate endDate,
+            long pageNo, long pageSize) {
+        return bufferPostingDetailMapper.selectPageByCondition(
+                accountingDate, accountNo, voucherNo, bufferMode, status, startDate, endDate, pageNo, pageSize);
     }
 }

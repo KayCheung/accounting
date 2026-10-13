@@ -1,6 +1,5 @@
-// 文件路径：src/api/buffer-monitor.ts
 import request from '@/utils/request'
-import type { SelectOption } from './types'
+import type { PageResponse, SelectOption } from './types'
 
 /**
  * 缓冲入账模式枚举：1-异步逐条，2-日间批量，3-日终批量
@@ -144,4 +143,61 @@ export function getBufferMonitor(params: { accountingDate?: string; status?: num
  */
 export function executeBufferPosting(data: BufferExecuteRequest): Promise<BufferExecuteResponse> {
   return request.post<BufferExecuteResponse>('/buffer/execute', data)
+}
+
+/**
+ * 缓冲记账明细项
+ */
+export interface BufferDetailItem {
+  id: number
+  ruleId: number
+  bufferMode: number
+  bufferModeDesc?: string
+  voucherNo: string
+  entryId: string
+  txnNo?: string
+  traceNo?: string
+  traceSeq?: number
+  businessCode?: string
+  tradingCode?: string
+  payChannel?: string
+  tradeType?: number
+  tradeTypeDesc?: string
+  tradeTime?: string
+  accountNo: string
+  debitCredit: number
+  debitCreditDesc?: string
+  currency: string
+  amount: number
+  accountingDate: string
+  summary?: string
+  status: number
+  statusDesc?: string
+  retryCount?: number
+  failReason?: string
+  startTime?: string
+  completeTime?: string
+  createTime?: string
+}
+
+/**
+ * 缓冲记账明细分页查询入参
+ */
+export interface BufferDetailQueryRequest {
+  pageNo?: number
+  pageSize?: number
+  accountingDate?: string
+  accountNo?: string
+  voucherNo?: string
+  bufferMode?: number
+  status?: number
+  startDate?: string
+  endDate?: string
+}
+
+/**
+ * 分页查询缓冲记账明细列表
+ */
+export function getBufferDetailPage(params: BufferDetailQueryRequest): Promise<PageResponse<BufferDetailItem>> {
+  return request.get<PageResponse<BufferDetailItem>>('/buffer/detail/page', params)
 }

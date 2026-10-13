@@ -89,6 +89,58 @@ export interface FreezeRecordQueryRequest {
 }
 
 /**
+ * 子账户明细项
+ */
+export interface SubAccountDetailItem {
+  id: number
+  voucherNo: string
+  entryId: string
+  txnNo: string
+  traceNo: string
+  traceSeq?: number
+  accountNo: string
+  balanceType: number
+  balanceTypeDesc: string
+  tradingCode: string
+  tradeType: number
+  tradeTypeDesc: string
+  tradeTime: string
+  debitCredit: number
+  debitCreditDesc: string
+  changeDirection: number
+  changeDirectionDesc: string
+  currency: string
+  preBalance: number
+  amount: number
+  postBalance: number
+  accountingDate: string
+  summary: string
+  createTime: string
+}
+
+/**
+ * 子账户明细分页查询入参
+ */
+export interface SubAccountDetailQueryRequest {
+  pageNo?: number
+  pageSize?: number
+  accountNo: string
+  balanceType?: number
+  startDate?: string
+  endDate?: string
+  tradeType?: number
+  debitCredit?: number
+}
+
+/**
+ * 子账户余额类型选项
+ */
+export const BALANCE_TYPE_OPTIONS: SelectOption<number>[] = [
+  { label: '可用余额', value: 1, tagType: 'success' },
+  { label: '冻结余额', value: 2, tagType: 'danger' }
+]
+
+/**
  * 交易类别选项
  */
 export const TRADE_TYPE_OPTIONS: SelectOption<number>[] = [
@@ -133,6 +185,13 @@ export function getAccountDetails(params: AccountDetailQueryRequest): Promise<Pa
  */
 export function getFreezeRecords(params: FreezeRecordQueryRequest): Promise<PageResponse<FreezeRecordItem>> {
   return request.get<PageResponse<FreezeRecordItem>>('/account/balance/freeze-records', params)
+}
+
+/**
+ * 分页查询子账户变动明细
+ */
+export function getSubAccountDetails(params: SubAccountDetailQueryRequest): Promise<PageResponse<SubAccountDetailItem>> {
+  return request.get<PageResponse<SubAccountDetailItem>>('/account/balance/sub-details', params)
 }
 
 /**

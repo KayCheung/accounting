@@ -1777,9 +1777,17 @@ const handleSubmit = async () => {
 
   submitting.value = true
   try {
-    // 规范化清洗明细与辅助核算项数据，确保 SpEL 表达式与分摊数值字段类型严格匹配后端契约
-    const cleanEntries = formModel.value.entries.map(entry => ({
-      ...entry,
+    // 规范化清洗明细与辅助核算项数据，确保字段完整准确，严格匹配后端契约
+    const cleanEntries = formModel.value.entries.map((entry, index) => ({
+      rowNum: index + 1,
+      fundsType: entry.fundsType,
+      subjectCode: entry.subjectCode,
+      accountScope: entry.accountScope,
+      debitCredit: entry.debitCredit,
+      currency: entry.currency || 'CNY',
+      isUnilateral: Boolean(entry.isUnilateral),
+      extendScript: entry.extendScript || '',
+      summary: entry.summary || '',
       auxiliaries: (entry.auxiliaries || []).map((a: any) => {
         const isSpel = a.allocationMethod === 4
         const isFixed = a.allocationMethod === 2
@@ -1845,7 +1853,7 @@ const handleEnable = async (row: RuleResponse) => {
 // 停用规则
 const handleDisable = (row: RuleResponse) => {
   ElMessageBox.confirm(
-    `确定要停用记账规则【${row.ruleName}】吗？停用前系统将自动检查是否存在历史未完结凭证引用。`,
+    `确定要停用记账规则【${row.ruleName}】吗？停用后新交易将无法使用此规则记账，已生成的历史凭证不受影响。`,
     '停用确认',
     {
       confirmButtonText: '确定停用',

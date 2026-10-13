@@ -1,10 +1,8 @@
 package com.kltb.accounting.core.application.assembler;
 
-import com.kltb.accounting.api.response.BufferExecuteResponse;
-import com.kltb.accounting.api.response.BufferMonitorResponse;
-import com.kltb.accounting.api.response.BufferPendingStatsResponse;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.kltb.accounting.api.response.*;
 import com.kltb.accounting.core.domain.enums.BufferStatusEnum;
-import com.kltb.accounting.core.domain.service.BufferPostingEngineDomainService;
 import com.kltb.accounting.core.domain.service.BufferPostingEngineDomainService.BatchPostingResult;
 import com.kltb.accounting.core.infrastructure.persistence.entity.BufferPostingDetailPO;
 import org.springframework.stereotype.Component;
@@ -100,5 +98,68 @@ public class BufferPostingAssembler {
         if (code == null) return "未知";
         BufferStatusEnum status = BufferStatusEnum.fromCode(code);
         return Optional.ofNullable(status).map(BufferStatusEnum::getDesc).orElse("未知");
+    }
+
+    /**
+     * PO → BufferDetailResponse
+     */
+    public BufferDetailResponse toDetailResponse(BufferPostingDetailPO po) {
+        if (po == null) {
+            return null;
+        }
+        BufferDetailResponse resp = new BufferDetailResponse();
+        resp.setId(po.getId());
+        resp.setRuleId(po.getRuleId());
+        if (po.getBufferMode() != null) {
+            resp.setBufferMode(po.getBufferMode().getCode());
+            resp.setBufferModeDesc(po.getBufferMode().getDesc());
+        }
+        resp.setVoucherNo(po.getVoucherNo());
+        resp.setEntryId(po.getEntryId());
+        resp.setTxnNo(po.getTxnNo());
+        resp.setTraceNo(po.getTraceNo());
+        resp.setTraceSeq(po.getTraceSeq());
+        resp.setBusinessCode(po.getBusinessCode());
+        resp.setTradingCode(po.getTradingCode());
+        resp.setPayChannel(po.getPayChannel());
+        if (po.getTradeType() != null) {
+            resp.setTradeType(po.getTradeType().getCode());
+            resp.setTradeTypeDesc(po.getTradeType().getDesc());
+        }
+        resp.setTradeTime(po.getTradeTime());
+        resp.setAccountNo(po.getAccountNo());
+        if (po.getDebitCredit() != null) {
+            resp.setDebitCredit(po.getDebitCredit().getCode());
+            resp.setDebitCreditDesc(po.getDebitCredit().getDesc());
+        }
+        resp.setCurrency(po.getCurrency());
+        resp.setAmount(po.getAmount());
+        resp.setAccountingDate(po.getAccountingDate());
+        resp.setSummary(po.getSummary());
+        if (po.getStatus() != null) {
+            resp.setStatus(po.getStatus().getCode());
+            resp.setStatusDesc(po.getStatus().getDesc());
+        }
+        resp.setRetryCount(po.getRetryCount());
+        resp.setFailReason(po.getFailReason());
+        resp.setStartTime(po.getStartTime());
+        resp.setCompleteTime(po.getCompleteTime());
+        resp.setCreateTime(po.getCreateTime());
+        return resp;
+    }
+
+    /**
+     * IPage<PO> → PageResponse<BufferDetailResponse>
+     */
+    public PageResponse<BufferDetailResponse> toDetailPageResponse(IPage<BufferPostingDetailPO> page) {
+        List<BufferDetailResponse> list = page.getRecords().stream()
+                .map(this::toDetailResponse)
+                .collect(Collectors.toList());
+        return PageResponse.<BufferDetailResponse>builder()
+                .total(page.getTotal())
+                .pages(page.getPages())
+                .current(page.getCurrent())
+                .list(list)
+                .build();
     }
 }

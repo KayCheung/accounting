@@ -32,7 +32,7 @@
           <el-button
             v-if="currentAccountNo"
             :icon="Refresh"
-            :loading="loadingAggregate || loadingDetails || loadingFreeze"
+            :loading="loadingAggregate || loadingDetails || loadingFreeze || loadingSubDetails"
             @click="refreshCurrentData"
           >
             刷新数据
@@ -482,6 +482,219 @@
             />
           </div>
         </el-tab-pane>
+
+        <!-- ==================== Tab 3: 子账户明细 ==================== -->
+        <el-tab-pane label="子账户明细" name="subDetails">
+          <!-- 筛选表单 -->
+          <el-form :inline="true" :model="subDetailFilter" class="sub-filter-form">
+            <el-form-item label="子账户类型">
+              <el-select
+                v-model="subDetailFilter.balanceType"
+                placeholder="全部子账户"
+                clearable
+                style="width: 140px;"
+                @change="loadSubDetails(1)"
+              >
+                <el-option
+                  v-for="item in BALANCE_TYPE_OPTIONS"
+                  :key="item.value"
+                  :label="item.label"
+                  :value="item.value"
+                />
+              </el-select>
+            </el-form-item>
+
+            <el-form-item label="会计日期">
+              <el-date-picker
+                v-model="subDetailDateRange"
+                type="daterange"
+                range-separator="至"
+                start-placeholder="开始日期"
+                end-placeholder="结束日期"
+                value-format="YYYY-MM-DD"
+                style="width: 230px;"
+                @change="handleSubDateRangeChange"
+              />
+            </el-form-item>
+
+            <el-form-item label="交易类别">
+              <el-select
+                v-model="subDetailFilter.tradeType"
+                placeholder="全部类别"
+                clearable
+                style="width: 130px;"
+                @change="loadSubDetails(1)"
+              >
+                <el-option
+                  v-for="item in TRADE_TYPE_OPTIONS"
+                  :key="item.value"
+                  :label="item.label"
+                  :value="item.value"
+                />
+              </el-select>
+            </el-form-item>
+
+            <el-form-item label="借贷方向">
+              <el-select
+                v-model="subDetailFilter.debitCredit"
+                placeholder="全部方向"
+                clearable
+                style="width: 120px;"
+                @change="loadSubDetails(1)"
+              >
+                <el-option
+                  v-for="item in DEBIT_CREDIT_OPTIONS"
+                  :key="item.value"
+                  :label="item.label"
+                  :value="item.value"
+                />
+              </el-select>
+            </el-form-item>
+
+            <el-form-item>
+              <el-button type="primary" :icon="Search" :loading="loadingSubDetails" @click="loadSubDetails(1)">
+                筛选
+              </el-button>
+              <el-button :icon="RefreshRight" @click="handleResetSubDetailFilter">
+                重置
+              </el-button>
+            </el-form-item>
+          </el-form>
+
+          <!-- 子账户明细表格 -->
+          <el-table
+            v-loading="loadingSubDetails"
+            :data="subDetailList"
+            border
+            stripe
+            size="small"
+            class="fin-table"
+            empty-text="暂无匹配的子账户变动记录"
+          >
+            <el-table-column type="index" label="序号" width="50" align="center" />
+
+            <el-table-column prop="voucherNo" label="凭证编号" min-width="150" show-overflow-tooltip>
+              <template #default="{ row }">
+                <span class="code-tag highlight" @click="openSubAuditDrawer(row)">
+                  {{ row.voucherNo }}
+                </span>
+                <el-button
+                  link
+                  type="primary"
+                  size="small"
+                  :icon="CopyDocument"
+                  class="cell-copy-btn"
+                  @click="copyText(row.voucherNo, '凭证号')"
+                />
+              </template>
+            </el-table-column>
+
+            <el-table-column prop="entryId" label="分录流水号" min-width="140" show-overflow-tooltip>
+              <template #default="{ row }">
+                <span class="mono">{{ row.entryId }}</span>
+              </template>
+            </el-table-column>
+
+            <el-table-column prop="balanceType" label="子账户类型" width="110" align="center">
+              <template #default="{ row }">
+                <el-tag :type="row.balanceType === 1 ? 'success' : 'danger'" size="small">
+                  {{ row.balanceType === 1 ? '可用余额' : '冻结余额' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+
+            <el-table-column prop="accountingDate" label="会计日期" width="105" align="center" />
+
+            <el-table-column prop="tradeTime" label="交易时间" width="145" align="center">
+              <template #default="{ row }">
+                <span>{{ formatDateTime(row.tradeTime) }}</span>
+              </template>
+            </el-table-column>
+
+            <el-table-column prop="tradeType" label="交易类别" width="95" align="center">
+              <template #default="{ row }">
+                <el-tag :type="getTradeTypeTagType(row.tradeType)" size="small">
+                  {{ row.tradeTypeDesc || getTradeTypeLabel(row.tradeType) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+
+            <el-table-column prop="debitCredit" label="借贷方向" width="80" align="center">
+              <template #default="{ row }">
+                <el-tag :type="row.debitCredit === 1 ? 'primary' : 'warning'" size="small" effect="dark">
+                  {{ row.debitCredit === 1 ? '借方' : '贷方' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+
+            <el-table-column prop="changeDirection" label="变动方向" width="80" align="center">
+              <template #default="{ row }">
+                <el-tag :type="row.changeDirection === 1 ? 'success' : 'info'" size="small">
+                  {{ row.changeDirection === 1 ? '+ 增加' : '- 减少' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+
+            <el-table-column prop="preBalance" label="交易前余额" min-width="125" align="right">
+              <template #default="{ row }">
+                <AmountDisplay :value="row.preBalance" prefix="¥ " />
+              </template>
+            </el-table-column>
+
+            <el-table-column prop="amount" label="交易金额" min-width="130" align="right">
+              <template #default="{ row }">
+                <span :class="['trans-amount', row.changeDirection === 1 ? 'is-increase' : 'is-decrease']">
+                  <AmountDisplay :value="row.amount" prefix="¥ " />
+                </span>
+              </template>
+            </el-table-column>
+
+            <el-table-column prop="postBalance" label="交易后余额" min-width="125" align="right">
+              <template #default="{ row }">
+                <AmountDisplay :value="row.postBalance" prefix="¥ " />
+              </template>
+            </el-table-column>
+
+            <el-table-column prop="summary" label="摘要说明" min-width="150" show-overflow-tooltip />
+
+            <!-- 操作列 -->
+            <el-table-column label="操作" width="70" fixed="right" align="center">
+              <template #default="{ row }">
+                <el-dropdown trigger="click">
+                  <el-button link type="primary" :icon="MoreFilled" class="action-more-btn" />
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item :icon="Tickets" @click="openSubAuditDrawer(row)">
+                        审计凭据
+                      </el-dropdown-item>
+                      <el-dropdown-item :icon="CopyDocument" @click="copyText(row.voucherNo, '凭证编号')">
+                        复制凭证号
+                      </el-dropdown-item>
+                      <el-dropdown-item v-if="row.txnNo" :icon="CopyDocument" @click="copyText(row.txnNo, '事务号')">
+                        复制事务号
+                      </el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </template>
+            </el-table-column>
+          </el-table>
+
+          <!-- 分页组件 -->
+          <div class="pagination-footer">
+            <el-pagination
+              v-model:current-page="subDetailPageNo"
+              v-model:page-size="subDetailPageSize"
+              :total="subDetailTotal"
+              :page-sizes="[10, 20, 50, 100]"
+              layout="total, sizes, prev, pager, next, jumper"
+              background
+              size="small"
+              @size-change="loadSubDetails(1)"
+              @current-change="(page: number) => loadSubDetails(page)"
+            />
+          </div>
+        </el-tab-pane>
       </el-tabs>
     </div>
 
@@ -568,14 +781,19 @@
           <el-descriptions-item label="系统跟踪号 (Trace No)">
             <span class="mono">{{ selectedDetail.traceNo || '-' }}</span>
           </el-descriptions-item>
+          <el-descriptions-item v-if="(selectedDetail as any).balanceType" label="子账户类型 (Balance Type)">
+            <el-tag :type="(selectedDetail as any).balanceType === 1 ? 'success' : 'danger'" size="small">
+              {{ (selectedDetail as any).balanceTypeDesc || ((selectedDetail as any).balanceType === 1 ? '可用余额' : '冻结余额') }}
+            </el-tag>
+          </el-descriptions-item>
           <el-descriptions-item label="账户编号 (Account No)">
             <span class="mono">{{ selectedDetail.accountNo }}</span>
           </el-descriptions-item>
           <el-descriptions-item label="科目编码 (Subject Code)">
-            <span class="mono">{{ selectedDetail.subjectCode }}</span>
+            <span class="mono">{{ (selectedDetail as any).subjectCode || '-' }}</span>
           </el-descriptions-item>
           <el-descriptions-item label="业务线编码 (Business)">
-            <span>{{ selectedDetail.businessCode || '-' }}</span>
+            <span>{{ (selectedDetail as any).businessCode || '-' }}</span>
           </el-descriptions-item>
           <el-descriptions-item label="交易编码 (Trading)">
             <span>{{ selectedDetail.tradingCode || '-' }}</span>
@@ -634,13 +852,16 @@ import {
   getAggregateBalance,
   getAccountDetails,
   getFreezeRecords,
+  getSubAccountDetails,
   searchAccountCandidates,
   TRADE_TYPE_OPTIONS,
   DEBIT_CREDIT_OPTIONS,
   FREEZE_STATUS_OPTIONS,
+  BALANCE_TYPE_OPTIONS,
   type AggregateBalanceResponse,
   type AccountDetailItem,
-  type FreezeRecordItem
+  type FreezeRecordItem,
+  type SubAccountDetailItem
 } from '@/api/balance'
 
 const route = useRoute()
@@ -689,9 +910,22 @@ const freezePageNo = ref(1)
 const freezePageSize = ref(10)
 const loadingFreeze = ref(false)
 
+// ==================== Tab 3: 子账户明细 ====================
+const subDetailDateRange = ref<[string, string] | null>(null)
+const subDetailFilter = reactive({
+  balanceType: undefined as number | undefined,
+  tradeType: undefined as number | undefined,
+  debitCredit: undefined as number | undefined
+})
+const subDetailList = ref<SubAccountDetailItem[]>([])
+const subDetailTotal = ref(0)
+const subDetailPageNo = ref(1)
+const subDetailPageSize = ref(10)
+const loadingSubDetails = ref(false)
+
 // ==================== 审计凭据抽屉 ====================
 const auditDrawerVisible = ref(false)
-const selectedDetail = ref<AccountDetailItem | null>(null)
+const selectedDetail = ref<AccountDetailItem | SubAccountDetailItem | null>(null)
 
 // 自动完成输入建议
 async function queryAccountSuggestions(queryString: string, cb: (results: AccountCandidate[]) => void) {
@@ -731,10 +965,13 @@ async function handleSearchAll() {
   // 同步重置并加载子标签数据
   detailPageNo.value = 1
   freezePageNo.value = 1
+  subDetailPageNo.value = 1
   if (activeTab.value === 'details') {
     loadDetails(1)
-  } else {
+  } else if (activeTab.value === 'freeze') {
     loadFreezeRecords(1)
+  } else if (activeTab.value === 'subDetails') {
+    loadSubDetails(1)
   }
 }
 
@@ -744,8 +981,10 @@ async function refreshCurrentData() {
   await loadAggregateBalance(currentAccountNo.value)
   if (activeTab.value === 'details') {
     loadDetails(detailPageNo.value)
-  } else {
+  } else if (activeTab.value === 'freeze') {
     loadFreezeRecords(freezePageNo.value)
+  } else if (activeTab.value === 'subDetails') {
+    loadSubDetails(subDetailPageNo.value)
   }
   ElMessage.success('账户资产与流水数据已刷新')
 }
@@ -759,6 +998,8 @@ function handleReset() {
   detailTotal.value = 0
   freezeList.value = []
   freezeTotal.value = 0
+  subDetailList.value = []
+  subDetailTotal.value = 0
 }
 
 // 加载聚合余额
@@ -842,6 +1083,48 @@ function handleResetFreezeFilter() {
   loadFreezeRecords(1)
 }
 
+// 加载子账户明细
+async function loadSubDetails(page = 1) {
+  if (!currentAccountNo.value) return
+  subDetailPageNo.value = page
+  loadingSubDetails.value = true
+
+  const startDate = subDetailDateRange.value ? subDetailDateRange.value[0] : undefined
+  const endDate = subDetailDateRange.value ? subDetailDateRange.value[1] : undefined
+
+  try {
+    const res = await getSubAccountDetails({
+      pageNo: subDetailPageNo.value,
+      pageSize: subDetailPageSize.value,
+      accountNo: currentAccountNo.value,
+      balanceType: subDetailFilter.balanceType,
+      startDate,
+      endDate,
+      tradeType: subDetailFilter.tradeType,
+      debitCredit: subDetailFilter.debitCredit
+    })
+    subDetailList.value = res.list || []
+    subDetailTotal.value = res.total || 0
+  } catch {
+    subDetailList.value = []
+    subDetailTotal.value = 0
+  } finally {
+    loadingSubDetails.value = false
+  }
+}
+
+function handleSubDateRangeChange() {
+  loadSubDetails(1)
+}
+
+function handleResetSubDetailFilter() {
+  subDetailDateRange.value = null
+  subDetailFilter.balanceType = undefined
+  subDetailFilter.tradeType = undefined
+  subDetailFilter.debitCredit = undefined
+  loadSubDetails(1)
+}
+
 // 标签页切换
 function handleTabChange(tabName: any) {
   if (!currentAccountNo.value) return
@@ -849,11 +1132,19 @@ function handleTabChange(tabName: any) {
     loadDetails(1)
   } else if (tabName === 'freeze' && freezeList.value.length === 0) {
     loadFreezeRecords(1)
+  } else if (tabName === 'subDetails' && subDetailList.value.length === 0) {
+    loadSubDetails(1)
   }
 }
 
 // 抽屉审计详情
 function openAuditDrawer(row: AccountDetailItem) {
+  selectedDetail.value = row
+  auditDrawerVisible.value = true
+}
+
+// 子账户抽屉审计详情
+function openSubAuditDrawer(row: SubAccountDetailItem) {
   selectedDetail.value = row
   auditDrawerVisible.value = true
 }

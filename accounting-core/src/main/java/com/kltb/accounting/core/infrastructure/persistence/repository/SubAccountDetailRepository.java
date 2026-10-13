@@ -1,5 +1,6 @@
 package com.kltb.accounting.core.infrastructure.persistence.repository;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.infrastructure.persistence.entity.SubAccountDetailPO;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.SubAccountDetailMapper;
@@ -7,6 +8,7 @@ import com.kltb.accounting.core.shared.exception.AccountException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -58,5 +60,36 @@ public class SubAccountDetailRepository {
         for (SubAccountDetailPO detail : details) {
             insert(detail);
         }
+    }
+
+    /**
+     * 分页查询子账户明细（按 accountNo + 子账户类型 + 日期范围 + 类型过滤）
+     *
+     * @param accountNo   账户编号
+     * @param balanceType 子账户类型（可选：1-可用余额, 2-冻结余额）
+     * @param startDate   起始日期（可选）
+     * @param endDate     结束日期（可选）
+     * @param tradeType   交易类别（可选）
+     * @param debitCredit 借贷方向（可选）
+     * @param offset      偏移量
+     * @param limit       每页条数
+     * @return 分页结果
+     */
+    public IPage<SubAccountDetailPO> selectPageByCondition(String accountNo, Integer balanceType,
+                                                            LocalDate startDate, LocalDate endDate,
+                                                            Integer tradeType, Integer debitCredit,
+                                                            long offset, int limit) {
+        return subAccountDetailMapper.selectPageByCondition(accountNo, balanceType, startDate, endDate,
+                tradeType, debitCredit, offset, limit);
+    }
+
+    /**
+     * 统计子账户明细总数
+     */
+    public Long countByCondition(String accountNo, Integer balanceType,
+                                   LocalDate startDate, LocalDate endDate,
+                                   Integer tradeType, Integer debitCredit) {
+        return subAccountDetailMapper.countByCondition(accountNo, balanceType, startDate, endDate,
+                tradeType, debitCredit);
     }
 }

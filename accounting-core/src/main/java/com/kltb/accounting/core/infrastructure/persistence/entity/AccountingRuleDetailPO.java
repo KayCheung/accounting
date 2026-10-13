@@ -66,6 +66,15 @@ public class AccountingRuleDetailPO extends BaseEntity {
     @TableField("is_unilateral")
     private Boolean unilateral;
 
+    public Boolean getIsUnilateral() {
+        return this.unilateral;
+    }
+
+    public AccountingRuleDetailPO setIsUnilateral(Boolean isUnilateral) {
+        this.unilateral = isUnilateral;
+        return this;
+    }
+
     /**
      * SpEL扩展脚本（启动时预加载，规则变更时同步更新）。
      */

@@ -2,14 +2,17 @@ package com.kltb.accounting.core.application;
 
 import com.kltb.accounting.api.request.AccountDetailQueryRequest;
 import com.kltb.accounting.api.request.FreezeRecordQueryRequest;
+import com.kltb.accounting.api.request.SubAccountDetailQueryRequest;
 import com.kltb.accounting.api.response.AccountDetailResponse;
 import com.kltb.accounting.api.response.AggregateBalanceResponse;
 import com.kltb.accounting.api.response.FreezeListResponse;
 import com.kltb.accounting.api.response.PageResponse;
+import com.kltb.accounting.api.response.SubAccountDetailResponse;
 import com.kltb.accounting.core.application.assembler.BalanceQueryAssembler;
 import com.kltb.accounting.core.domain.service.BalanceQueryDomainService;
 import com.kltb.accounting.core.domain.service.BalanceQueryDomainService.AccountDetailPageResult;
 import com.kltb.accounting.core.domain.service.BalanceQueryDomainService.FreezeRecordPageResult;
+import com.kltb.accounting.core.domain.service.BalanceQueryDomainService.SubAccountDetailPageResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -74,6 +77,28 @@ public class BalanceQueryApplicationService {
                 .pages(result.getPages())
                 .current((long) result.getCurrent())
                 .list(balanceQueryAssembler.toFreezeListResponseList(result.getList()))
+                .build();
+    }
+
+    /**
+     * 子账户明细分页查询
+     */
+    public PageResponse<SubAccountDetailResponse> querySubAccountDetails(SubAccountDetailQueryRequest request) {
+        SubAccountDetailPageResult result = balanceQueryDomainService.querySubAccountDetails(
+                request.getAccountNo(),
+                request.getBalanceType(),
+                request.getStartDate(),
+                request.getEndDate(),
+                request.getTradeType(),
+                request.getDebitCredit(),
+                request.getPageNo(),
+                request.getPageSize()
+        );
+        return PageResponse.<SubAccountDetailResponse>builder()
+                .total(result.getTotal())
+                .pages(result.getPages())
+                .current((long) result.getCurrent())
+                .list(balanceQueryAssembler.toSubDetailResponseList(result.getList()))
                 .build();
     }
 }

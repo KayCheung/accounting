@@ -43,6 +43,9 @@ public class AuxiliaryLedgerQueryRequest implements Serializable {
     @Schema(description = "搜索关键字（核算项名称/编码、凭证号、科目或摘要模糊匹配）", example = "研发")
     private String keyword;
 
+    @Schema(description = "凭证状态过滤：3-仅已过账, 5-仅已冲销, 不传或空表示包含已过账与已冲销", example = "3")
+    private Integer voucherStatus;
+
     @Schema(description = "页码（分页查询凭证流水时生效，默认 1）", example = "1")
     private Integer pageNo = 1;
 

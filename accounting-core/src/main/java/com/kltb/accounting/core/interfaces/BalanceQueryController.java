@@ -3,11 +3,13 @@ package com.kltb.accounting.core.interfaces;
 import com.kltb.accounting.api.request.AccountDetailQueryRequest;
 import com.kltb.accounting.api.request.BalanceAggregateRequest;
 import com.kltb.accounting.api.request.FreezeRecordQueryRequest;
+import com.kltb.accounting.api.request.SubAccountDetailQueryRequest;
 import com.kltb.accounting.api.response.AccountDetailResponse;
 import com.kltb.accounting.api.response.AggregateBalanceResponse;
 import com.kltb.accounting.api.response.ApiResponse;
 import com.kltb.accounting.api.response.FreezeListResponse;
 import com.kltb.accounting.api.response.PageResponse;
+import com.kltb.accounting.api.response.SubAccountDetailResponse;
 import com.kltb.accounting.core.application.BalanceQueryApplicationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -23,7 +25,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/accounting/account/balance")
 @RequiredArgsConstructor
 @Validated
-@Tag(name = "余额查询", description = "聚合余额/账户明细/冻结记录查询接口")
+@Tag(name = "余额查询", description = "聚合余额/账户明细/冻结记录/子账户明细查询接口")
 public class BalanceQueryController {
 
     private final BalanceQueryApplicationService balanceQueryApplicationService;
@@ -50,6 +52,14 @@ public class BalanceQueryController {
     public ApiResponse<PageResponse<FreezeListResponse>> queryFreezeRecords(
             @Valid FreezeRecordQueryRequest request) {
         PageResponse<FreezeListResponse> response = balanceQueryApplicationService.queryFreezeRecords(request);
+        return ApiResponse.ok(response);
+    }
+
+    @GetMapping("/sub-details")
+    @Operation(summary = "子账户明细分页查询", description = "按子账户类型、日期范围、交易类别、借贷方向等条件分页查询子账户变动明细")
+    public ApiResponse<PageResponse<SubAccountDetailResponse>> querySubAccountDetails(
+            @Valid SubAccountDetailQueryRequest request) {
+        PageResponse<SubAccountDetailResponse> response = balanceQueryApplicationService.querySubAccountDetails(request);
         return ApiResponse.ok(response);
     }
 }

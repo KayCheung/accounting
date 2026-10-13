@@ -97,7 +97,10 @@ public class RuleConverter {
         po.setDebitCredit(Optional.ofNullable(DebitCreditEnum.fromCode(request.getDebitCredit()))
                 .orElse(DebitCreditEnum.DEBIT));
         po.setCurrency(request.getCurrency() != null ? request.getCurrency() : "CNY");
-        po.setUnilateral(request.getIsUnilateral() != null && request.getIsUnilateral());
+        boolean isUnilateral = (request.getIsUnilateral() != null && request.getIsUnilateral())
+                || (request.getUnilateral() != null && request.getUnilateral());
+        po.setUnilateral(isUnilateral);
+        po.setIsUnilateral(isUnilateral);
         po.setExtendScript(request.getExtendScript() != null ? request.getExtendScript() : "");
         po.setSummary(request.getSummary() != null ? request.getSummary() : "");
         po.setCreateId(Constants.SYSTEM_OPERATOR);
@@ -167,7 +170,10 @@ public class RuleConverter {
         resp.setAccountScope(Optional.ofNullable(po.getAccountScope()).map(AccountScopeEnum::getCode).orElse(null));
         resp.setDebitCredit(Optional.ofNullable(po.getDebitCredit()).map(DebitCreditEnum::getCode).orElse(null));
         resp.setCurrency(po.getCurrency());
-        resp.setIsUnilateral(po.getUnilateral());
+        boolean isUnilateral = (po.getIsUnilateral() != null && po.getIsUnilateral())
+                || (po.getUnilateral() != null && po.getUnilateral());
+        resp.setIsUnilateral(isUnilateral);
+        resp.setUnilateral(isUnilateral);
         resp.setExtendScript(po.getExtendScript());
         resp.setSummary(po.getSummary());
         resp.setAuxiliaries(auxiliaries);

@@ -63,4 +63,13 @@ public class BufferPostingController {
         }
         return ApiResponse.ok(bufferPostingApplicationService.getMonitorData(accountingDate, status));
     }
+
+    /**
+     * GET /accounting/buffer/detail/page — 分页查询缓冲记账明细
+     */
+    @GetMapping("/detail/page")
+    @Operation(summary = "分页查询缓冲记账明细", description = "按会计日期、账户编号、凭证号、缓冲模式、状态等多条件分页查询缓冲记账明细")
+    public ApiResponse<PageResponse<BufferDetailResponse>> getDetailPage(@Valid @ModelAttribute com.kltb.accounting.api.request.BufferDetailQueryRequest request) {
+        return ApiResponse.ok(bufferPostingApplicationService.queryDetailPage(request));
+    }
 }

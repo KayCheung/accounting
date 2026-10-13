@@ -96,6 +96,10 @@ export interface AuxiliaryEntryRecordResponse {
   debitAmount: number
   creditAmount: number
   amount: number
+  voucherStatus?: number
+  voucherStatusDesc?: string
+  tradeType?: number
+  tradeTypeDesc?: string
 }
 
 /**
@@ -108,6 +112,7 @@ export interface AuxiliaryLedgerQueryParams {
   endDate?: string
   subjectCode?: string
   subjectCategory?: number
+  voucherStatus?: number
   keyword?: string
   pageNo?: number
   pageSize?: number
@@ -129,6 +134,7 @@ export function getAuxiliaryItems(params: {
   auxType: string
   startDate?: string
   endDate?: string
+  voucherStatus?: number
 }): Promise<AuxiliaryItemResponse[]> {
   return request.get<AuxiliaryItemResponse[]>('/report/auxiliary/items', params)
 }

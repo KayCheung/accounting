@@ -49,6 +49,13 @@ public class AccountingRuleRepository {
     }
 
     /**
+     * 按业务键查询任意状态的记账规则（用于创建防重校验）
+     */
+    public AccountingRulePO selectAnyByBusinessKey(String businessCode, String tradingCode, String payChannel) {
+        return ruleMapper.selectAnyByBusinessKey(businessCode, tradingCode, payChannel);
+    }
+
+    /**
      * 查询已启用的记账规则
      *
      * @return 已启用规则列表，无数据时返回空列表

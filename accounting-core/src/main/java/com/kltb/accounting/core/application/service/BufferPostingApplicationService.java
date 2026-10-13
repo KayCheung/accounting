@@ -1,10 +1,10 @@
 package com.kltb.accounting.core.application.service;
 
 import cn.hutool.core.util.StrUtil;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.kltb.accounting.api.request.BufferDetailQueryRequest;
 import com.kltb.accounting.api.request.BufferExecuteRequest;
-import com.kltb.accounting.api.response.BufferExecuteResponse;
-import com.kltb.accounting.api.response.BufferMonitorResponse;
-import com.kltb.accounting.api.response.BufferPendingStatsResponse;
+import com.kltb.accounting.api.response.*;
 import com.kltb.accounting.core.application.assembler.BufferPostingAssembler;
 import com.kltb.accounting.core.domain.enums.BufferModeEnum;
 import com.kltb.accounting.core.domain.enums.BufferStatusEnum;
@@ -210,5 +210,27 @@ public class BufferPostingApplicationService {
         }
 
         return response;
+    }
+
+    /**
+     * 分页多条件查询缓冲记账明细
+     */
+    public PageResponse<BufferDetailResponse> queryDetailPage(BufferDetailQueryRequest request) {
+        long pageNo = request.getPageNo() != null ? request.getPageNo() : 1L;
+        long pageSize = request.getPageSize() != null ? request.getPageSize() : 10L;
+
+        IPage<BufferPostingDetailPO> page = bufferPostingDetailRepository.selectPageByCondition(
+                request.getAccountingDate(),
+                request.getAccountNo(),
+                request.getVoucherNo(),
+                request.getBufferMode(),
+                request.getStatus(),
+                request.getStartDate(),
+                request.getEndDate(),
+                pageNo,
+                pageSize
+        );
+
+        return assembler.toDetailPageResponse(page);
     }
 }

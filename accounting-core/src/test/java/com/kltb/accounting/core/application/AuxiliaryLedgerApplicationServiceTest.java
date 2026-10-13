@@ -108,7 +108,7 @@ class AuxiliaryLedgerApplicationServiceTest {
         s2.setRecordCount(25L);
         s2.setTotalAmount(new BigDecimal("280000.00"));
 
-        when(auxiliaryRepository.selectDistinctItems(eq("DEPARTMENT"), any(), any()))
+        when(auxiliaryRepository.selectDistinctItems(eq("DEPARTMENT"), any(), any(), any()))
                 .thenReturn(List.of(s2, s1));
 
         List<AuxiliaryItemResponse> items = auxiliaryService.getAuxiliaryItems("DEPARTMENT", null, null);
@@ -142,7 +142,7 @@ class AuxiliaryLedgerApplicationServiceTest {
         s2.setTotalAmount(new BigDecimal("186000.00"));
 
         when(auxiliaryRepository.selectSummary(req)).thenReturn(summaryBO);
-        when(auxiliaryRepository.selectDistinctItems(eq("DEPARTMENT"), any(), any()))
+        when(auxiliaryRepository.selectDistinctItems(eq("DEPARTMENT"), any(), any(), any()))
                 .thenReturn(List.of(s1, s2));
 
         AuxiliarySummaryResponse resp = auxiliaryService.getAuxiliarySummary(req);
@@ -169,7 +169,7 @@ class AuxiliaryLedgerApplicationServiceTest {
         s2.setAuxName("技术中心");
         s2.setTotalAmount(new BigDecimal("1000.00"));
 
-        when(auxiliaryRepository.selectDistinctItems(eq("DEPARTMENT"), any(), any()))
+        when(auxiliaryRepository.selectDistinctItems(eq("DEPARTMENT"), any(), any(), any()))
                 .thenReturn(List.of(s1, s2));
 
         AuxiliaryMatrixCellBO c1 = new AuxiliaryMatrixCellBO();
@@ -214,6 +214,8 @@ class AuxiliaryLedgerApplicationServiceTest {
         bo.setChangeDirection(1);
         bo.setDebitCredit(1);
         bo.setAmount(new BigDecimal("50000.00"));
+        bo.setVoucherStatus(5);
+        bo.setTradeType(3);
 
         IPage<AuxiliaryEntryRecordBO> page = new Page<>(1, 10);
         page.setRecords(List.of(bo));
@@ -228,5 +230,9 @@ class AuxiliaryLedgerApplicationServiceTest {
         assertThat(item.getVoucherWord()).contains("20260301000001");
         assertThat(item.getDebitAmount()).isEqualByComparingTo("50000.00");
         assertThat(item.getCreditAmount()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(item.getVoucherStatus()).isEqualTo(5);
+        assertThat(item.getVoucherStatusDesc()).isEqualTo("已冲销");
+        assertThat(item.getTradeType()).isEqualTo(3);
+        assertThat(item.getTradeTypeDesc()).isEqualTo("红");
     }
 }

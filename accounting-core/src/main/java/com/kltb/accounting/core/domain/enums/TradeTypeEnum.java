@@ -6,6 +6,11 @@ import com.fasterxml.jackson.annotation.JsonValue;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
+import java.util.Arrays;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
 /**
  * 交易类别枚举：1-正常，2-调账，3-红，4-蓝。
  */
@@ -26,14 +31,29 @@ public enum TradeTypeEnum {
 
     private final String desc;
 
-    public static boolean isValid(Integer code) {
-        if (code == null) return false;
-        for (TradeTypeEnum value : values()) {
-            if (value.code.equals(code)) {
-                return true;
-            }
+    private static final Map<Integer, TradeTypeEnum> CODE_MAP = Arrays.stream(values())
+            .collect(Collectors.toMap(TradeTypeEnum::getCode, Function.identity()));
+
+    /**
+     * 根据编码查找枚举实例（空安全，未匹配时返回 null）
+     */
+    public static TradeTypeEnum getByCode(Integer code) {
+        return code == null ? null : CODE_MAP.get(code);
+    }
+
+    /**
+     * 根据编码获取中文描述（空安全，未匹配时返回编码本身或空字符串）
+     */
+    public static String getDescByCode(Integer code) {
+        if (code == null) {
+            return "";
         }
-        return false;
+        TradeTypeEnum type = getByCode(code);
+        return type != null ? type.getDesc() : String.valueOf(code);
+    }
+
+    public static boolean isValid(Integer code) {
+        return code != null && CODE_MAP.containsKey(code);
     }
 
     public static TradeTypeEnum fromCode(Integer code) {

@@ -2,11 +2,14 @@ package com.kltb.accounting.core.application;
 
 import com.kltb.accounting.api.request.AccountDetailQueryRequest;
 import com.kltb.accounting.api.request.FreezeRecordQueryRequest;
+import com.kltb.accounting.api.request.SubAccountDetailQueryRequest;
 import com.kltb.accounting.api.response.AccountDetailResponse;
 import com.kltb.accounting.api.response.AggregateBalanceResponse;
 import com.kltb.accounting.api.response.FreezeListResponse;
 import com.kltb.accounting.api.response.PageResponse;
+import com.kltb.accounting.api.response.SubAccountDetailResponse;
 import com.kltb.accounting.core.application.assembler.BalanceQueryAssembler;
+import com.kltb.accounting.core.domain.enums.BalanceTypeEnum;
 import com.kltb.accounting.core.domain.enums.ChangeDirectionEnum;
 import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
 import com.kltb.accounting.core.domain.enums.FreezeStatusEnum;
@@ -15,8 +18,10 @@ import com.kltb.accounting.core.domain.service.BalanceQueryDomainService;
 import com.kltb.accounting.core.domain.service.BalanceQueryDomainService.AccountDetailPageResult;
 import com.kltb.accounting.core.domain.service.BalanceQueryDomainService.AggregateBalanceDTO;
 import com.kltb.accounting.core.domain.service.BalanceQueryDomainService.FreezeRecordPageResult;
+import com.kltb.accounting.core.domain.service.BalanceQueryDomainService.SubAccountDetailPageResult;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountDetailPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountFreezeDetailPO;
+import com.kltb.accounting.core.infrastructure.persistence.entity.SubAccountDetailPO;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -154,5 +159,57 @@ class BalanceQueryApplicationServiceTest {
         assertThat(row.getFreezeId()).isEqualTo("FRZ20260301001");
         assertThat(row.getFreezeAmount()).isEqualByComparingTo("2000.00");
         assertThat(row.getStatusDesc()).isEqualTo("冻结");
+    }
+
+    @Test
+    @DisplayName("querySubAccountDetails: 查询子账户变动明细并分页组装")
+    void querySubAccountDetails_shouldReturnSubDetailPageResponse() {
+        SubAccountDetailPO detail = new SubAccountDetailPO();
+        detail.setId(100L);
+        detail.setVoucherNo("VOU20260301002");
+        detail.setEntryId("ENT20260301002");
+        detail.setTxnNo("TXN20260301002");
+        detail.setTraceNo("TRC20260301002");
+        detail.setTraceSeq(1);
+        detail.setAccountNo("0012026030100001");
+        detail.setBalanceType(BalanceTypeEnum.AVAILABLE);
+        detail.setTradingCode("TRADE001");
+        detail.setTradeType(TradeTypeEnum.NORMAL);
+        detail.setTradeTime(LocalDateTime.of(2026, 3, 1, 10, 0, 0));
+        detail.setDebitCredit(DebitCreditEnum.DEBIT);
+        detail.setChangeDirection(ChangeDirectionEnum.INCREASE);
+        detail.setCurrency("CNY");
+        detail.setPreBalance(new BigDecimal("1000.00"));
+        detail.setAmount(new BigDecimal("500.00"));
+        detail.setPostBalance(new BigDecimal("1500.00"));
+        detail.setAccountingDate(LocalDate.of(2026, 3, 1));
+        detail.setSummary("可用余额增加");
+        detail.setCreateTime(LocalDateTime.of(2026, 3, 1, 10, 0, 0));
+
+        SubAccountDetailPageResult pageResult = new SubAccountDetailPageResult(1L, 1L, 1, List.of(detail));
+        when(balanceQueryDomainService.querySubAccountDetails(
+                eq("0012026030100001"), eq(1), any(), any(), any(), any(), eq(1), eq(10)
+        )).thenReturn(pageResult);
+
+        SubAccountDetailQueryRequest req = new SubAccountDetailQueryRequest();
+        req.setAccountNo("0012026030100001");
+        req.setBalanceType(1);
+        req.setPageNo(1);
+        req.setPageSize(10);
+
+        PageResponse<SubAccountDetailResponse> res = service.querySubAccountDetails(req);
+
+        assertThat(res).isNotNull();
+        assertThat(res.getTotal()).isEqualTo(1L);
+        assertThat(res.getList()).hasSize(1);
+        SubAccountDetailResponse row = res.getList().get(0);
+        assertThat(row.getId()).isEqualTo(100L);
+        assertThat(row.getVoucherNo()).isEqualTo("VOU20260301002");
+        assertThat(row.getBalanceType()).isEqualTo(1);
+        assertThat(row.getBalanceTypeDesc()).isEqualTo("可用余额");
+        assertThat(row.getAmount()).isEqualByComparingTo("500.00");
+        assertThat(row.getPreBalance()).isEqualByComparingTo("1000.00");
+        assertThat(row.getPostBalance()).isEqualByComparingTo("1500.00");
+        assertThat(row.getChangeDirectionDesc()).isEqualTo("增");
     }
 }

@@ -1,5 +1,6 @@
 package com.kltb.accounting.core.application.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Getter;
 import lombok.Setter;
@@ -40,8 +41,25 @@ public class RuleEntryResponse implements Serializable {
     @Schema(description = "币种")
     private String currency;
 
+    @JsonProperty("isUnilateral")
     @Schema(description = "是否单边更新")
     private Boolean isUnilateral;
+
+    public Boolean getIsUnilateral() {
+        return this.isUnilateral;
+    }
+
+    public void setIsUnilateral(Boolean isUnilateral) {
+        this.isUnilateral = isUnilateral;
+    }
+
+    public Boolean getUnilateral() {
+        return this.isUnilateral;
+    }
+
+    public void setUnilateral(Boolean unilateral) {
+        this.isUnilateral = unilateral;
+    }
 
     @Schema(description = "SpEL扩展脚本")
     private String extendScript;
