@@ -12,6 +12,7 @@ import com.kltb.accounting.core.domain.enums.SubjectCategoryEnum;
 import com.kltb.accounting.core.infrastructure.persistence.bo.*;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountSubjectPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.DictionaryPO;
+import com.kltb.accounting.core.infrastructure.dictionary.DictionaryComponent;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountingVoucherAuxiliaryRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.DictionaryRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.SubjectRepository;
@@ -50,6 +51,9 @@ class AuxiliaryLedgerApplicationServiceTest {
 
     @Mock
     private DictionaryRepository dictionaryRepository;
+
+    @Mock
+    private DictionaryComponent dictionaryComponent;
 
     @InjectMocks
     private AuxiliaryLedgerApplicationService auxiliaryService;
@@ -307,5 +311,32 @@ class AuxiliaryLedgerApplicationServiceTest {
         assertThat(item.getVoucherStatusDesc()).isEqualTo("已冲销");
         assertThat(item.getTradeType()).isEqualTo(3);
         assertThat(item.getTradeTypeDesc()).isEqualTo("红");
+    }
+
+    @Test
+    @DisplayName("resolveAuxName: 原始名称为code时通过字典反查到中文名称")
+    void testResolveAuxNameWithDictionary() {
+        DictionaryPO deptDict = new DictionaryPO();
+        deptDict.setDictType("DEPARTMENT");
+        deptDict.setDictCode("DEPT_TECH");
+        deptDict.setDictName("技术中心");
+
+        when(dictionaryComponent.findByTypeAndCodeOrName("DEPARTMENT", "DEPT_TECH")).thenReturn(deptDict);
+
+        // 1. 原始名称与编码相同，成功命中字典返回字典名称
+        String resolved = auxiliaryService.resolveAuxName("DEPARTMENT", "DEPT_TECH", "DEPT_TECH");
+        assertThat(resolved).isEqualTo("技术中心");
+
+        // 2. 原始名称为空，成功命中字典返回字典名称
+        String resolvedEmpty = auxiliaryService.resolveAuxName("DEPARTMENT", "DEPT_TECH", "");
+        assertThat(resolvedEmpty).isEqualTo("技术中心");
+
+        // 3. 原始名称已有业务名称且不同于code，即使无字典也返回原名称
+        String resolvedCustom = auxiliaryService.resolveAuxName("DEPARTMENT", "DEPT_CUSTOM", "自定义运营组");
+        assertThat(resolvedCustom).isEqualTo("自定义运营组");
+
+        // 4. 无字典且无特别名称，兜底返回code
+        String resolvedFallback = auxiliaryService.resolveAuxName("UNKNOWN", "UNK_01", "UNK_01");
+        assertThat(resolvedFallback).isEqualTo("UNK_01");
     }
 }

@@ -271,9 +271,47 @@ class AccountOpeningDomainServiceTest {
 
         assertThat(result).hasSize(2);
         assertThat(result.get(0).getSubjectCode()).isEqualTo("1001");
+        assertThat(result.get(0).getRequestNo()).isEqualTo("REQ001");
         assertThat(result.get(1).getSubjectCode()).isEqualTo("1002");
+        assertThat(result.get(1).getRequestNo()).isEqualTo("REQ001");
         verify(accountRepository, times(2)).insert(any(AccountPO.class));
         verify(subAccountRepository, times(4)).insert(any(SubAccountPO.class));
+    }
+
+    @Test
+    @DisplayName("外部开户: 64位长度traceNo作为requestNo完整保留，超过64位严格报错阻断抛出PARAM_ERROR")
+    void openExternalAccount_with64CharTraceNo_shouldRetainFullRequestNo() {
+        String traceNo64 = "TR" + "0".repeat(61) + "1";
+        assertThat(traceNo64).hasSize(64);
+
+        AccountTemplatePO t1 = buildTemplate();
+        AccountSubjectPO s1 = buildSubject().setSubjectCode("1001");
+
+        when(subjectRepository.selectTemplateByBusinessKey("PAYMENT", 2, "1001")).thenReturn(t1);
+        when(accountRepository.existsByOwnerIdAndSubjectCode("CUST001", "1001")).thenReturn(false);
+        when(subjectRepository.selectByCode("1001")).thenReturn(s1);
+        when(accountNoGenerator.generateExternalAccountNo()).thenReturn("0012026030100001");
+        doAnswer(invocation -> ((TransactionCallback<?>) invocation.getArgument(0)).doInTransaction(null))
+                .when(transactionTemplate).execute(any());
+        doAnswer(invocation -> ((Supplier<?>) invocation.getArgument(3)).get())
+                .when(distributedLockTemplate).execute(anyString(), anyLong(), anyLong(), any());
+
+        AccountPO result = accountOpeningDomainService.openExternalAccount(
+                "PAYMENT", "CUST001", CustomerTypeEnum.ENTERPRISE, "1001", traceNo64);
+
+        assertThat(result.getRequestNo()).isEqualTo(traceNo64);
+        assertThat(result.getRequestNo()).hasSize(64);
+
+        // 超长必须报错阻断，严禁静默截断篡改原始值
+        String traceNo70 = traceNo64 + "ABCDEF";
+        assertThatThrownBy(() -> accountOpeningDomainService.openExternalAccount(
+                "PAYMENT", "CUST001", CustomerTypeEnum.ENTERPRISE, "1001", traceNo70))
+                .isInstanceOf(AccountException.class)
+                .satisfies(ex -> {
+                    AccountException e = (AccountException) ex;
+                    assertThat(e.getResultCode()).isEqualTo(ResultCode.PARAM_ERROR);
+                    assertThat(e.getMessage()).contains("开户请求号长度不能超过64位");
+                });
     }
 
     // ==================== openInternalAccount 测试 ====================

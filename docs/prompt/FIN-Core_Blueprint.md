@@ -1051,6 +1051,44 @@
       - **质量保障与单测验证**：
         - `AuxiliaryLedgerApplicationServiceTest` 增补双口径切换、红冲净额归零及贷方大于借方的绝对值断言，单测全部 100% 通过；
         - 前端通过 `vue-tsc` 类型检查与 `vite build` 生产构建 0 错误。
+    - **业务流水已红冲展示与按钮权限治理（BUG261014-001）**：
+      - **全链路根因剖析（Root Cause）**：
+        1. 业务流水记账成功入账后触发业务红冲时，系统仅更新凭证状态为 `5-已冲销（REVERSED）`，未联动更新业务流水记录表 `t_business_record.status`，导致流水仍保持 `2-成功（SUCCESS）`；
+        2. `BusinessRecordStatusEnum` 缺少冲销终态定义，列表响应 DTO `JournalRecordItemResponse` 缺失 `canReversal` 权限标记；
+        3. 前端表格操作列仅依赖 `row.status === 2 && row.tradeType !== 3 && row.tradeType !== 6` 控制业务红冲按钮显示，致使已冲销流水依然显示按钮，再次点击报错抛出 `未找到已过账凭证，无法执行红冲`。
+      - **全维度加固治理落地**：
+        1. **领域枚举扩展**：`BusinessRecordStatusEnum` 扩展终态 `REVERSED(4, "已红冲")`；
+        2. **契约层扩展（accounting-api）**：`JournalRecordItemResponse` 新增 `canReversal` 字段（布尔类型，显式控制业务红冲操作可用性）；
+        3. **持久层与仓储扩充（accounting-core）**：`AccountingVoucherMapper` 与 `AccountingVoucherRepository` 扩充 `selectByTraceNos`，批量查询当前页关联凭证，杜绝 N+1 性能陷阱；
+        4. **应用编排与转换层（accounting-core）**：
+           - `JournalingApplicationService.reversalJournal` 与 `ReversalApplicationService.executeReversal` 执行红冲后，同步在同一事务中通过 `updateStatusByTraceNo` 联动更新流水状态为 `REVERSED`；
+           - `JournalingApplicationService.getJournalPage` 结合流水状态与凭证状态联动感知，精准输出 `status: 4`、`statusDesc: "已红冲"` 及 `canReversal: false`；
+           - `JournalingAssembler.toOverviewResponse` 全景总览同步支持 `REVERSED` 状态流转与权限控制；
+        5. **前端管理台交互（accounting-ui）**：
+           - `accounting-ui/src/views/business/journal/index.vue` 表格操作列「业务红冲」按钮条件加固为 `row.status === 2 && row.tradeType !== 3 && row.tradeType !== 6 && (row.canReversal ?? true)`，红冲完成后即刻隐藏；
+           - `getJournalStatusTag` 与 `getJournalStatusDesc` 适配 4 对应 `info` 标签与“已红冲”文案，`JOURNAL_STATUS_OPTIONS` 增加“已红冲”状态筛选项。
+      - **测试保障与回归验证**：
+        - `JournalingApplicationServiceTest` 新增对已红冲流水的单测覆盖断言，单测 100% 通过；
+        - 前端 `vue-tsc` 类型检查 0 错误通过。
+    - **账户表开户请求号与接口跟踪号对齐治理（BUG261014-002）**：
+      - **全链路根因剖析（Root Cause）**：
+        1. 历史代码在 `AccountPreCheckDomainService` 自动预开户外部账户时，误认为 `requestNo` 需要全局唯一以防并发冲突，人工拼接了 `"JOURNAL-" + traceNo + "-" + i + "-" + System.nanoTime()`；
+        2. `AccountOpeningDomainService` 在多模板匹配开户时，又再次拼接了 `"-" + finalIndex`；
+        3. 数据库 `t_account.request_no` 字段定义仅为 `VARCHAR(32)`，而 `JournalSubmitRequest.traceNo` 契约与 `t_business_record.trace_no` 为 64 位，代码中强制执行 `substring(0, 32)` 截断；
+        4. 以上三重干扰叠加，导致外部账户在自动开户后 `t_account.request_no` 永远无法与上游业务接口传入的任何原始流水号（`traceNo`）或开户号对齐，完全丧失了反向对账与正向溯源能力。
+      - **全维度加固治理落地**：
+        1. **数据库 DDL 与迁移脚本**：
+           - 新增 Flyway 迁移脚本 `V24__alter_account_request_no_length.sql`，执行 `ALTER TABLE t_account MODIFY COLUMN request_no VARCHAR(64) NOT NULL DEFAULT '' COMMENT '开户请求号'`；
+           - 同步在 `docker/mysql/init/02_accounting_schema.sql` 追加 V24 迁移，保证与 `trace_no` 及开户契约最大长度 64 位完全统一；
+        2. **预开户检查领域服务（AccountPreCheckDomainService）**：
+           - 彻底移除 `AtomicInteger` 序号与 `"JOURNAL-"` 前缀、纳米级时间戳拼接，直接将记账流水跟踪号 `traceNo` 传入 `openExternalAccount`；
+        3. **开户领域服务（AccountOpeningDomainService）**：
+           - 彻底移除多模板开户拼接 `"-" + finalIndex` 的逻辑，同一批次开出的账户 `requestNo` 均严格保持调用者传入的原值；
+           - 严格遵循金融数据不可篡改法则，彻底废除所有静默截断（`substring`）逻辑；在 `openExternalAccounts` 方法入口增加严格长度边界校验，若 `requestNo` 长度超过 64 位，立即抛出 `AccountException(ResultCode.PARAM_ERROR)` 显式报错阻断，驱动上游修正调用契约；
+        4. **测试保障与回归验证**：
+           - 新增 `AccountPreCheckDomainServiceTest` 单元测试，捕获并断言自动预开户时传入开户引擎的 `requestNo` 严格等于传入的 `traceNo`；
+           - 扩充 `AccountOpeningDomainServiceTest`：断言多模板开户时所有开出的账户 `requestNo` 均为原始 `requestNo`；验证 64 位 `traceNo` 完整无损入库，以及超过 64 位时精准抛出 `PARAM_ERROR` 异常阻断；
+           - 运行全套 75 个账户与流水相关单测 100% 通过（0 Failure / 0 Error）。
 - [x] **Step 23** · 业务功能页面开发全量交付完毕（100% 完成）
 
 

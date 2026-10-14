@@ -1,5 +1,6 @@
 package com.kltb.accounting.core.application.service;
 
+import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.kltb.accounting.api.request.AuxiliaryLedgerQueryRequest;
@@ -11,6 +12,7 @@ import com.kltb.accounting.core.domain.enums.ChangeDirectionEnum;
 import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
 import com.kltb.accounting.core.domain.enums.TradeTypeEnum;
 import com.kltb.accounting.core.domain.enums.VoucherStatusEnum;
+import com.kltb.accounting.core.infrastructure.dictionary.DictionaryComponent;
 import com.kltb.accounting.core.infrastructure.persistence.bo.*;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountSubjectPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.DictionaryPO;
@@ -46,6 +48,7 @@ public class AuxiliaryLedgerApplicationService {
     private final SubjectRepository subjectRepository;
     private final DictionaryCacheService dictionaryCacheService;
     private final DictionaryRepository dictionaryRepository;
+    private final DictionaryComponent dictionaryComponent;
 
     /**
      * 获取系统支持的所有辅助核算类别（从字典 auxiliary_type 获取）
@@ -79,9 +82,10 @@ public class AuxiliaryLedgerApplicationService {
                     BigDecimal credit = stat.getCreditAmount() != null ? stat.getCreditAmount() : BigDecimal.ZERO;
                     BigDecimal net = debit.subtract(credit).abs();
                     String netDirection = BalanceDirectionEnum.determineDirection(debit, credit).getDesc();
+                    String resolvedName = resolveAuxName(auxType, stat.getAuxCode(), stat.getAuxName());
                     return AuxiliaryItemResponse.builder()
                             .auxCode(stat.getAuxCode())
-                            .auxName(stat.getAuxName())
+                            .auxName(resolvedName)
                             .recordCount(stat.getRecordCount())
                             .totalAmount(stat.getTotalAmount() != null ? stat.getTotalAmount() : BigDecimal.ZERO)
                             .debitAmount(debit)
@@ -119,9 +123,10 @@ public class AuxiliaryLedgerApplicationService {
             if (grandTotal.compareTo(BigDecimal.ZERO) > 0 && amt.compareTo(BigDecimal.ZERO) > 0) {
                 pct = amt.multiply(HUNDRED).divide(grandTotal, 2, RoundingMode.HALF_UP);
             }
+            String resolvedName = resolveAuxName(request.getAuxType(), item.getAuxCode(), item.getAuxName());
             topItems.add(AuxiliaryItemShareResponse.builder()
                     .auxCode(item.getAuxCode())
-                    .auxName(item.getAuxName())
+                    .auxName(resolvedName)
                     .amount(amt)
                     .percentage(pct)
                     .build());
@@ -355,6 +360,7 @@ public class AuxiliaryLedgerApplicationService {
 
         String digits = bo.getVoucherNo() != null ? bo.getVoucherNo().replaceAll("[^0-9]", "") : "";
         String voucherWord = "记 " + (digits.isEmpty() ? bo.getVoucherNo() : digits);
+        String resolvedName = resolveAuxName(bo.getAuxType(), bo.getAuxCode(), bo.getAuxName());
 
         return AuxiliaryEntryRecordResponse.builder()
                 .id(bo.getId())
@@ -365,7 +371,7 @@ public class AuxiliaryLedgerApplicationService {
                 .summary(bo.getSummary() != null ? bo.getSummary() : "")
                 .auxType(bo.getAuxType())
                 .auxCode(bo.getAuxCode())
-                .auxName(bo.getAuxName())
+                .auxName(resolvedName)
                 .subjectCode(bo.getSubjectCode())
                 .subjectName(bo.getSubjectName() != null ? bo.getSubjectName() : bo.getSubjectCode())
                 .changeDirection(bo.getChangeDirection())
@@ -380,5 +386,44 @@ public class AuxiliaryLedgerApplicationService {
                 .tradeType(bo.getTradeType())
                 .tradeTypeDesc(TradeTypeEnum.getDescByCode(bo.getTradeType()))
                 .build();
+    }
+
+    /**
+     * 解析辅助核算项显示名称（优先反查字典名称，其次使用既有业务名称，最后兜底使用编码）
+     */
+    public String resolveAuxName(String auxType, String auxCode, String rawAuxName) {
+        if (StrUtil.isBlank(auxCode)) {
+            return StrUtil.isNotBlank(rawAuxName) ? rawAuxName : "";
+        }
+        boolean hasDistinctName = StrUtil.isNotBlank(rawAuxName) && !rawAuxName.equalsIgnoreCase(auxCode);
+
+        // 优先从字典反查中文名称
+        if (StrUtil.isNotBlank(auxType)) {
+            DictionaryPO dict = null;
+            if (dictionaryComponent != null) {
+                dict = dictionaryComponent.findByTypeAndCodeOrName(auxType, auxCode);
+                if (dict == null) {
+                    dict = dictionaryComponent.findByTypeAndCodeOrName(auxType.toLowerCase(), auxCode);
+                }
+                if (dict == null) {
+                    dict = dictionaryComponent.findByTypeAndCodeOrName(auxType.toUpperCase(), auxCode);
+                }
+            } else if (dictionaryCacheService != null) {
+                List<DictionaryPO> list = dictionaryCacheService.getByType(auxType);
+                if (list != null) {
+                    dict = list.stream()
+                            .filter(d -> auxCode.equalsIgnoreCase(d.getDictCode()))
+                            .findFirst().orElse(null);
+                }
+            }
+            if (dict != null && StrUtil.isNotBlank(dict.getDictName())) {
+                return dict.getDictName();
+            }
+        }
+
+        if (hasDistinctName) {
+            return rawAuxName;
+        }
+        return StrUtil.isNotBlank(rawAuxName) ? rawAuxName : auxCode;
     }
 }

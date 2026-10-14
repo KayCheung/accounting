@@ -558,7 +558,9 @@ public class JournalingApplicationService {
             record.setStatus(BusinessRecordStatusEnum.FAILED);
         } else if (voucher != null && voucher.getStatus() == VoucherStatusEnum.POSTED) {
             record.setStatus(BusinessRecordStatusEnum.SUCCESS);
-        } else if (voucher != null && (voucher.getStatus() == VoucherStatusEnum.FAILED || voucher.getStatus() == VoucherStatusEnum.REVERSED)) {
+        } else if (voucher != null && voucher.getStatus() == VoucherStatusEnum.REVERSED) {
+            record.setStatus(BusinessRecordStatusEnum.REVERSED);
+        } else if (voucher != null && voucher.getStatus() == VoucherStatusEnum.FAILED) {
             record.setStatus(BusinessRecordStatusEnum.FAILED);
         } else {
             record.setStatus(BusinessRecordStatusEnum.PROCESSING);
@@ -666,6 +668,7 @@ public class JournalingApplicationService {
         String effectiveSummary = StrUtil.blankToDefault(reason, "业务流水红冲: " + traceNo);
 
         reversalDomainService.executeReversal(postedVoucher.getVoucherNo(), effectiveBookkeeper, effectiveSummary);
+        businessRecordRepository.updateStatusByTraceNo(traceNo, BusinessRecordStatusEnum.REVERSED);
         return getJournalOverview(traceNo);
     }
 
@@ -853,9 +856,35 @@ public class JournalingApplicationService {
      */
     public PageResponse<JournalRecordItemResponse> getJournalPage(JournalPageQueryRequest request) {
         Page<BusinessRecordPO> pageResult = businessRecordRepository.selectPage(request);
-        List<JournalRecordItemResponse> items = pageResult.getRecords().stream()
-                .map(assembler::toJournalRecordItemResponse)
+        List<BusinessRecordPO> records = pageResult.getRecords();
+        if (records == null || records.isEmpty()) {
+            return PageResponse.<JournalRecordItemResponse>builder()
+                    .current(pageResult.getCurrent())
+                    .pages(pageResult.getPages())
+                    .total(pageResult.getTotal())
+                    .list(Collections.emptyList())
+                    .build();
+        }
+
+        List<String> traceNos = records.stream()
+                .map(BusinessRecordPO::getTraceNo)
+                .filter(StrUtil::isNotBlank)
+                .distinct()
                 .collect(Collectors.toList());
+
+        Map<String, List<AccountingVoucherPO>> voucherMap = traceNos.isEmpty()
+                ? Collections.emptyMap()
+                : accountingVoucherRepository.selectByTraceNos(traceNos).stream()
+                        .filter(v -> v.getTraceNo() != null)
+                        .collect(Collectors.groupingBy(AccountingVoucherPO::getTraceNo));
+
+        List<JournalRecordItemResponse> items = records.stream()
+                .map(record -> {
+                    List<AccountingVoucherPO> vouchers = voucherMap.getOrDefault(record.getTraceNo(), Collections.emptyList());
+                    return assembler.toJournalRecordItemResponse(record, vouchers);
+                })
+                .collect(Collectors.toList());
+
         return PageResponse.<JournalRecordItemResponse>builder()
                 .current(pageResult.getCurrent())
                 .pages(pageResult.getPages())

@@ -4,6 +4,8 @@ import cn.hutool.core.util.StrUtil;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.AllocationMethodEnum;
 import com.kltb.accounting.core.domain.enums.ChangeDirectionEnum;
+import com.kltb.accounting.core.infrastructure.dictionary.DictionaryComponent;
+import com.kltb.accounting.core.infrastructure.persistence.entity.DictionaryPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingRuleAuxiliaryPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherAuxiliaryPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.BusinessDetailPO;
@@ -36,6 +38,7 @@ public class AuxiliaryDomainService {
 
     private final AccountingVoucherAuxiliaryMapper voucherAuxiliaryMapper;
     private final RuleScriptExecutor ruleScriptExecutor;
+    private final DictionaryComponent dictionaryComponent;
 
     /**
      * 辅助核算分摊引擎（向下兼容）
@@ -192,6 +195,24 @@ public class AuxiliaryDomainService {
             }
         }
 
+        String resolvedAuxName = resolvedAuxCode;
+        if (dictionaryComponent != null && StrUtil.isNotBlank(resolvedAuxCode) && StrUtil.isNotBlank(config.getAuxType())) {
+            try {
+                DictionaryPO dict = dictionaryComponent.findByTypeAndCodeOrName(config.getAuxType(), resolvedAuxCode);
+                if (dict == null) {
+                    dict = dictionaryComponent.findByTypeAndCodeOrName(config.getAuxType().toLowerCase(), resolvedAuxCode);
+                }
+                if (dict == null) {
+                    dict = dictionaryComponent.findByTypeAndCodeOrName(config.getAuxType().toUpperCase(), resolvedAuxCode);
+                }
+                if (dict != null && StrUtil.isNotBlank(dict.getDictName())) {
+                    resolvedAuxName = dict.getDictName();
+                }
+            } catch (Exception e) {
+                log.debug("[Auxiliary] 辅助核算字典名称解析异常: auxType={}, auxCode={}", config.getAuxType(), resolvedAuxCode);
+            }
+        }
+
         Integer changeDir = (entryData != null && entryData.getChangeDirection() != null)
                 ? entryData.getChangeDirection()
                 : (entryData != null ? entryData.getDebitCredit() : 1);
@@ -202,7 +223,7 @@ public class AuxiliaryDomainService {
                 entryData != null ? entryData.getSubjectCode() : null,
                 config.getAuxType(),
                 resolvedAuxCode,
-                resolvedAuxCode,
+                resolvedAuxName,
                 changeDir,
                 amount,
                 entryData != null ? entryData.getAccountingDate() : null

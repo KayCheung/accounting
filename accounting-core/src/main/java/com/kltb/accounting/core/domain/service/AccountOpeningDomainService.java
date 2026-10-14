@@ -113,6 +113,12 @@ public class AccountOpeningDomainService {
                                                  String templateName, String requestNo) {
         String ownerId = customerId;
 
+        // 严格参数校验：开户请求号不得超过64位，严禁静默截断篡改原始值，超长必须显式报错
+        if (requestNo != null && requestNo.length() > 64) {
+            throw new AccountException(ResultCode.PARAM_ERROR,
+                    "开户请求号长度不能超过64位: requestNo=" + requestNo);
+        }
+
         // 1. 匹配开户模板列表
         List<AccountTemplatePO> templates;
         if (subjectCode != null && !subjectCode.isEmpty()) {
@@ -136,10 +142,8 @@ public class AccountOpeningDomainService {
 
         final int totalTemplates = templates.size();
         List<AccountPO> openedAccounts = new ArrayList<>();
-        int itemIndex = 0;
 
         for (AccountTemplatePO template : templates) {
-            itemIndex++;
             // 校验模板状态与是否支持自动开户
             if (template.getStatus() != TemplateStatusEnum.ENABLED) {
                 if (totalTemplates == 1) {
@@ -158,16 +162,7 @@ public class AccountOpeningDomainService {
 
             final String templateSubjectCode = template.getSubjectCode();
             final String lockKey = RedisKeyConstants.Lock.AccountOpen.of(ownerId, templateSubjectCode);
-            final int finalIndex = itemIndex;
-
-            String subReqNo = requestNo != null ? requestNo : "";
-            if (totalTemplates > 1 && requestNo != null) {
-                subReqNo = requestNo + "-" + finalIndex;
-            }
-            if (subReqNo.length() > 32) {
-                subReqNo = subReqNo.substring(0, 32);
-            }
-            final String finalActualRequestNo = subReqNo;
+            final String finalActualRequestNo = requestNo != null ? requestNo : "";
 
             AccountPO account = distributedLockTemplate.execute(lockKey, 5, -1, () -> {
                 // 双重检查：若账户已存在

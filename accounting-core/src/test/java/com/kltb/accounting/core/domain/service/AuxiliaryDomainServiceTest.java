@@ -10,6 +10,7 @@ import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountingVouc
 import com.kltb.accounting.core.infrastructure.spel.JournalSpelContext;
 import com.kltb.accounting.core.infrastructure.spel.RuleScriptExecutor;
 import com.kltb.accounting.core.shared.exception.AccountException;
+import com.kltb.accounting.core.infrastructure.dictionary.DictionaryComponent;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,6 +39,9 @@ class AuxiliaryDomainServiceTest {
 
     @Mock
     private RuleScriptExecutor ruleScriptExecutor;
+
+    @Mock
+    private DictionaryComponent dictionaryComponent;
 
     @InjectMocks
     private AuxiliaryDomainService auxiliaryDomainService;
@@ -115,6 +119,25 @@ class AuxiliaryDomainServiceTest {
         verify(voucherAuxiliaryMapper).insert(captor.capture());
         assertThat(captor.getValue().getAuxCode()).isEqualTo("D001");
         assertThat(captor.getValue().getAmount()).isEqualByComparingTo("100.00");
+    }
+
+    @Test
+    @DisplayName("calculateAuxiliaryAllocation: 匹配字典时成功将字典名称解析为 auxName")
+    void calculateAuxiliaryAllocation_withDictionaryName_shouldResolveAuxName() {
+        VoucherEntryData entry = buildEntryData("ENT001", "1001", new BigDecimal("100.00"));
+        AccountingRuleAuxiliaryPO aux = buildAuxConfig("DEPARTMENT", "DEPT001", AllocationMethodEnum.FIXED_AMOUNT, new BigDecimal("100.00"));
+
+        com.kltb.accounting.core.infrastructure.persistence.entity.DictionaryPO dict = new com.kltb.accounting.core.infrastructure.persistence.entity.DictionaryPO();
+        dict.setDictType("DEPARTMENT");
+        dict.setDictCode("DEPT001");
+        dict.setDictName("研发中心");
+
+        when(dictionaryComponent.findByTypeAndCodeOrName("DEPARTMENT", "DEPT001")).thenReturn(dict);
+
+        List<AuxiliaryItemData> result = auxiliaryDomainService.calculateAuxiliaryAllocation(entry, List.of(aux));
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getAuxCode()).isEqualTo("DEPT001");
+        assertThat(result.get(0).getAuxName()).isEqualTo("研发中心");
     }
 
     private VoucherEntryData buildEntryData(String entryId, String subjectCode, BigDecimal amount) {

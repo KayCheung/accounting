@@ -7,6 +7,10 @@ import com.kltb.accounting.core.application.assembler.ReversalAssembler;
 import com.kltb.accounting.core.domain.service.ReversalDomainService;
 import com.kltb.accounting.core.domain.service.ReversalDomainService.ReversalResult;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherPO;
+import cn.hutool.core.util.StrUtil;
+import com.kltb.accounting.core.domain.enums.BusinessRecordStatusEnum;
+import com.kltb.accounting.core.infrastructure.persistence.repository.AccountingVoucherRepository;
+import com.kltb.accounting.core.infrastructure.persistence.repository.BusinessRecordRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -29,6 +33,8 @@ public class ReversalApplicationService {
 
     private final ReversalDomainService reversalDomainService;
     private final ReversalAssembler reversalAssembler;
+    private final AccountingVoucherRepository voucherRepository;
+    private final BusinessRecordRepository businessRecordRepository;
 
     /**
      * 执行凭证红冲
@@ -41,6 +47,16 @@ public class ReversalApplicationService {
                 request.getOrigVoucherNo(),
                 request.getBookkeeperName(),
                 request.getSummary());
+
+        // 若原凭证关联了业务流水，同步更新业务流水状态为已红冲
+        try {
+            AccountingVoucherPO origVoucher = voucherRepository.selectByVoucherNoSimple(request.getOrigVoucherNo());
+            if (origVoucher != null && StrUtil.isNotBlank(origVoucher.getTraceNo())) {
+                businessRecordRepository.updateStatusByTraceNo(origVoucher.getTraceNo(), BusinessRecordStatusEnum.REVERSED);
+            }
+        } catch (Exception e) {
+            log.warn("[REVERSAL] 联动更新业务流水状态异常(非阻断): origVoucherNo={} error={}", request.getOrigVoucherNo(), e.getMessage());
+        }
 
         // 通过 Assembler 转换响应（tradeType 已从 ReversalResult 获取，无需额外查询）
         ReversalResponse response = reversalAssembler.toResponse(result);

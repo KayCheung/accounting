@@ -47,8 +47,12 @@
             <div class="node-content">
               <span class="status-dot" :class="{ active: selectedAuxCode === item.auxCode }"></span>
               <div class="node-text">
-                <span class="node-name" :title="item.auxName">{{ item.auxName }}</span>
-                <span class="node-code mono">{{ item.auxCode }}</span>
+                <span class="node-name" :title="getAuxDisplayName(item.auxCode, item.auxName)">
+                  {{ getAuxDisplayName(item.auxCode, item.auxName) }}
+                </span>
+                <span v-if="item.auxCode && item.auxCode !== getAuxDisplayName(item.auxCode, item.auxName)" class="node-code mono">
+                  {{ item.auxCode }}
+                </span>
               </div>
             </div>
             <div class="node-amt-box">
@@ -189,7 +193,10 @@
             </div>
             <div class="kpi-sub">
               <span>当前核算项：</span>
-              <b>{{ currentSelectedItemName }}</b>
+              <b :title="currentSelectedItemName">{{ currentSelectedItemName }}</b>
+              <span v-if="selectedAuxCode !== 'ALL' && selectedAuxCode !== currentSelectedItemName" class="kpi-sub-code mono">
+                ({{ selectedAuxCode }})
+              </span>
             </div>
           </div>
 
@@ -250,7 +257,12 @@
               :key="item.auxCode"
               class="proportion-row"
             >
-              <div class="prop-label" :title="item.auxName">{{ item.auxName }}</div>
+              <div class="prop-label" :title="`${getAuxDisplayName(item.auxCode, item.auxName)} (${item.auxCode})`">
+                <span class="prop-name">{{ getAuxDisplayName(item.auxCode, item.auxName) }}</span>
+                <span v-if="item.auxCode && item.auxCode !== getAuxDisplayName(item.auxCode, item.auxName)" class="prop-code mono">
+                  ({{ item.auxCode }})
+                </span>
+              </div>
               <div class="prop-progress">
                 <el-progress
                   :percentage="Number(item.percentage) || 0"
@@ -321,10 +333,18 @@
                     v-for="col in matrixData?.columns || []"
                     :key="col.auxCode"
                     :prop="'amounts.' + col.auxCode"
-                    :label="col.auxName"
-                    min-width="135"
+                    :label="getAuxDisplayName(col.auxCode, col.auxName)"
+                    min-width="140"
                     align="right"
                   >
+                    <template #header>
+                      <div class="matrix-col-header" :title="`${getAuxDisplayName(col.auxCode, col.auxName)} (${col.auxCode})`">
+                        <span class="header-name">{{ getAuxDisplayName(col.auxCode, col.auxName) }}</span>
+                        <span v-if="col.auxCode && col.auxCode !== getAuxDisplayName(col.auxCode, col.auxName)" class="header-code mono">
+                          {{ col.auxCode }}
+                        </span>
+                      </div>
+                    </template>
                     <template #default="{ row }">
                       <el-tooltip
                         v-if="row.amounts && row.amounts[col.auxCode] !== undefined && row.amounts[col.auxCode] !== null"
@@ -548,11 +568,16 @@
 
                   <el-table-column prop="summary" label="摘要" min-width="180" show-overflow-tooltip />
 
-                  <el-table-column prop="auxName" :label="'归属' + currentAuxTypeName" width="140">
+                  <el-table-column prop="auxName" :label="'归属' + currentAuxTypeName" min-width="160">
                     <template #default="{ row }">
-                      <el-tag size="small" type="primary" effect="plain" class="tag-dept">
-                        {{ row.auxName }}
-                      </el-tag>
+                      <div class="entry-aux-cell">
+                        <el-tag size="small" type="primary" effect="plain" class="tag-dept">
+                          {{ getAuxDisplayName(row.auxCode, row.auxName) }}
+                        </el-tag>
+                        <span v-if="row.auxCode && row.auxCode !== getAuxDisplayName(row.auxCode, row.auxName)" class="entry-aux-code mono">
+                          {{ row.auxCode }}
+                        </span>
+                      </div>
                     </template>
                   </el-table-column>
 
@@ -690,7 +715,11 @@
                   <span class="mono-code">{{ row.auxCode }}</span>
                 </template>
               </el-table-column>
-              <el-table-column prop="auxName" label="核算项名称" min-width="120" />
+              <el-table-column prop="auxName" label="核算项名称" min-width="130">
+                <template #default="{ row }">
+                  <span class="is-bold">{{ getAuxDisplayName(row.auxCode, row.auxName) }}</span>
+                </template>
+              </el-table-column>
               <el-table-column prop="changeDirection" label="增减" width="70" align="center">
                 <template #default="{ row }">
                   <el-tag size="small" :type="row.changeDirection === 1 ? 'primary' : 'warning'">
@@ -738,8 +767,11 @@ import {
 } from '@/api/auxiliary-report'
 import { getVoucherDetail, type VoucherFullDetail } from '@/api/voucher'
 import type { DictResponse } from '@/api/dict'
+import { useDictStore } from '@/stores/dict'
 
 // ==================== 状态定义 ====================
+
+const dictStore = useDictStore()
 
 // 期间与日期默认值
 const now = new Date()
@@ -787,6 +819,27 @@ const currentVoucherNo = ref('')
 const loadingVoucherDetail = ref(false)
 const voucherDetail = ref<VoucherFullDetail | null>(null)
 
+// ==================== 辅助方法 ====================
+
+/**
+ * 解析辅助核算项展示名称（优先已有业务名称，其次字典反查名称，最后兜底显示编码）
+ */
+function getAuxDisplayName(code?: string, rawName?: string): string {
+  if (!code && !rawName) return '-'
+  const targetCode = code || rawName || ''
+  // 1. 如果已有业务名称且不等于编码本身，直接使用业务名称
+  if (rawName && rawName !== code) {
+    return rawName
+  }
+  // 2. 尝试从本地字典缓存读取 (dictType = queryForm.auxType)
+  const dictLabel = dictStore.getDictLabel(queryForm.auxType, targetCode)
+  if (dictLabel && dictLabel !== targetCode) {
+    return dictLabel
+  }
+  // 3. 兜底返回业务名称或编码
+  return rawName || targetCode
+}
+
 // ==================== 计算属性 ====================
 
 const currentAuxTypeName = computed(() => {
@@ -799,11 +852,12 @@ const filteredAuxItems = computed(() => {
     return auxItems.value
   }
   const kw = itemSearchKeyword.value.toLowerCase().trim()
-  return auxItems.value.filter(
-    (item) =>
-      item.auxName.toLowerCase().includes(kw) ||
-      item.auxCode.toLowerCase().includes(kw)
-  )
+  return auxItems.value.filter((item) => {
+    const displayName = getAuxDisplayName(item.auxCode, item.auxName).toLowerCase()
+    const code = (item.auxCode || '').toLowerCase()
+    const rawName = (item.auxName || '').toLowerCase()
+    return displayName.includes(kw) || code.includes(kw) || rawName.includes(kw)
+  })
 })
 
 const currentSelectedItemName = computed(() => {
@@ -811,7 +865,7 @@ const currentSelectedItemName = computed(() => {
     return `全${currentAuxTypeName.value}汇总`
   }
   const found = auxItems.value.find((item) => item.auxCode === selectedAuxCode.value)
-  return found ? found.auxName : selectedAuxCode.value
+  return found ? getAuxDisplayName(found.auxCode, found.auxName) : getAuxDisplayName(selectedAuxCode.value)
 })
 
 const currentPeriodDesc = computed(() => {
@@ -831,6 +885,9 @@ function handleDateRangeChange(val: [string, string]) {
 
 async function handleAuxTypeChange() {
   selectedAuxCode.value = 'ALL'
+  if (queryForm.auxType) {
+    await dictStore.loadDict(queryForm.auxType).catch(() => {})
+  }
   await loadAuxItems()
   loadAllData()
 }
@@ -894,6 +951,9 @@ async function loadAuxTypes() {
 
 async function loadAuxItems() {
   try {
+    if (queryForm.auxType) {
+      dictStore.loadDict(queryForm.auxType).catch(() => {})
+    }
     const items = await getAuxiliaryItems({
       auxType: queryForm.auxType,
       startDate: dateRange.value ? dateRange.value[0] : undefined,
@@ -1298,6 +1358,12 @@ onMounted(async () => {
   margin-top: 6px;
 }
 
+.kpi-sub-code {
+  font-size: 11px;
+  color: #8c8c8c;
+  margin-left: 4px;
+}
+
 /* 占比分布卡片 */
 .proportion-card {
   padding: 14px 18px;
@@ -1334,13 +1400,27 @@ onMounted(async () => {
 }
 
 .prop-label {
-  width: 100px;
+  width: 140px;
   font-size: 12px;
   color: #595959;
   text-align: right;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.prop-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.prop-code {
+  font-size: 10px;
+  color: #8c8c8c;
 }
 
 .prop-progress {
@@ -1352,6 +1432,41 @@ onMounted(async () => {
   font-size: 12px;
   color: #595959;
   text-align: right;
+}
+
+.matrix-col-header {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+  align-items: flex-end;
+  width: 100%;
+}
+
+.header-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2229;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.header-code {
+  font-size: 10px;
+  color: #8c8c8c;
+}
+
+.entry-aux-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.entry-aux-code {
+  font-size: 11px;
+  color: #8c8c8c;
 }
 
 /* 表格区域 */

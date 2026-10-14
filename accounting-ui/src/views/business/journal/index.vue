@@ -214,9 +214,9 @@
                   全景总览
                 </el-button>
 
-                <!-- 记账成功：标准业务红冲 -->
+                <!-- 记账成功且未红冲：标准业务红冲 -->
                 <el-button
-                  v-if="row.status === 2 && row.tradeType !== 3 && row.tradeType !== 6"
+                  v-if="row.status === 2 && row.tradeType !== 3 && row.tradeType !== 6 && (row.canReversal ?? true)"
                   link
                   type="warning"
                   size="small"
@@ -1031,11 +1031,12 @@ function formatMoney(amount: number | string | undefined | null): string {
   return val.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-function getJournalStatusTag(status: number): '' | 'warning' | 'success' | 'danger' {
+function getJournalStatusTag(status: number): '' | 'warning' | 'success' | 'danger' | 'info' {
   switch (status) {
     case 1: return 'warning'
     case 2: return 'success'
     case 3: return 'danger'
+    case 4: return 'info'
     default: return ''
   }
 }
@@ -1045,6 +1046,7 @@ function getJournalStatusDesc(status: number): string {
     case 1: return '处理中'
     case 2: return '记账成功'
     case 3: return '记账失败'
+    case 4: return '已红冲'
     default: return '未知'
   }
 }

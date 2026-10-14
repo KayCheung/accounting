@@ -638,6 +638,7 @@ class JournalingApplicationServiceTest {
 
         assertThat(overview).isNotNull();
         verify(reversalDomainService).executeReversal("VOU_REV_001", "OPERATOR", "错账冲销");
+        verify(businessRecordRepository).updateStatusByTraceNo(traceNo, BusinessRecordStatusEnum.REVERSED);
     }
 
     @Test
@@ -700,7 +701,7 @@ class JournalingApplicationServiceTest {
     }
 
     @Test
-    @DisplayName("getJournalPage: 分页查询业务记账流水记录成功")
+    @DisplayName("getJournalPage: 分页查询业务记账流水记录成功并正确计算可红冲状态")
     void getJournalPage_shouldReturnPageResponse() {
         JournalPageQueryRequest req = new JournalPageQueryRequest();
         req.setPageNo(1);
@@ -724,6 +725,61 @@ class JournalingApplicationServiceTest {
         assertThat(response.getTotal()).isEqualTo(1L);
         assertThat(response.getList()).hasSize(1);
         assertThat(response.getList().get(0).getTraceNo()).isEqualTo("TRACE_PAGE_001");
+        assertThat(response.getList().get(0).getCanReversal()).isTrue();
+    }
+
+    @Test
+    @DisplayName("getJournalPage: 已红冲流水应标记 canReversal 为 false 且状态为已红冲")
+    void getJournalPage_whenReversed_shouldHaveCanReversalFalse() {
+        JournalPageQueryRequest req = new JournalPageQueryRequest();
+        req.setPageNo(1);
+        req.setPageSize(20);
+
+        // Case 1: 业务流水状态直接为 REVERSED
+        BusinessRecordPO record1 = new BusinessRecordPO();
+        record1.setTraceNo("TRACE_REV_001");
+        record1.setAmount(new BigDecimal("100.00"));
+        record1.setStatus(BusinessRecordStatusEnum.REVERSED);
+
+        // Case 2: 历史数据流水状态为 SUCCESS，但关联凭证为 REVERSED
+        BusinessRecordPO record2 = new BusinessRecordPO();
+        record2.setTraceNo("TRACE_REV_002");
+        record2.setAmount(new BigDecimal("200.00"));
+        record2.setStatus(BusinessRecordStatusEnum.SUCCESS);
+
+        AccountingVoucherPO voucher2 = new AccountingVoucherPO();
+        voucher2.setTraceNo("TRACE_REV_002");
+        voucher2.setVoucherNo("VOU_REV_002");
+        voucher2.setStatus(VoucherStatusEnum.REVERSED);
+
+        com.baomidou.mybatisplus.extension.plugins.pagination.Page<BusinessRecordPO> mockPage =
+                new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(1, 20);
+        mockPage.setRecords(List.of(record1, record2));
+        mockPage.setTotal(2);
+
+        when(businessRecordRepository.selectPage(req)).thenReturn(mockPage);
+        when(accountingVoucherRepository.selectByTraceNos(List.of("TRACE_REV_001", "TRACE_REV_002")))
+                .thenReturn(List.of(voucher2));
+
+        PageResponse<JournalRecordItemResponse> response = service.getJournalPage(req);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getTotal()).isEqualTo(2L);
+        assertThat(response.getList()).hasSize(2);
+
+        // 验证 Case 1
+        JournalRecordItemResponse item1 = response.getList().get(0);
+        assertThat(item1.getTraceNo()).isEqualTo("TRACE_REV_001");
+        assertThat(item1.getStatus()).isEqualTo(BusinessRecordStatusEnum.REVERSED.getCode());
+        assertThat(item1.getStatusDesc()).isEqualTo("已红冲");
+        assertThat(item1.getCanReversal()).isFalse();
+
+        // 验证 Case 2 (凭证已冲销联动感知)
+        JournalRecordItemResponse item2 = response.getList().get(1);
+        assertThat(item2.getTraceNo()).isEqualTo("TRACE_REV_002");
+        assertThat(item2.getStatus()).isEqualTo(BusinessRecordStatusEnum.REVERSED.getCode());
+        assertThat(item2.getStatusDesc()).isEqualTo("已红冲");
+        assertThat(item2.getCanReversal()).isFalse();
     }
 
     @Test

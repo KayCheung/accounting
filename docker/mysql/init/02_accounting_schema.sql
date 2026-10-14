@@ -1,4 +1,4 @@
-﻿-- 02_accounting_schema.sql
+-- 02_accounting_schema.sql
 USE `accounting`;
 
 
@@ -1281,3 +1281,10 @@ SET @sql = IF(@col_exists > 0,
     'ALTER TABLE `t_business_detail` DROP COLUMN `item_code`',
     'SELECT ''Column item_code already removed, skip drop'' AS msg');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- ==================== Migration: V24__alter_account_request_no_length.sql ====================
+
+USE `accounting`;
+
+-- V24: 扩充 t_account 表 request_no 字段长度至 64 位，保持与 trace_no 及开户契约一致
+ALTER TABLE `t_account` MODIFY COLUMN `request_no` VARCHAR(64) NOT NULL DEFAULT '' COMMENT '开户请求号';

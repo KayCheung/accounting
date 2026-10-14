@@ -58,6 +58,20 @@ public class AccountingVoucherRepository {
     }
 
     /**
+     * 按系统跟踪号列表批量查询凭证列表
+     *
+     * @param traceNos 系统跟踪号列表
+     * @return 凭证列表，无数据时返回空列表
+     */
+    public List<AccountingVoucherPO> selectByTraceNos(List<String> traceNos) {
+        if (traceNos == null || traceNos.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<AccountingVoucherPO> result = voucherMapper.selectByTraceNos(traceNos);
+        return result != null ? result : Collections.emptyList();
+    }
+
+    /**
      * 按全局事务号查询凭证列表
      *
      * @param txnNo 全局事务号

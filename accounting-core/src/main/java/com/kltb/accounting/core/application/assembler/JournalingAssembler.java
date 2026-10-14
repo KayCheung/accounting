@@ -6,6 +6,7 @@ import com.kltb.accounting.api.response.*;
 import com.kltb.accounting.core.domain.enums.BusinessRecordStatusEnum;
 import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
 import com.kltb.accounting.core.domain.enums.FreezeStatusEnum;
+import com.kltb.accounting.core.domain.enums.TradeTypeEnum;
 import com.kltb.accounting.core.domain.enums.TransactionStatusEnum;
 import com.kltb.accounting.core.domain.enums.VoucherEntryStatusEnum;
 import com.kltb.accounting.core.domain.enums.VoucherStatusEnum;
@@ -352,13 +353,14 @@ public class JournalingAssembler {
         response.setPostingSummary(summaryInfo);
 
         // 6. 当前记账流程阶段、进度百分比及重试/回滚/红冲操作可用性判定
+        boolean isReversed = (record != null && record.getStatus() == BusinessRecordStatusEnum.REVERSED)
+                || (vouchers != null && vouchers.stream().anyMatch(v -> v.getStatus() != null && v.getStatus() == VoucherStatusEnum.REVERSED));
         boolean isFailed = (record != null && record.getStatus() == BusinessRecordStatusEnum.FAILED)
                 || (txn != null && txn.getStatus() == TransactionStatusEnum.FAILED);
-        boolean isSuccess = (record != null && record.getStatus() == BusinessRecordStatusEnum.SUCCESS)
+        boolean isSuccess = (record != null && (record.getStatus() == BusinessRecordStatusEnum.SUCCESS || record.getStatus() == BusinessRecordStatusEnum.REVERSED))
                 || (txn != null && txn.getStatus() == TransactionStatusEnum.SUCCESS);
 
-        boolean hasReversedVoucher = vouchers != null && vouchers.stream()
-                .anyMatch(v -> v.getStatus() != null && v.getStatus() == VoucherStatusEnum.REVERSED);
+        boolean hasReversedVoucher = isReversed;
 
         if (isFailed) {
             response.setProcessStage("FAILED");
@@ -431,9 +433,31 @@ public class JournalingAssembler {
      * 业务流水 PO → 列表项响应 DTO
      */
     public JournalRecordItemResponse toJournalRecordItemResponse(BusinessRecordPO record) {
+        return toJournalRecordItemResponse(record, Collections.emptyList());
+    }
+
+    /**
+     * 业务流水 PO + 关联凭证列表 → 列表项响应 DTO
+     */
+    public JournalRecordItemResponse toJournalRecordItemResponse(BusinessRecordPO record, List<AccountingVoucherPO> vouchers) {
         if (record == null) {
             return null;
         }
+
+        boolean hasReversedVoucher = vouchers != null && vouchers.stream()
+                .anyMatch(v -> v.getStatus() != null && v.getStatus() == VoucherStatusEnum.REVERSED);
+
+        boolean isReversed = record.getStatus() == BusinessRecordStatusEnum.REVERSED || hasReversedVoucher;
+
+        Integer status = isReversed ? BusinessRecordStatusEnum.REVERSED.getCode() : (record.getStatus() != null ? record.getStatus().getCode() : null);
+        String statusDesc = isReversed ? BusinessRecordStatusEnum.REVERSED.getDesc() : (record.getStatus() != null ? record.getStatus().getDesc() : null);
+
+        // 仅在记账成功、未被红冲、且非红冲/预冻结解冻等交易类型时，允许业务红冲
+        boolean canReversal = !isReversed
+                && record.getStatus() == BusinessRecordStatusEnum.SUCCESS
+                && record.getTradeType() != TradeTypeEnum.RED
+                && record.getTradeType() != TradeTypeEnum.PRE_UNFREEZE;
+
         return JournalRecordItemResponse.builder()
                 .traceNo(record.getTraceNo())
                 .traceSeq(record.getTraceSeq())
@@ -447,8 +471,9 @@ public class JournalingAssembler {
                 .accountingDate(record.getAccountingDate())
                 .summary(record.getSummary())
                 .origFreezeNo(record.getOrigFreezeNo())
-                .status(record.getStatus() != null ? record.getStatus().getCode() : null)
-                .statusDesc(record.getStatus() != null ? record.getStatus().getDesc() : null)
+                .status(status)
+                .statusDesc(statusDesc)
+                .canReversal(canReversal)
                 .createTime(record.getCreateTime())
                 .build();
     }

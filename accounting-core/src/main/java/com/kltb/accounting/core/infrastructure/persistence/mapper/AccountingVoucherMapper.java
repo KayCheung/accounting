@@ -40,6 +40,18 @@ public interface AccountingVoucherMapper extends BaseMapper<AccountingVoucherPO>
     }
 
     /**
+     * 按系统跟踪号列表批量查询凭证列表
+     */
+    default List<AccountingVoucherPO> selectByTraceNos(List<String> traceNos) {
+        if (traceNos == null || traceNos.isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+        return this.selectList(new LambdaQueryWrapper<AccountingVoucherPO>()
+                .in(AccountingVoucherPO::getTraceNo, traceNos)
+                .eq(AccountingVoucherPO::getIsDelete, 0));
+    }
+
+    /**
      * 按全局事务号查询凭证列表
      */
     default List<AccountingVoucherPO> selectByTxnNo(String txnNo) {

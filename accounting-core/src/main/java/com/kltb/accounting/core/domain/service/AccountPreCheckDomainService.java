@@ -19,7 +19,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 /**
@@ -140,7 +139,6 @@ public class AccountPreCheckDomainService {
         // 4. 逐账户检查 + 自动开户，收集 account_no 与内存字典
         List<String> accountNos = new ArrayList<>();
         Map<String, String> accountMapping = new LinkedHashMap<>();
-        AtomicInteger index = new AtomicInteger(0);
 
         for (AccountCheckItem item : checkItems.values()) {
             String accountNo;
@@ -155,11 +153,10 @@ public class AccountPreCheckDomainService {
                     AccountPO openedInner = accountOpeningDomainService.openInternalAccount(item.subjectCode);
                     accountNo = openedInner.getAccountNo();
                 } else {
-                    int i = index.incrementAndGet();
-                    String requestNo = "JOURNAL-" + traceNo + "-" + i + "-" + System.nanoTime();
+                    // 业务流水自动预开户：开户请求号直接使用当前业务请求跟踪号 traceNo，方便业务对账与溯源
                     AccountPO opened = accountOpeningDomainService.openExternalAccount(
                             rule.getBusinessCode(), item.ownerId, item.customerType, item.subjectCode,
-                            requestNo);
+                            traceNo);
                     accountNo = opened.getAccountNo();
                 }
             }

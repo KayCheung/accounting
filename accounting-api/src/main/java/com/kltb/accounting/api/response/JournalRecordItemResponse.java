@@ -70,6 +70,9 @@ public class JournalRecordItemResponse implements Serializable {
     @Schema(description = "处理状态描述", example = "成功")
     private String statusDesc;
 
+    @Schema(description = "是否允许业务红冲", example = "true")
+    private Boolean canReversal;
+
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     @Schema(description = "创建时间")
     private LocalDateTime createTime;

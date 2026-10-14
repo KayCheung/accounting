@@ -19,6 +19,7 @@ export interface JournalRecordItem {
   origFreezeNo?: string
   status: number
   statusDesc: string
+  canReversal?: boolean
   createTime: string
 }
 
@@ -185,7 +186,8 @@ export const JOURNAL_STATUS_OPTIONS: SelectOption<number>[] = [
   { label: '全部状态', value: '' as any },
   { label: '处理中', value: 1, tagType: 'warning' },
   { label: '记账成功', value: 2, tagType: 'success' },
-  { label: '记账失败', value: 3, tagType: 'danger' }
+  { label: '记账失败', value: 3, tagType: 'danger' },
+  { label: '已红冲', value: 4, tagType: 'info' }
 ]
 
 /**
