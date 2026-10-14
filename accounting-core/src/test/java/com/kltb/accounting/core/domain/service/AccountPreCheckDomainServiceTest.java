@@ -4,6 +4,7 @@ import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.AccountScopeEnum;
 import com.kltb.accounting.core.domain.enums.CustomerTypeEnum;
 import com.kltb.accounting.core.domain.enums.RuleStatusEnum;
+import com.kltb.accounting.core.domain.model.CustomerCheckInfo;
 import com.kltb.accounting.core.domain.model.AccountPreCheckResult;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingRuleDetailPO;
@@ -75,7 +76,7 @@ class AccountPreCheckDomainServiceTest {
     }
 
     @Test
-    @DisplayName("预开户检查: 自动预开户时，开户号requestNo必须与traceNo完全一致且不拼接前缀或后缀")
+    @DisplayName("预开户检查: 自动预开户时透传 customerName，开户号requestNo必须与traceNo完全一致")
     void preCheckAndOpenAccounts_autoOpenExternalAccount_shouldPassExactTraceNo() {
         String traceNo = "TR2026101411200010001";
         AccountingRulePO rule = new AccountingRulePO();
@@ -96,13 +97,13 @@ class AccountPreCheckDomainServiceTest {
         when(accountingRuleRepository.selectDetailsWithAuxiliary(10L))
                 .thenReturn(List.of(d1, d2));
 
-        // 外部账户不存在，触发自动开户
+        // 外部账户不存在，触发自动开户（透传 customerName="张三"）
         when(accountRepository.selectByOwnerIdAndSubjectCode("USER123", "1001"))
                 .thenReturn(null);
         AccountPO openedExt = new AccountPO();
         openedExt.setAccountNo("ACCT_EXT_999");
         when(accountOpeningDomainService.openExternalAccount(
-                eq("PAYMENT"), eq("USER123"), eq(CustomerTypeEnum.PERSONAL), eq("1001"), eq(traceNo)))
+                eq("PAYMENT"), eq("USER123"), eq("张三"), eq(CustomerTypeEnum.PERSONAL), eq("1001"), eq(traceNo)))
                 .thenReturn(openedExt);
 
         // 内部账户不存在，触发自动开内部户
@@ -113,8 +114,9 @@ class AccountPreCheckDomainServiceTest {
         when(accountOpeningDomainService.openInternalAccount("2001"))
                 .thenReturn(openedInner);
 
+        CustomerCheckInfo checkInfo = new CustomerCheckInfo(CustomerTypeEnum.PERSONAL, "张三");
         AccountPreCheckResult result = accountPreCheckDomainService.preCheckAndOpenAccounts(
-                "PAYMENT", "PAY", "ALIPAY", Map.of("USER123", CustomerTypeEnum.PERSONAL), traceNo);
+                "PAYMENT", "PAY", "ALIPAY", Map.of("USER123", checkInfo), traceNo);
 
         assertThat(result).isNotNull();
         // 账户按 account_no 升序排列 ("ACCT_EXT_999" < "ACCT_INN_111")
@@ -122,10 +124,10 @@ class AccountPreCheckDomainServiceTest {
         assertThat(result.getAccountMapping().get("USER123:1001")).isEqualTo("ACCT_EXT_999");
         assertThat(result.getAccountMapping().get("INNER:2001")).isEqualTo("ACCT_INN_111");
 
-        // 核心断言：openExternalAccount 收到的 requestNo 参数必须完全等于 traceNo，不得包含 JOURNAL-、序号或时间戳
+        // 核心断言：openExternalAccount 收到的 customerName 必须为 "张三"，requestNo 必须完全等于 traceNo
         ArgumentCaptor<String> reqCaptor = ArgumentCaptor.forClass(String.class);
         verify(accountOpeningDomainService).openExternalAccount(
-                eq("PAYMENT"), eq("USER123"), eq(CustomerTypeEnum.PERSONAL), eq("1001"), reqCaptor.capture());
+                eq("PAYMENT"), eq("USER123"), eq("张三"), eq(CustomerTypeEnum.PERSONAL), eq("1001"), reqCaptor.capture());
         assertThat(reqCaptor.getValue()).isEqualTo(traceNo);
     }
 }

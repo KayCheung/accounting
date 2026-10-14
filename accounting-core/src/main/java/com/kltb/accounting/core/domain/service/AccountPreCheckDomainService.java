@@ -6,6 +6,7 @@ import com.kltb.accounting.core.domain.enums.AccountScopeEnum;
 import com.kltb.accounting.core.domain.enums.CustomerTypeEnum;
 import com.kltb.accounting.core.domain.enums.RuleStatusEnum;
 import com.kltb.accounting.core.domain.model.AccountPreCheckResult;
+import com.kltb.accounting.core.domain.model.CustomerCheckInfo;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingRuleDetailPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingRulePO;
@@ -50,18 +51,13 @@ public class AccountPreCheckDomainService {
      * @param businessCode 业务线编码
      * @param tradingCode  交易编码
      * @param payChannel   支付渠道
-     * @param customerMap  客户ID → CustomerTypeEnum 映射
-     * @param traceNo      系统跟踪号（用于生成唯一的 requestNo，P1-7 修复）
-     * @return 账户编号列表（已按 account_no 升序排列）
-     */
-    /**
-     * 预开户检查：根据业务参数解析所需账户，不存在则自动开户
-     *
+     * @param customerMap  客户ID → CustomerCheckInfo 映射
+     * @param traceNo      系统跟踪号（用于生成唯一的 requestNo）
      * @return 账户编号列表（已按 account_no 升序排列）
      */
     public List<String> checkAndOpenAccounts(
             String businessCode, String tradingCode, String payChannel,
-            Map<String, CustomerTypeEnum> customerMap, String traceNo) {
+            Map<String, CustomerCheckInfo> customerMap, String traceNo) {
         return preCheckAndOpenAccounts(businessCode, tradingCode, payChannel, customerMap, traceNo)
                 .getSortedAccountNos();
     }
@@ -71,7 +67,7 @@ public class AccountPreCheckDomainService {
      */
     public List<String> checkAndOpenAccounts(
             AccountingRulePO rule,
-            Map<String, CustomerTypeEnum> customerMap, String traceNo) {
+            Map<String, CustomerCheckInfo> customerMap, String traceNo) {
         return preCheckAndOpenAccounts(rule, customerMap, traceNo)
                 .getSortedAccountNos();
     }
@@ -81,7 +77,7 @@ public class AccountPreCheckDomainService {
      */
     public AccountPreCheckResult preCheckAndOpenAccounts(
             String businessCode, String tradingCode, String payChannel,
-            Map<String, CustomerTypeEnum> customerMap, String traceNo) {
+            Map<String, CustomerCheckInfo> customerMap, String traceNo) {
         // 1. 匹配记账规则（优先走二级缓存）
         AccountingRulePO rule = accountingRuleRepository.selectByBusinessKey(
                 businessCode, tradingCode, payChannel);
@@ -97,7 +93,7 @@ public class AccountPreCheckDomainService {
      */
     public AccountPreCheckResult preCheckAndOpenAccounts(
             AccountingRulePO rule,
-            Map<String, CustomerTypeEnum> customerMap, String traceNo) {
+            Map<String, CustomerCheckInfo> customerMap, String traceNo) {
 
         if (rule == null) {
             throw new AccountException(ResultCode.RULE_NOT_FOUND, "记账规则不存在");
@@ -121,16 +117,18 @@ public class AccountPreCheckDomainService {
                 String key = "INNER:" + detail.getSubjectCode();
                 if (!checkItems.containsKey(key)) {
                     checkItems.put(key, new AccountCheckItem(
-                            "INNER", null, detail.getSubjectCode()));
+                            "INNER", null, null, detail.getSubjectCode()));
                 }
             } else {
-                for (Map.Entry<String, CustomerTypeEnum> entry : customerMap.entrySet()) {
+                for (Map.Entry<String, CustomerCheckInfo> entry : customerMap.entrySet()) {
                     String customerId = entry.getKey();
-                    CustomerTypeEnum customerType = entry.getValue();
+                    CustomerCheckInfo checkInfo = entry.getValue();
+                    CustomerTypeEnum customerType = checkInfo != null ? checkInfo.getCustomerType() : null;
+                    String customerName = checkInfo != null ? checkInfo.getCustomerName() : null;
                     String key = customerId + ":" + detail.getSubjectCode();
                     if (!checkItems.containsKey(key)) {
                         checkItems.put(key, new AccountCheckItem(
-                                customerId, customerType, detail.getSubjectCode()));
+                                customerId, customerName, customerType, detail.getSubjectCode()));
                     }
                 }
             }
@@ -155,7 +153,7 @@ public class AccountPreCheckDomainService {
                 } else {
                     // 业务流水自动预开户：开户请求号直接使用当前业务请求跟踪号 traceNo，方便业务对账与溯源
                     AccountPO opened = accountOpeningDomainService.openExternalAccount(
-                            rule.getBusinessCode(), item.ownerId, item.customerType, item.subjectCode,
+                            rule.getBusinessCode(), item.ownerId, item.ownerName, item.customerType, item.subjectCode,
                             traceNo);
                     accountNo = opened.getAccountNo();
                 }
@@ -172,15 +170,17 @@ public class AccountPreCheckDomainService {
 
 
     /**
-     * 账户检查项（M3 修复：绑定 ownerId + customerType + subjectCode）
+     * 账户检查项（绑定 ownerId + ownerName + customerType + subjectCode）
      */
     private static class AccountCheckItem {
         final String ownerId;
+        final String ownerName;
         final CustomerTypeEnum customerType;
         final String subjectCode;
 
-        AccountCheckItem(String ownerId, CustomerTypeEnum customerType, String subjectCode) {
+        AccountCheckItem(String ownerId, String ownerName, CustomerTypeEnum customerType, String subjectCode) {
             this.ownerId = ownerId;
+            this.ownerName = ownerName;
             this.customerType = customerType;
             this.subjectCode = subjectCode;
         }

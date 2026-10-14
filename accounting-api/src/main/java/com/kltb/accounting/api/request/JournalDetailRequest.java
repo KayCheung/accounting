@@ -17,6 +17,12 @@ public class JournalDetailRequest {
     @Size(max = 64, message = "customerId长度不能超过64")
     private String customerId;
 
+    /**
+     * 客户名称（用于开户户名生成规则）
+     */
+    @Size(max = 64, message = "customerName长度不能超过64")
+    private String customerName;
+
     @NotNull(message = "customerType不能为空")
     private Integer customerType;
 

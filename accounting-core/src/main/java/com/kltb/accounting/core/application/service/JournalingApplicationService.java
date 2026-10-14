@@ -10,6 +10,7 @@ import com.kltb.accounting.api.response.*;
 import com.kltb.accounting.core.application.assembler.JournalingAssembler;
 import com.kltb.accounting.core.domain.enums.*;
 import com.kltb.accounting.core.domain.model.AccountPreCheckResult;
+import com.kltb.accounting.core.domain.model.CustomerCheckInfo;
 import com.kltb.accounting.core.domain.model.FreezeRecordCommand;
 import com.kltb.accounting.core.domain.model.JournalCreateCommand;
 import com.kltb.accounting.core.domain.service.*;
@@ -160,7 +161,7 @@ public class JournalingApplicationService {
         JournalSubmitResult result = journalingDomainService.persistJournal(createCmd);
 
         // 预开户检查 + 自动开户（直接复用流程已匹配规则，彻底避免重复查询）
-        Map<String, CustomerTypeEnum> customerMap = buildCustomerMap(request.getDetails());
+        Map<String, CustomerCheckInfo> customerMap = buildCustomerMap(request.getDetails());
         AccountPreCheckResult preCheckResult;
         if (rule != null) {
             preCheckResult = accountPreCheckDomainService.preCheckAndOpenAccounts(rule, customerMap, request.getTraceNo());
@@ -267,7 +268,7 @@ public class JournalingApplicationService {
         }
 
         // 预开户检查 + 自动开户（直接复用规则，避免重复查库）
-        Map<String, CustomerTypeEnum> customerMap = buildCustomerMap(request.getDetails());
+        Map<String, CustomerCheckInfo> customerMap = buildCustomerMap(request.getDetails());
         AccountPreCheckResult preCheckResult = accountPreCheckDomainService.preCheckAndOpenAccounts(rule, customerMap, request.getTraceNo());
         List<AccountingRuleDetailPO> ruleDetails = accountingRuleRepository.selectDetailsWithAuxiliary(rule.getId());
         if (ruleDetails == null || ruleDetails.isEmpty()) {
@@ -700,7 +701,7 @@ public class JournalingApplicationService {
                 log.info("[RECONCILE] 凭证未生成，尝试补生成凭证并过账: traceNo={}", traceNo);
                 try {
                     List<BusinessDetailPO> details = businessDetailRepository.selectByTraceNo(traceNo);
-                    Map<String, CustomerTypeEnum> customerMap = buildCustomerMapFromDetails(details);
+                    Map<String, CustomerCheckInfo> customerMap = buildCustomerMapFromDetails(details);
 
                     AccountPreCheckResult preCheckResult = accountPreCheckDomainService.preCheckAndOpenAccounts(
                             curRecord.getBusinessCode(), curRecord.getTradingCode(), curRecord.getPayChannel(),
@@ -764,13 +765,16 @@ public class JournalingApplicationService {
     }
 
     /**
-     * 从 BusinessDetailPO 列表构建 CustomerTypeEnum 映射
+     * 从 BusinessDetailPO 列表构建 CustomerCheckInfo 映射
      */
-    private Map<String, CustomerTypeEnum> buildCustomerMapFromDetails(List<BusinessDetailPO> details) {
-        Map<String, CustomerTypeEnum> map = new HashMap<>();
+    private Map<String, CustomerCheckInfo> buildCustomerMapFromDetails(List<BusinessDetailPO> details) {
+        Map<String, CustomerCheckInfo> map = new HashMap<>();
         if (details != null) {
             for (BusinessDetailPO detail : details) {
-                map.putIfAbsent(detail.getCustomerId(), detail.getCustomerType());
+                if (detail != null && StrUtil.isNotBlank(detail.getCustomerId())) {
+                    map.putIfAbsent(detail.getCustomerId(),
+                            new CustomerCheckInfo(detail.getCustomerType(), null));
+                }
             }
         }
         return map;
@@ -828,13 +832,29 @@ public class JournalingApplicationService {
     }
 
     /**
-     * 构建 customerId → CustomerTypeEnum 映射
+     * 构建 customerId → CustomerCheckInfo 映射（含 customerType 与 customerName）
      */
-    private Map<String, CustomerTypeEnum> buildCustomerMap(List<JournalDetailRequest> details) {
-        Map<String, CustomerTypeEnum> map = new HashMap<>();
-        for (JournalDetailRequest detail : details) {
-            map.putIfAbsent(detail.getCustomerId(),
-                    CustomerTypeEnum.fromValue(detail.getCustomerType()));
+    private Map<String, CustomerCheckInfo> buildCustomerMap(List<JournalDetailRequest> details) {
+        Map<String, CustomerCheckInfo> map = new HashMap<>();
+        if (details != null) {
+            for (JournalDetailRequest detail : details) {
+                if (detail == null || StrUtil.isBlank(detail.getCustomerId())) {
+                    continue;
+                }
+                CustomerTypeEnum customerType = CustomerTypeEnum.fromValue(detail.getCustomerType());
+                String customerName = detail.getCustomerName();
+                CustomerCheckInfo existing = map.get(detail.getCustomerId());
+                if (existing == null) {
+                    map.put(detail.getCustomerId(), new CustomerCheckInfo(customerType, customerName));
+                } else {
+                    if (StrUtil.isBlank(existing.getCustomerName()) && StrUtil.isNotBlank(customerName)) {
+                        existing.setCustomerName(customerName);
+                    }
+                    if (existing.getCustomerType() == null && customerType != null) {
+                        existing.setCustomerType(customerType);
+                    }
+                }
+            }
         }
         return map;
     }

@@ -87,7 +87,7 @@ class AccountOpeningDomainServiceTest {
                 .when(distributedLockTemplate).execute(anyString(), anyLong(), anyLong(), any());
 
         AccountPO result = accountOpeningDomainService.openExternalAccount(
-                "PAYMENT", "CUST001", CustomerTypeEnum.ENTERPRISE, "1001", "REQ001");
+                "PAYMENT", "CUST001", "测试企业", CustomerTypeEnum.ENTERPRISE, "1001", "REQ001");
 
         assertThat(result).isNotNull();
         assertThat(result.getAccountNo()).isEqualTo("0012026030100001");
@@ -105,7 +105,7 @@ class AccountOpeningDomainServiceTest {
                 .thenReturn(null);
 
         assertThatThrownBy(() -> accountOpeningDomainService.openExternalAccount(
-                "PAYMENT", "CUST001", CustomerTypeEnum.ENTERPRISE, "1001", "REQ001"))
+                "PAYMENT", "CUST001", "测试企业", CustomerTypeEnum.ENTERPRISE, "1001", "REQ001"))
                 .isInstanceOf(AccountException.class)
                 .satisfies(ex -> {
                     AccountException e = (AccountException) ex;
@@ -121,7 +121,7 @@ class AccountOpeningDomainServiceTest {
                 .thenReturn(template);
 
         assertThatThrownBy(() -> accountOpeningDomainService.openExternalAccount(
-                "PAYMENT", "CUST001", CustomerTypeEnum.ENTERPRISE, "1001", "REQ001"))
+                "PAYMENT", "CUST001", "测试企业", CustomerTypeEnum.ENTERPRISE, "1001", "REQ001"))
                 .isInstanceOf(AccountException.class)
                 .satisfies(ex -> {
                     AccountException e = (AccountException) ex;
@@ -137,7 +137,7 @@ class AccountOpeningDomainServiceTest {
                 .thenReturn(template);
 
         assertThatThrownBy(() -> accountOpeningDomainService.openExternalAccount(
-                "PAYMENT", "CUST001", CustomerTypeEnum.ENTERPRISE, "1001", "REQ001"))
+                "PAYMENT", "CUST001", "测试企业", CustomerTypeEnum.ENTERPRISE, "1001", "REQ001"))
                 .isInstanceOf(AccountException.class)
                 .satisfies(ex -> {
                     AccountException e = (AccountException) ex;
@@ -161,7 +161,7 @@ class AccountOpeningDomainServiceTest {
                 .when(distributedLockTemplate).execute(anyString(), anyLong(), anyLong(), any());
 
         assertThatThrownBy(() -> accountOpeningDomainService.openExternalAccount(
-                "PAYMENT", "CUST001", CustomerTypeEnum.ENTERPRISE, "1001", "REQ001"))
+                "PAYMENT", "CUST001", "测试企业", CustomerTypeEnum.ENTERPRISE, "1001", "REQ001"))
                 .isInstanceOf(AccountException.class)
                 .satisfies(ex -> {
                     AccountException e = (AccountException) ex;
@@ -185,7 +185,7 @@ class AccountOpeningDomainServiceTest {
                 .when(distributedLockTemplate).execute(anyString(), anyLong(), anyLong(), any());
 
         assertThatThrownBy(() -> accountOpeningDomainService.openExternalAccount(
-                "PAYMENT", "CUST001", CustomerTypeEnum.ENTERPRISE, "1001", "REQ001"))
+                "PAYMENT", "CUST001", "测试企业", CustomerTypeEnum.ENTERPRISE, "1001", "REQ001"))
                 .isInstanceOf(AccountException.class)
                 .satisfies(ex -> {
                     AccountException e = (AccountException) ex;
@@ -206,7 +206,7 @@ class AccountOpeningDomainServiceTest {
                 .when(distributedLockTemplate).execute(anyString(), anyLong(), anyLong(), any());
 
         assertThatThrownBy(() -> accountOpeningDomainService.openExternalAccount(
-                "PAYMENT", "CUST001", CustomerTypeEnum.ENTERPRISE, "1001", "REQ001"))
+                "PAYMENT", "CUST001", "测试企业", CustomerTypeEnum.ENTERPRISE, "1001", "REQ001"))
                 .isInstanceOf(AccountException.class)
                 .satisfies(ex -> {
                     AccountException e = (AccountException) ex;
@@ -235,7 +235,7 @@ class AccountOpeningDomainServiceTest {
                 .when(distributedLockTemplate).execute(anyString(), anyLong(), anyLong(), any());
 
         AccountPO result = accountOpeningDomainService.openExternalAccount(
-                "PAYMENT", "CUST001", CustomerTypeEnum.ENTERPRISE, null, "REQ002");
+                "PAYMENT", "CUST001", "测试企业", CustomerTypeEnum.ENTERPRISE, null, "REQ002");
 
         assertThat(result).isNotNull();
         assertThat(result.getAccountNo()).isEqualTo("0012026030100002");
@@ -297,7 +297,7 @@ class AccountOpeningDomainServiceTest {
                 .when(distributedLockTemplate).execute(anyString(), anyLong(), anyLong(), any());
 
         AccountPO result = accountOpeningDomainService.openExternalAccount(
-                "PAYMENT", "CUST001", CustomerTypeEnum.ENTERPRISE, "1001", traceNo64);
+                "PAYMENT", "CUST001", "测试企业", CustomerTypeEnum.ENTERPRISE, "1001", traceNo64);
 
         assertThat(result.getRequestNo()).isEqualTo(traceNo64);
         assertThat(result.getRequestNo()).hasSize(64);
@@ -305,7 +305,7 @@ class AccountOpeningDomainServiceTest {
         // 超长必须报错阻断，严禁静默截断篡改原始值
         String traceNo70 = traceNo64 + "ABCDEF";
         assertThatThrownBy(() -> accountOpeningDomainService.openExternalAccount(
-                "PAYMENT", "CUST001", CustomerTypeEnum.ENTERPRISE, "1001", traceNo70))
+                "PAYMENT", "CUST001", "测试企业", CustomerTypeEnum.ENTERPRISE, "1001", traceNo70))
                 .isInstanceOf(AccountException.class)
                 .satisfies(ex -> {
                     AccountException e = (AccountException) ex;

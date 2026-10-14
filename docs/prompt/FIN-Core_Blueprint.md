@@ -1089,6 +1089,19 @@
            - 新增 `AccountPreCheckDomainServiceTest` 单元测试，捕获并断言自动预开户时传入开户引擎的 `requestNo` 严格等于传入的 `traceNo`；
            - 扩充 `AccountOpeningDomainServiceTest`：断言多模板开户时所有开出的账户 `requestNo` 均为原始 `requestNo`；验证 64 位 `traceNo` 完整无损入库，以及超过 64 位时精准抛出 `PARAM_ERROR` 异常阻断；
            - 运行全套 75 个账户与流水相关单测 100% 通过（0 Failure / 0 Error）。
+    - **记账流水明细补齐客户名称与自动开户户名生成透传治理（BUG261014-003）**：
+      - **全链路根因剖析（Root Cause）**：
+        1. 契约层 `JournalDetailRequest` 仅包含 `customerId`、`customerType`、`fundsType`、`amount`、`extraAttrs`，缺少 `customerName`；
+        2. 记账流水触发预开户检查时，`JournalingApplicationService` 仅提取 `Map<String, CustomerTypeEnum>` 传递给 `AccountPreCheckDomainService`，丢失客户名称上下文；
+        3. `AccountPreCheckDomainService` 只能调用 5 参数重载 `openExternalAccount`（`customerName` 传入 `null`）；
+        4. 开户规则解析账户名称（`AccountNoGenerator.generateAccountName`）时，`acctNameRule` 包含 `{ownerName}` 或 `{ownerName2}` 占位符因缺少 `customerName` 退化为 `ownerId`，无法生成如“张三-活期存款”的真实户名。
+      - **全维度加固治理落地**：
+        1. **契约层扩展（accounting-api）**：`JournalDetailRequest` 扩充 `customerName` 字段并添加 `@Size(max = 64)` 校验；
+        2. **领域模型与数据载体（accounting-core）**：新建 `CustomerCheckInfo` 统一封装 `customerType` 与 `customerName`；
+        3. **开户领域服务（AccountOpeningDomainService）**：彻底清除无 `customerName` 的 5 参数过期重载方法，统一收口至 6 参数 `openExternalAccount`；
+        4. **预开户检查领域服务（AccountPreCheckDomainService）**：入参全面重构为 `Map<String, CustomerCheckInfo>`，彻底清理旧版 `Map<String, CustomerTypeEnum>` 方法，内部绑定 `ownerName` 并在自动开户时向 `AccountOpeningDomainService` 完整透传；
+        5. **记账应用编排层（JournalingApplicationService）**：升级 `buildCustomerMap` 与 `buildCustomerMapFromDetails`，在普通记账、业务预冻结及掉单对账补偿全链路透传包含客户名称的 `CustomerCheckInfo`；
+        6. **测试保障与回归验证**：更新 `AccountOpeningDomainServiceTest`、`AccountPreCheckDomainServiceTest`，并在 `JournalingApplicationServiceTest` 增补对 `customerName` 传递的断言测试，全工程 386 个单测 100% 绿色通过。
 - [x] **Step 23** · 业务功能页面开发全量交付完毕（100% 完成）
 
 

@@ -63,19 +63,6 @@ public class AccountOpeningDomainService {
     @Autowired(required = false)
     private DictionaryCacheService dictionaryCacheService;
 
-    /**
-     * 外部客户账户开户（单账户兼容接口）
-     *
-     * @param businessCode 业务线编码
-     * @param customerId   客户ID（作为 ownerId）
-     * @param customerType 客户类型枚举
-     * @param subjectCode  科目编码（可选，传入则精确匹配模板，不传则匹配首个启用模板）
-     * @param requestNo    开户请求号
-     */
-    public AccountPO openExternalAccount(String businessCode, String customerId,
-                                          CustomerTypeEnum customerType, String subjectCode, String requestNo) {
-        return openExternalAccount(businessCode, customerId, null, customerType, subjectCode, requestNo);
-    }
 
     /**
      * 外部客户账户开户（含 customerName）

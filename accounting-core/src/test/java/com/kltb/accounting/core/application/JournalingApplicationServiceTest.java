@@ -18,10 +18,12 @@ import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.infrastructure.redis.DistributedLockTemplate;
 import com.kltb.accounting.core.shared.exception.AccountException;
 import com.kltb.accounting.core.shared.exception.ServiceException;
+import com.kltb.accounting.core.domain.model.CustomerCheckInfo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -808,5 +810,54 @@ class JournalingApplicationServiceTest {
         assertThat(response.getTotal()).isEqualTo(1L);
         assertThat(response.getList()).hasSize(1);
         assertThat(response.getList().get(0).getTxnNo()).isEqualTo("TXN_PAGE_001");
+    }
+
+    @Test
+    @DisplayName("submitJournal: 明细传入 customerName 时正确封装 CustomerCheckInfo 并透传给预开户检查")
+    void submitJournal_withCustomerName_shouldPassCustomerCheckInfoToPreCheck() {
+        JournalSubmitRequest request = new JournalSubmitRequest();
+        request.setTraceNo("TRACE_CUST_NAME_001");
+        request.setTraceSeq(0);
+        request.setBusinessCode("LOAN");
+        request.setTradingCode("DISBURSE");
+        request.setPayChannel("BANK");
+        request.setTradeType(TradeTypeEnum.NORMAL.getCode());
+        request.setAmount(new BigDecimal("200.00"));
+        request.setTradeTime(LocalDateTime.now());
+        request.setSummary("放款客户名称测试");
+
+        JournalDetailRequest detail = new JournalDetailRequest();
+        detail.setCustomerId("CUST_ZHANGSAN");
+        detail.setCustomerName("张三");
+        detail.setCustomerType(CustomerTypeEnum.PERSONAL.getCode());
+        detail.setFundsType("PRINCIPAL");
+        detail.setAmount(new BigDecimal("200.00"));
+        request.setDetails(List.of(detail));
+
+        AccountingRulePO rule = new AccountingRulePO();
+        rule.setId(88L);
+        rule.setBusinessCode("LOAN");
+        rule.setTradingCode("DISBURSE");
+        rule.setPayChannel("BANK");
+        rule.setStatus(RuleStatusEnum.ENABLED);
+        when(accountingRuleRepository.selectByBusinessKey("LOAN", "DISBURSE", "BANK")).thenReturn(rule);
+        when(journalingDomainService.checkIdempotent("TRACE_CUST_NAME_001", 0)).thenReturn(null);
+        when(journalingDomainService.determineAccountingDate(any())).thenReturn(LocalDate.of(2026, 3, 1));
+        when(journalingDomainService.persistJournal(any(JournalCreateCommand.class)))
+                .thenReturn(new JournalSubmitResult("TRACE_CUST_NAME_001", LocalDate.of(2026, 3, 1), "TXN001"));
+
+        JournalSubmitResponse response = service.submitJournal(request);
+
+        assertThat(response).isNotNull();
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, CustomerCheckInfo>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(accountPreCheckDomainService).preCheckAndOpenAccounts(eq(rule), captor.capture(), eq("TRACE_CUST_NAME_001"));
+
+        Map<String, CustomerCheckInfo> capturedMap = captor.getValue();
+        assertThat(capturedMap).containsKey("CUST_ZHANGSAN");
+        CustomerCheckInfo info = capturedMap.get("CUST_ZHANGSAN");
+        assertThat(info.getCustomerName()).isEqualTo("张三");
+        assertThat(info.getCustomerType()).isEqualTo(CustomerTypeEnum.PERSONAL);
     }
 }
