@@ -7,7 +7,6 @@ import com.kltb.accounting.core.application.dto.SubjectResponse;
 import com.kltb.accounting.core.domain.enums.AvailableStatusEnum;
 import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
 import com.kltb.accounting.core.domain.enums.SubjectCategoryEnum;
-import com.kltb.accounting.core.domain.enums.SubjectNatureEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountSubjectPO;
 import com.kltb.accounting.core.shared.context.TenantContext;
 
@@ -33,8 +32,6 @@ public class SubjectConverter {
         po.setParentSubjectId(request.getParentSubjectId());
         po.setSubjectCategory(Optional.ofNullable(SubjectCategoryEnum.fromCode(request.getSubjectCategory()))
                 .orElse(SubjectCategoryEnum.OFF_BALANCE));
-        po.setNature(Optional.ofNullable(SubjectNatureEnum.fromCode(request.getNature()))
-                .orElse(SubjectNatureEnum.NORMAL));
         po.setDebitCredit(Optional.ofNullable(DebitCreditEnum.fromCode(request.getDebitCredit()))
                 .orElse(DebitCreditEnum.DEBIT));
         po.setLeaf(request.getLeaf() != null && request.getLeaf());
@@ -60,10 +57,6 @@ public class SubjectConverter {
         if (request.getSubjectCategory() != null) {
             Optional.ofNullable(SubjectCategoryEnum.fromCode(request.getSubjectCategory()))
                     .ifPresent(po::setSubjectCategory);
-        }
-        if (request.getNature() != null) {
-            Optional.ofNullable(SubjectNatureEnum.fromCode(request.getNature()))
-                    .ifPresent(po::setNature);
         }
         if (request.getDebitCredit() != null) {
             Optional.ofNullable(DebitCreditEnum.fromCode(request.getDebitCredit()))
@@ -97,7 +90,6 @@ public class SubjectConverter {
         resp.setSubjectLevel(po.getSubjectLevel());
         resp.setParentSubjectId(po.getParentSubjectId());
         resp.setSubjectCategory(Optional.ofNullable(po.getSubjectCategory()).map(SubjectCategoryEnum::getCode).orElse(null));
-        resp.setNature(Optional.ofNullable(po.getNature()).map(SubjectNatureEnum::getCode).orElse(null));
         resp.setDebitCredit(Optional.ofNullable(po.getDebitCredit()).map(DebitCreditEnum::getCode).orElse(null));
         resp.setLeaf(po.getLeaf());
         resp.setAllowPost(po.getAllowPost());

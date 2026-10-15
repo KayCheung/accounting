@@ -16,7 +16,6 @@ public class SubjectResponse {
     private Integer subjectLevel;
     private Long parentSubjectId;
     private Integer subjectCategory;
-    private Integer nature;
     private Integer debitCredit;
     private Boolean leaf;
     private Boolean allowPost;

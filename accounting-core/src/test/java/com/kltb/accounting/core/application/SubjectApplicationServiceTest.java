@@ -5,7 +5,6 @@ import com.kltb.accounting.api.request.SubjectUpdateRequest;
 import com.kltb.accounting.core.domain.enums.AvailableStatusEnum;
 import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
 import com.kltb.accounting.core.domain.enums.SubjectCategoryEnum;
-import com.kltb.accounting.core.domain.enums.SubjectNatureEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountSubjectPO;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountMapper;
 import com.kltb.accounting.core.infrastructure.persistence.repository.SubjectRepository;
@@ -60,7 +59,6 @@ class SubjectApplicationServiceTest {
         po.setSubjectCode("1001");
         po.setSubjectName("库存现金");
         po.setSubjectCategory(SubjectCategoryEnum.ASSET);
-        po.setNature(SubjectNatureEnum.CASH);
         po.setDebitCredit(DebitCreditEnum.DEBIT);
         po.setLeaf(true);
         po.setStatus(AvailableStatusEnum.ENABLED);

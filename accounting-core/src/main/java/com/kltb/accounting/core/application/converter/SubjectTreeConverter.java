@@ -8,7 +8,6 @@ import com.kltb.accounting.core.application.dto.SubjectResponse;
 import com.kltb.accounting.core.domain.enums.AvailableStatusEnum;
 import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
 import com.kltb.accounting.core.domain.enums.SubjectCategoryEnum;
-import com.kltb.accounting.core.domain.enums.SubjectNatureEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountSubjectAuxiliaryPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountSubjectPO;
 import com.kltb.accounting.core.shared.context.TenantContext;
@@ -35,7 +34,6 @@ public class SubjectTreeConverter {
         resp.setSubjectLevel(po.getSubjectLevel());
         resp.setParentSubjectId(po.getParentSubjectId());
         resp.setSubjectCategory(Optional.ofNullable(po.getSubjectCategory()).map(SubjectCategoryEnum::getCode).orElse(null));
-        resp.setNature(Optional.ofNullable(po.getNature()).map(SubjectNatureEnum::getCode).orElse(null));
         resp.setDebitCredit(Optional.ofNullable(po.getDebitCredit()).map(DebitCreditEnum::getCode).orElse(null));
         resp.setLeaf(po.getLeaf());
         resp.setAllowPost(po.getAllowPost());

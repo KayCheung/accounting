@@ -1102,6 +1102,16 @@
         4. **预开户检查领域服务（AccountPreCheckDomainService）**：入参全面重构为 `Map<String, CustomerCheckInfo>`，彻底清理旧版 `Map<String, CustomerTypeEnum>` 方法，内部绑定 `ownerName` 并在自动开户时向 `AccountOpeningDomainService` 完整透传；
         5. **记账应用编排层（JournalingApplicationService）**：升级 `buildCustomerMap` 与 `buildCustomerMapFromDetails`，在普通记账、业务预冻结及掉单对账补偿全链路透传包含客户名称的 `CustomerCheckInfo`；
         6. **测试保障与回归验证**：更新 `AccountOpeningDomainServiceTest`、`AccountPreCheckDomainServiceTest`，并在 `JournalingApplicationServiceTest` 增补对 `customerName` 传递的断言测试，全工程 386 个单测 100% 绿色通过。
+    - **会计科目表冗余且歧义的 nature（科目性质）字段彻底下线与模型纯化治理（REQ261015-001）**：
+      - **全链路根因剖析（Root Cause）**：
+        1. 原 `t_account_subject.nature` 字段（1-非特殊性科目, 2-销账类科目, 3-贷款类科目, 4-现金类科目）存在严重的分类维度混淆与概念重叠（将核算控制模式、资金流动性特征与业务产品品种揉杂在一个单选枚举中），导致理解与录入歧义；
+        2. 全系统技术盘点确认：整个记账过账引擎、凭证生成、日终结账、分户核算等核心业务逻辑从未读取或消费该字段，属于早期原型遗留的无业务语义“幽灵字段”；而“总账类与明细类”体系已通过 `subject_level`、`is_leaf`、`allow_open_account` 精确表达；
+      - **全维度纯化与下线落地**：
+        1. **数据库 DDL 与迁移脚本**：新增 Flyway 迁移脚本 `V26__remove_nature_from_subject.sql`，执行安全校验删除 `t_account_subject.nature` 物理列，并同步同步更新 `docker/mysql/init/02_accounting_schema.sql`；
+        2. **契约与持久层精简（accounting-api & accounting-core）**：从 `SubjectCreateRequest`、`SubjectUpdateRequest`、`SubjectResponse`、`AccountSubjectPO` 中彻底移除 `nature` 字段；物理删除无用的 `SubjectNatureEnum`；
+        3. **转换器与单元测试**：重构 `SubjectConverter` 与 `SubjectTreeConverter`，清理 `SubjectApplicationServiceTest`；
+        4. **前端管理台同步精简（accounting-ui）**：从 `src/api/subject.ts` 中删除 `nature` 及 `SUBJECT_NATURES` 常量；从 `views/config/subject/index.vue` 中移除科目表格「科目性质」列、表单下拉项、校验规则及初始状态，优雅对齐「账类」与「余额方向」网格排版；
+      - **测试保障与构建验证**：全工程 Maven 402 个单元与集成测试 100% 绿色通过（0 失败 0 错误）；前端 `vue-tsc` 类型检查与 `vite build` 生产构建 0 错误打包通过。
 - [x] **Step 23** · 业务功能页面开发全量交付完毕（100% 完成）
 
 

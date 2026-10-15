@@ -92,11 +92,6 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="nature" label="科目性质" width="130" align="center">
-          <template #default="{ row }">
-            <span>{{ getNatureLabel(row.nature) }}</span>
-          </template>
-        </el-table-column>
         <el-table-column prop="debitCredit" label="余额方向" width="90" align="center">
           <template #default="{ row }">
             <el-tag
@@ -186,40 +181,55 @@
         :rules="formRules"
         label-width="100px"
       >
-        <!-- 父级科目展示 -->
-        <el-form-item label="上级科目">
-          <el-input
-            :model-value="parentSubjectDisplay"
-            disabled
-            placeholder="无（顶级科目）"
-          />
-        </el-form-item>
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <!-- 父级科目展示 -->
+            <el-form-item label="上级科目">
+              <el-input
+                :model-value="parentSubjectDisplay"
+                disabled
+                placeholder="无（顶级科目）"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <!-- 科目级次 -->
+            <el-form-item label="科目级次">
+              <el-tag type="info">{{ subjectForm.subjectLevel }} 级</el-tag>
+            </el-form-item>
+          </el-col>
+        </el-row>
 
-        <!-- 科目编码 -->
-        <el-form-item label="科目编码" prop="subjectCode">
-          <el-input
-            v-model="subjectForm.subjectCode"
-            placeholder="如: 1001 或 100101"
-            :disabled="isEditMode"
-            maxlength="32"
-          >
-            <template v-if="!isEditMode && currentParent" #prepend>
-              {{ currentParent.subjectCode }}
-            </template>
-          </el-input>
-          <div v-if="!isEditMode && currentParent" class="form-tip">
-            子科目编码必须以父科目编码「{{ currentParent.subjectCode }}」为前缀
-          </div>
-        </el-form-item>
-
-        <!-- 科目名称 -->
-        <el-form-item label="科目名称" prop="subjectName">
-          <el-input
-            v-model="subjectForm.subjectName"
-            placeholder="如: 库存现金 或 人民币现金"
-            maxlength="64"
-          />
-        </el-form-item>
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <!-- 科目编码 -->
+            <el-form-item label="科目编码" prop="subjectCode">
+              <el-input
+                v-model="subjectForm.subjectCode"
+                placeholder="如: 1001 或 100101"
+                :disabled="isEditMode"
+                maxlength="32"
+              >
+                <template v-if="!isEditMode && currentParent" #prepend>
+                  {{ currentParent.subjectCode }}
+                </template>
+              </el-input>
+              <div v-if="!isEditMode && currentParent" class="form-tip">
+                子科目编码必须以父科目编码「{{ currentParent.subjectCode }}」为前缀
+              </div>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <!-- 科目名称 -->
+            <el-form-item label="科目名称" prop="subjectName">
+              <el-input
+                v-model="subjectForm.subjectName"
+                placeholder="如: 库存现金 或 人民币现金"
+                maxlength="64"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
 
         <el-row :gutter="20">
           <el-col :span="12">
@@ -241,26 +251,6 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <!-- 科目性质 -->
-            <el-form-item label="科目性质" prop="nature">
-              <el-select
-                v-model="subjectForm.nature"
-                placeholder="请选择性质"
-                style="width: 100%;"
-              >
-                <el-option
-                  v-for="n in SUBJECT_NATURES"
-                  :key="n.value"
-                  :label="n.label"
-                  :value="n.value"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-row :gutter="20">
-          <el-col :span="12">
             <!-- 余额方向 -->
             <el-form-item label="余额方向" prop="debitCredit">
               <el-radio-group
@@ -270,12 +260,6 @@
                 <el-radio :value="1">借方</el-radio>
                 <el-radio :value="2">贷方</el-radio>
               </el-radio-group>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <!-- 科目级次 -->
-            <el-form-item label="科目级次">
-              <el-tag type="info">{{ subjectForm.subjectLevel }} 级</el-tag>
             </el-form-item>
           </el-col>
         </el-row>
@@ -467,7 +451,6 @@ import {
   updateSubjectAuxiliary,
   deleteSubjectAuxiliary,
   SUBJECT_CATEGORIES,
-  SUBJECT_NATURES,
   type SubjectItem,
   type SubjectCreateRequest,
   type SubjectUpdateRequest,
@@ -495,10 +478,6 @@ const filteredTableData = computed(() => tableData.value)
 
 function getCategoryMeta(categoryCode: number) {
   return SUBJECT_CATEGORIES.find((c) => c.value === categoryCode)
-}
-
-function getNatureLabel(natureCode: number) {
-  return SUBJECT_NATURES.find((n) => n.value === natureCode)?.label || '未知性质'
 }
 
 /**
@@ -637,7 +616,6 @@ const subjectForm = reactive({
   subjectLevel: 1,
   parentSubjectId: 0,
   subjectCategory: 1,
-  nature: 1,
   debitCredit: 1,
   leaf: true,
   allowPost: true,
@@ -682,7 +660,6 @@ const formRules: FormRules = {
     { max: 64, message: '科目名称最大 64 个字符', trigger: 'blur' }
   ],
   subjectCategory: [{ required: true, message: '请选择账类', trigger: 'change' }],
-  nature: [{ required: true, message: '请选择科目性质', trigger: 'change' }],
   debitCredit: [{ required: true, message: '请选择余额方向', trigger: 'change' }]
 }
 
@@ -709,7 +686,6 @@ function openCreateTopDialog() {
     subjectLevel: 1,
     parentSubjectId: 0,
     subjectCategory: defaultCategory,
-    nature: 1,
     debitCredit: 1,
     leaf: true,
     allowPost: true,
@@ -733,7 +709,6 @@ function openAddChildDialog(parent: SubjectItem) {
     subjectLevel: parent.subjectLevel + 1,
     parentSubjectId: parent.id,
     subjectCategory: parent.subjectCategory,
-    nature: parent.nature,
     debitCredit: parent.debitCredit,
     leaf: true,
     allowPost: true,
@@ -765,7 +740,6 @@ function openEditDialog(row: SubjectItem) {
     subjectLevel: row.subjectLevel,
     parentSubjectId: row.parentSubjectId,
     subjectCategory: row.subjectCategory,
-    nature: row.nature,
     debitCredit: row.debitCredit,
     leaf: row.leaf,
     allowPost: row.allowPost,
@@ -788,7 +762,6 @@ async function handleSubmitSubject() {
       const updatePayload: SubjectUpdateRequest = {
         subjectName: subjectForm.subjectName,
         subjectCategory: subjectForm.subjectCategory,
-        nature: subjectForm.nature,
         debitCredit: subjectForm.debitCredit,
         leaf: subjectForm.leaf,
         allowPost: subjectForm.allowPost,
@@ -804,7 +777,6 @@ async function handleSubmitSubject() {
         subjectLevel: subjectForm.subjectLevel,
         parentSubjectId: subjectForm.parentSubjectId,
         subjectCategory: subjectForm.subjectCategory,
-        nature: subjectForm.nature,
         debitCredit: subjectForm.debitCredit,
         leaf: subjectForm.leaf,
         allowPost: subjectForm.allowPost,

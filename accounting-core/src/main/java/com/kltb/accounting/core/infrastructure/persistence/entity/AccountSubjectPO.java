@@ -6,7 +6,6 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import com.kltb.accounting.core.domain.enums.AvailableStatusEnum;
 import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
 import com.kltb.accounting.core.domain.enums.SubjectCategoryEnum;
-import com.kltb.accounting.core.domain.enums.SubjectNatureEnum;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
@@ -37,9 +36,6 @@ public class AccountSubjectPO extends BaseEntity {
 
     /** 账类：资产/负债/权益/共同/成本/损益/表外 */
     private SubjectCategoryEnum subjectCategory;
-
-    /** 科目性质：非特殊/销账/贷款/现金 */
-    private SubjectNatureEnum nature;
 
     /** 借贷方向：借/贷（复用 Java-A 定义的 DebitCreditEnum） */
     private DebitCreditEnum debitCredit;

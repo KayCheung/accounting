@@ -464,7 +464,6 @@ CREATE TABLE IF NOT EXISTS t_account_subject (
     subject_level TINYINT NOT NULL COMMENT '科目级别',
     parent_subject_id BIGINT NOT NULL DEFAULT 0 COMMENT '父科目ID',
     subject_category TINYINT NOT NULL COMMENT '账类：1-资产类,2-负债类,3-权益类,4-共同类,5-成本类,6-损益类,0-表外科目',
-    nature TINYINT NOT NULL COMMENT '科目性质：1-非特殊性科目,2-销账类科目,3-贷款类科目,4-现金类科目',
     debit_credit TINYINT NOT NULL COMMENT '借贷方向：1-借,2-贷',
     is_leaf TINYINT NOT NULL DEFAULT '0' COMMENT '是否末级科目',
     allow_post TINYINT NOT NULL DEFAULT '0' COMMENT '是否允许记账',
@@ -1310,3 +1309,18 @@ CREATE TABLE IF NOT EXISTS `t_eod_status` (
     UNIQUE KEY `uk_eod_date` (`accounting_date`, `is_delete`),
     KEY `idx_eod_status` (`eod_status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='日切状态表';
+
+-- ==================== Migration: V26__remove_nature_from_subject.sql ====================
+
+USE `accounting`;
+
+-- V26: 移除会计科目表 t_account_subject 中冗余无业务语义的 nature 字段
+SET @schema_name = COALESCE(DATABASE(), 'accounting');
+
+SET @col_exists = 0;
+SELECT COUNT(*) INTO @col_exists FROM information_schema.columns
+    WHERE table_schema = @schema_name AND table_name = 't_account_subject' AND column_name = 'nature';
+SET @sql = IF(@col_exists > 0,
+    'ALTER TABLE `t_account_subject` DROP COLUMN `nature`',
+    'SELECT \'Column nature already removed, skip drop\' AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;

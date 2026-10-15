@@ -35,10 +35,6 @@ public class SubjectCreateRequest {
     @Schema(description = "账类：0=表外，1=资产，2=负债，3=权益，4=共同，5=成本，6=损益", requiredMode = Schema.RequiredMode.REQUIRED)
     private Integer subjectCategory;
 
-    @NotNull(message = "科目性质不能为空")
-    @Schema(description = "科目性质：1=非特殊，2=销账，3=贷款，4=现金", requiredMode = Schema.RequiredMode.REQUIRED)
-    private Integer nature;
-
     @NotNull(message = "借贷方向不能为空")
     @Schema(description = "借贷方向：1=借，2=贷", requiredMode = Schema.RequiredMode.REQUIRED)
     private Integer debitCredit;

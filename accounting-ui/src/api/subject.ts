@@ -11,7 +11,6 @@ export interface SubjectItem {
   subjectLevel: number
   parentSubjectId: number
   subjectCategory: number // 0=表外, 1=资产, 2=负债, 3=权益, 4=共同, 5=成本, 6=损益
-  nature: number          // 1=非特殊, 2=销账, 3=贷款, 4=现金
   debitCredit: number     // 1=借, 2=贷
   leaf: boolean
   allowPost: boolean
@@ -32,7 +31,6 @@ export interface SubjectCreateRequest {
   subjectLevel: number
   parentSubjectId: number
   subjectCategory: number
-  nature: number
   debitCredit: number
   leaf?: boolean
   allowPost?: boolean
@@ -46,7 +44,6 @@ export interface SubjectCreateRequest {
 export interface SubjectUpdateRequest {
   subjectName?: string
   subjectCategory?: number
-  nature?: number
   debitCredit?: number
   leaf?: boolean
   allowPost?: boolean
@@ -104,16 +101,6 @@ export const SUBJECT_CATEGORIES = [
   { value: 5, label: '成本类', tagType: 'success' },
   { value: 6, label: '损益类', tagType: '' },
   { value: 0, label: '表外科目', tagType: 'info' }
-] as const
-
-/**
- * 科目性质常量定义
- */
-export const SUBJECT_NATURES = [
-  { value: 1, label: '非特殊性科目' },
-  { value: 2, label: '销账类科目' },
-  { value: 3, label: '贷款类科目' },
-  { value: 4, label: '现金类科目' }
 ] as const
 
 /**

@@ -19,9 +19,6 @@ public class SubjectUpdateRequest {
     @Schema(description = "账类：0=表外，1=资产，2=负债，3=权益，4=共同，5=成本，6=损益")
     private Integer subjectCategory;
 
-    @Schema(description = "科目性质：1=非特殊，2=销账，3=贷款，4=现金")
-    private Integer nature;
-
     @Schema(description = "是否末级科目")
     private Boolean leaf;
 
