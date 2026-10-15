@@ -198,9 +198,6 @@ public class PostingApplicationService {
                 if (voucher.getTxnNo() != null) {
                     TransactionPO txn = transactionRepository.selectByTxnNo(voucher.getTxnNo());
                     if (txn != null) {
-                        // 回填 relateAccountCount
-                        txn.setRelateAccountCount(accountNos.size());
-
                         if (!hasAsync) {
                             // 无异步分录：事务状态=成功
                             transactionRepository.updateStatusByTxnNo(

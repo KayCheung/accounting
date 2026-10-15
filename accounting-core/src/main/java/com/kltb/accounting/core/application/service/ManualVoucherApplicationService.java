@@ -17,6 +17,7 @@ import com.kltb.accounting.core.infrastructure.persistence.entity.*;
 import com.kltb.accounting.core.infrastructure.persistence.repository.*;
 import com.kltb.accounting.core.shared.exception.AccountException;
 import com.kltb.accounting.core.shared.exception.ServiceException;
+import com.kltb.accounting.core.shared.util.AccountingEntryUtil;
 import com.kltb.accounting.core.shared.util.FinancialAmountUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -348,7 +349,8 @@ public class ManualVoucherApplicationService {
             txn.setTxnNo(txnNo);
             txn.setTraceNo(po.getApplyNo());
             txn.setAccountingDate(po.getAccountingDate());
-            txn.setRelateAccountCount(applyEntries.size());
+            int distinctAccounts = AccountingEntryUtil.countDistinctAccounts(applyEntries, ManualVoucherApplyEntryPO::getAccountNo);
+            txn.setRelateAccountCount(distinctAccounts);
             txn.setAmount(po.getTotalDebitAmount());
             txn.setCurrency(resolvedCurrency);
             txn.setStatus(TransactionStatusEnum.PROCESSING);

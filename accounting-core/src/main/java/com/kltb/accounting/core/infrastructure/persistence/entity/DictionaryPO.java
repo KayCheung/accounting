@@ -43,11 +43,20 @@ public class DictionaryPO extends BaseEntity {
 
     /**
      * 是否系统内置
-     * DDL: is_system TINYINT → Boolean（去掉 is 前缀）
+     * DDL: `is_system` TINYINT
      * 系统内置字典禁止删除
      */
-    @TableField("is_system")
-    private Boolean system;
+    @TableField("`is_system`")
+    private Boolean isSystem;
+
+    public Boolean getSystem() {
+        return this.isSystem;
+    }
+
+    public DictionaryPO setSystem(Boolean system) {
+        this.isSystem = system;
+        return this;
+    }
 
     /** 扩展属性 JSON */
     private String extJson;

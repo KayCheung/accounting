@@ -22,6 +22,7 @@ import com.kltb.accounting.core.infrastructure.redis.DistributedLockTemplate;
 import com.kltb.accounting.core.infrastructure.redis.RedisKeyConstants;
 import com.kltb.accounting.core.shared.exception.AccountException;
 import com.kltb.accounting.core.shared.exception.ServiceException;
+import com.kltb.accounting.core.shared.util.AccountingEntryUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
@@ -502,6 +503,15 @@ public class JournalingApplicationService {
                     .toList();
             if (!entryIds.isEmpty()) {
                 localMessages = localMessageService.selectByBusinessKeys(entryIds);
+            }
+        }
+
+        // 历史数据自愈兼容：若事务中涉及分户数为 0 或空，基于已生成的凭证分录重新计算并持久化
+        if (txn != null && (txn.getRelateAccountCount() == null || txn.getRelateAccountCount() == 0)) {
+            int distinctCount = AccountingEntryUtil.countDistinctAccountsFromEntryMap(entryMap);
+            if (distinctCount > 0) {
+                txn.setRelateAccountCount(distinctCount);
+                transactionRepository.updateRelateAccountCount(txn.getTxnNo(), distinctCount);
             }
         }
 

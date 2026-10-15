@@ -16,8 +16,10 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -222,7 +224,7 @@ public class JournalingAssembler {
             txnInfo.setStatusDesc(txn.getStatus() != null ? txn.getStatus().getDesc() : null);
             txnInfo.setFailReason(txn.getFailReason());
             txnInfo.setFinishTime(txn.getFinishTime());
-            txnInfo.setRelateAccountCount(txn.getRelateAccountCount());
+            txnInfo.setRelateAccountCount(txn.getRelateAccountCount() != null ? txn.getRelateAccountCount() : 0);
             response.setTransaction(txnInfo);
         }
 

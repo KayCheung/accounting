@@ -543,7 +543,7 @@
                   {{ overviewData.transaction.statusDesc }}
                 </el-tag>
               </el-descriptions-item>
-              <el-descriptions-item label="涉及分户账户数">{{ overviewData.transaction.relateAccountCount }} 户</el-descriptions-item>
+              <el-descriptions-item label="涉及分户账户数">{{ getRelateAccountCount(overviewData) }} 户</el-descriptions-item>
               <el-descriptions-item label="完成时间">{{ overviewData.transaction.finishTime || '处理中' }}</el-descriptions-item>
               <el-descriptions-item v-if="overviewData.transaction.failReason" label="失败原因" :span="2">
                 <span class="danger-text">{{ overviewData.transaction.failReason }}</span>
@@ -1067,6 +1067,29 @@ function getTxStatusDesc(status: number): string {
     case 3: return '失败'
     default: return '未知'
   }
+}
+
+function getRelateAccountCount(overview: JournalOverviewResponse | null): number {
+  if (!overview) return 0
+  if (overview.transaction?.relateAccountCount && overview.transaction.relateAccountCount > 0) {
+    return overview.transaction.relateAccountCount
+  }
+  if (overview.vouchers && overview.vouchers.length > 0) {
+    const accounts = new Set<string>()
+    for (const v of overview.vouchers) {
+      if (v.entries) {
+        for (const e of v.entries) {
+          if (e.accountNo) {
+            accounts.add(e.accountNo)
+          }
+        }
+      }
+    }
+    if (accounts.size > 0) {
+      return accounts.size
+    }
+  }
+  return 0
 }
 
 function getTradeTypeTag(type: number): '' | 'primary' | 'warning' | 'danger' | 'info' {

@@ -422,6 +422,8 @@ class JournalingApplicationServiceTest {
         assertThat(overview).isNotNull();
         assertThat(overview.getRecord().getTraceNo()).isEqualTo(traceNo);
         assertThat(overview.getTransaction().getTxnNo()).isEqualTo("TXN_001");
+        assertThat(overview.getTransaction().getRelateAccountCount()).isEqualTo(1);
+        verify(transactionRepository).updateRelateAccountCount("TXN_001", 1);
         assertThat(overview.getVouchers()).hasSize(1);
         assertThat(overview.getVouchers().get(0).getEntries()).hasSize(1);
         assertThat(overview.getVouchers().get(0).getEntries().get(0).getEntryId()).isEqualTo("ENT_001");

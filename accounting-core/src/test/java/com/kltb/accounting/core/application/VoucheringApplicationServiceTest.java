@@ -395,6 +395,7 @@ class VoucheringApplicationServiceTest {
         assertThat(resp).isNotNull();
         assertThat(resp.getEntries().get(0).getAccountNo()).isEqualTo("ACC-FROM-DB-002");
         verify(accountRepository).selectByOwnerIdAndSubjectCode("CUST002", "1001");
+        verify(transactionRepository).updateRelateAccountCount("TXN002", 1);
     }
 
     @Test

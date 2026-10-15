@@ -58,6 +58,19 @@ public class TransactionRepository {
     }
 
     /**
+     * 按事务编号更新事务涉及分户账户数
+     */
+    public void updateRelateAccountCount(String txnNo, int relateAccountCount) {
+        if (StrUtil.isBlank(txnNo)) {
+            return;
+        }
+        LambdaUpdateWrapper<TransactionPO> wrapper = new LambdaUpdateWrapper<TransactionPO>()
+                .eq(TransactionPO::getTxnNo, txnNo)
+                .set(TransactionPO::getRelateAccountCount, relateAccountCount);
+        transactionMapper.update(null, wrapper);
+    }
+
+    /**
      * 按事务编号查询事务
      */
     public TransactionPO selectByTxnNo(String txnNo) {

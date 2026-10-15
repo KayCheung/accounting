@@ -29,6 +29,7 @@ import com.kltb.accounting.core.infrastructure.persistence.repository.SubjectRep
 import com.kltb.accounting.core.infrastructure.persistence.repository.TransactionRepository;
 import com.kltb.accounting.core.shared.exception.AccountException;
 import com.kltb.accounting.core.shared.exception.ServiceException;
+import com.kltb.accounting.core.shared.util.AccountingEntryUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -208,6 +209,12 @@ public class VoucheringApplicationService {
             if (affected != 1) {
                 throw new ServiceException(ResultCode.SYSTEM_ERROR,
                         "txnNo 回填失败: voucherNo=" + vouNo);
+            }
+
+            // 5f. 凭证生成阶段即可明确涉及分户账户：统计凭证全部分录的去重分户账号数并回填事务表
+            if (StrUtil.isNotBlank(txnNo) && entries != null && !entries.isEmpty()) {
+                int relateAccountCount = AccountingEntryUtil.countDistinctAccounts(entries, VoucherEntryData::getAccountNo);
+                transactionRepository.updateRelateAccountCount(txnNo, relateAccountCount);
             }
 
             return vouNo;
