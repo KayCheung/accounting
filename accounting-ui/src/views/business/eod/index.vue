@@ -226,8 +226,8 @@
               type="error"
               :closable="false"
               show-icon
-              title="存在不平衡科目！"
-              :description="`共发现 ${trialBalanceData.imbalancedSubjects?.length || 0} 个科目的借贷方净差额异常，阻断日终归档。`"
+              title="试算借贷不平衡阻断！"
+              :description="`检测到借贷总发生额存在差额（¥ ${trialBalanceData.diff || 0}），借方总发生额与贷方总发生额不相等，阻断日终归档。`"
             />
           </div>
         </div>
@@ -244,7 +244,7 @@
 
         <div class="bar-right">
           <el-checkbox v-model="onlyShowImbalanced" :disabled="!hasImbalancedSubjects">
-            仅看异常/不平衡科目 ({{ trialBalanceData?.imbalancedSubjects?.length || 0 }})
+            仅看差异科目 ({{ !trialBalanceData?.passed ? (trialBalanceData?.imbalancedSubjects?.length || 0) : 0 }})
           </el-checkbox>
           <el-input
             v-model="subjectFilterKeyword"
@@ -302,13 +302,24 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="平衡校验" width="110" align="center">
+        <el-table-column label="发生方向" width="90" align="center">
           <template #default="{ row }">
             <el-tag
-              :type="row.netDiff === 0 || row.netDiff === '0' || row.netDiff === 0.00 ? 'success' : 'danger'"
+              :type="getNetDirectionType(row.netDiff)"
               size="small"
             >
-              {{ row.netDiff === 0 || row.netDiff === '0' || row.netDiff === 0.00 ? '平衡' : '差额异常' }}
+              {{ getNetDirectionText(row.netDiff) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="平衡校验" width="110" align="center">
+          <template #default>
+            <el-tag
+              :type="trialBalanceData?.passed ? 'success' : 'danger'"
+              size="small"
+            >
+              {{ trialBalanceData?.passed ? '平衡' : '总账未平' }}
             </el-tag>
           </template>
         </el-table-column>
@@ -552,7 +563,8 @@ const defaultCheckItems: CheckItem[] = [
   { name: 'BUFFER_DETAIL', count: 0, passed: true },
   { name: 'PENDING_TRANSACTION', count: 0, passed: true },
   { name: 'UNPOSTED_VOUCHER', count: 0, passed: true },
-  { name: 'PENDING_JOURNAL', count: 0, passed: true }
+  { name: 'PENDING_JOURNAL', count: 0, passed: true },
+  { name: 'EXPIRED_FREEZE', count: 0, passed: true }
 ]
 
 // ==================== 计算属性 ====================
@@ -561,7 +573,7 @@ const defaultCheckItems: CheckItem[] = [
  * 是否存在不平衡科目
  */
 const hasImbalancedSubjects = computed(() => {
-  return (trialBalanceData.value?.imbalancedSubjects?.length || 0) > 0
+  return trialBalanceData.value != null && !trialBalanceData.value.passed
 })
 
 /**
@@ -572,10 +584,14 @@ const filteredSubjectList = computed<SubjectDetail[]>(() => {
   let list = trialBalanceData.value.subjectDetails
 
   if (onlyShowImbalanced.value) {
-    list = list.filter((item) => {
-      const net = Number(item.netDiff) || 0
-      return Math.abs(net) > 0.000001
-    })
+    if (!trialBalanceData.value.passed) {
+      list = list.filter((item) => {
+        const net = Number(item.netDiff) || 0
+        return Math.abs(net) > 0.000001
+      })
+    } else {
+      list = []
+    }
   }
 
   if (subjectFilterKeyword.value.trim()) {
@@ -651,9 +667,27 @@ function formatCheckItemName(name: string): string {
     BUFFER_DETAIL: '缓冲记账待入账明细',
     PENDING_TRANSACTION: '在途处理中业务事务',
     UNPOSTED_VOUCHER: '待过账凭证记录',
-    PENDING_JOURNAL: '在途业务流水单据'
+    PENDING_JOURNAL: '在途业务流水单据',
+    EXPIRED_FREEZE: '已到期未解冻控制明细',
+    bufferPending: '缓冲记账待入账明细',
+    processingTxn: '在途处理中业务事务',
+    unpostedVoucher: '待过账凭证记录',
+    processingJournal: '在途业务流水单据',
+    expiredFreeze: '已到期未解冻控制明细'
   }
   return map[name] || name
+}
+
+function getNetDirectionText(netDiff: number | string): string {
+  const num = Number(netDiff) || 0
+  if (Math.abs(num) < 0.000001) return '平'
+  return num > 0 ? '借' : '贷'
+}
+
+function getNetDirectionType(netDiff: number | string): 'primary' | 'warning' | 'info' {
+  const num = Number(netDiff) || 0
+  if (Math.abs(num) < 0.000001) return 'info'
+  return num > 0 ? 'primary' : 'warning'
 }
 
 function formatDuration(ms?: number): string {

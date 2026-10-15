@@ -21,19 +21,19 @@ public class EodAssembler {
                 .allPassed(result.isAllPassed())
                 .checks(List.of(
                         EodPreCheckResponse.CheckItem.builder()
-                                .name("bufferPending").count(result.getBufferPending())
+                                .name("BUFFER_DETAIL").count(result.getBufferPending())
                                 .passed(result.getBufferPending() == 0).build(),
                         EodPreCheckResponse.CheckItem.builder()
-                                .name("processingTxn").count(result.getProcessingTxn())
+                                .name("PENDING_TRANSACTION").count(result.getProcessingTxn())
                                 .passed(result.getProcessingTxn() == 0).build(),
                         EodPreCheckResponse.CheckItem.builder()
-                                .name("unpostedVoucher").count(result.getUnpostedVoucher())
+                                .name("UNPOSTED_VOUCHER").count(result.getUnpostedVoucher())
                                 .passed(result.getUnpostedVoucher() == 0).build(),
                         EodPreCheckResponse.CheckItem.builder()
-                                .name("processingJournal").count(result.getProcessingJournal())
+                                .name("PENDING_JOURNAL").count(result.getProcessingJournal())
                                 .passed(result.getProcessingJournal() == 0).build(),
                         EodPreCheckResponse.CheckItem.builder()
-                                .name("expiredFreeze").count(result.getExpiredFreeze())
+                                .name("EXPIRED_FREEZE").count(result.getExpiredFreeze())
                                 .passed(result.getExpiredFreeze() == 0).build()
                 ))
                 .build();

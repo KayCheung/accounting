@@ -70,24 +70,25 @@ public class AccountingDateCache {
     public LocalDate getCurrentDate() {
         // L1: Caffeine
         LocalDate cached = localCache.getIfPresent(REDIS_KEY);
-        if (cached != null) {
+        if (cached != null && !isDateArchived(cached)) {
             return cached;
         }
 
         // L2: Redis
-        // 注：Redis 中的值由 setCurrentDate() 写入，来源必定是 DB 兜底（eod_status=8），
-        // 所以读取时不再校验 eod_status，直接信任。
         RBucket<String> bucket = redissonClient.getBucket(REDIS_KEY);
         String redisValue = bucket.get();
         if (redisValue != null) {
             LocalDate date = LocalDate.parse(redisValue);
-            localCache.put(REDIS_KEY, date);
-            return date;
+            if (!isDateArchived(date)) {
+                localCache.put(REDIS_KEY, date);
+                return date;
+            }
+            log.warn("[ACCOUNTING-DATE] 缓存中的会计日期 [{}] 已归档，触发 DB 兜底重新计算", date);
         }
 
         // DB 兜底
         EodStatusPO latest = eodStatusRepository.findLatestCompleted();
-        if (latest != null && latest.getEodStatus() == 8) {
+        if (latest != null && latest.isCompleted()) {
             LocalDate date = latest.getAccountingDate().plusDays(1);
             localCache.put(REDIS_KEY, date);
             bucket.set(date.toString(), TTL_HOURS, TimeUnit.HOURS);
@@ -131,5 +132,11 @@ public class AccountingDateCache {
     public void invalidate() {
         localCache.invalidate(REDIS_KEY);
         log.info("[ACCOUNTING-DATE] 本地缓存已清除");
+    }
+
+    private boolean isDateArchived(LocalDate date) {
+        if (date == null) return false;
+        EodStatusPO status = eodStatusRepository.findByDate(date);
+        return status != null && status.isCompleted();
     }
 }

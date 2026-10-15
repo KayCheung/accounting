@@ -42,29 +42,32 @@ public class AccountingDateSwitchDomainService {
         LocalDate currentDate = accountingDateCache.getCurrentDate();
         LocalDate newDate = targetDate != null ? targetDate : currentDate.plusDays(1);
 
-        // 幂等检查：目标日期是否已存在日切记录
-        EodStatusPO existing = eodStatusRepository.findByDate(newDate);
-        if (existing != null && existing.getEodStatus() >= 2) {
-            log.info("[DATE-SWITCH] 目标日期已有日切记录，跳过: date={}", newDate);
+        // 幂等检查：若系统当前日期已经是目标日期或晚于目标日期，跳过
+        if (currentDate.isEqual(newDate) || currentDate.isAfter(newDate)) {
+            log.info("[DATE-SWITCH] 当前全局会计日期已达目标日期，跳过切日: current={}, target={}", currentDate, newDate);
             return new DateSwitchResult(currentDate, newDate, true);
         }
 
         try {
             log.info("[DATE-SWITCH] 开始切日: oldDate={}, newDate={}", currentDate, newDate);
-
-            // 1. 写入 t_eod_status 新记录（状态=2 切日中）
-            eodStatusDomainService.createStatus(newDate);
-            eodStatusDomainService.updateStage(2, newDate);
-
-            // 2. 更新切日完成时间（持久化到 DB）
             LocalDateTime switchTime = LocalDateTime.now();
-            eodStatusDomainService.updateSwitchDateTime(newDate, switchTime);
 
-            // 3. 更新 Redis + Caffeine 缓存
+            // 1. 更新原会计日（T日）的切日完成时间
+            if (currentDate != null) {
+                eodStatusDomainService.updateSwitchDateTime(currentDate, switchTime);
+            }
+
+            // 2. 初始化新会计日（T+1日）状态为 1-未开始(正常营业中)
+            EodStatusPO existing = eodStatusRepository.findByDate(newDate);
+            if (existing == null) {
+                eodStatusDomainService.createStatus(newDate);
+            } else if (existing.isCompleted()) {
+                // 若历史数据曾误标记为已完成，重置为未开始/营业中
+                eodStatusRepository.resetStatus(newDate);
+            }
+
+            // 3. 更新 Redis + Caffeine 缓存及通知
             accountingDateCache.setCurrentDate(newDate);
-
-            // 4. 标记切日完成
-            eodStatusDomainService.updateStage(8, newDate);
 
             log.info("[DATE-SWITCH] 切日完成: oldDate={}, newDate={}", currentDate, newDate);
             return new DateSwitchResult(currentDate, newDate, false, switchTime);

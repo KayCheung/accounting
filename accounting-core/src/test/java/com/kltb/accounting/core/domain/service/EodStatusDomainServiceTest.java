@@ -1,5 +1,6 @@
 package com.kltb.accounting.core.domain.service;
 
+import com.kltb.accounting.core.domain.enums.EodStatusEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.EodStatusPO;
 import com.kltb.accounting.core.infrastructure.persistence.repository.EodStatusRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -31,7 +32,7 @@ class EodStatusDomainServiceTest {
         EodStatusPO po = new EodStatusPO();
         po.setId(1L);
         po.setAccountingDate(date);
-        po.setEodStatus(1);
+        po.setEodStatus(EodStatusEnum.NOT_STARTED);
 
         when(eodStatusRepository.createStatus(date)).thenReturn(po);
 
@@ -39,6 +40,7 @@ class EodStatusDomainServiceTest {
 
         assertThat(result).isNotNull();
         assertThat(result.getId()).isEqualTo(1L);
+        assertThat(result.getEodStatus()).isEqualTo(EodStatusEnum.NOT_STARTED);
         verify(eodStatusRepository).createStatus(date);
     }
 
@@ -46,8 +48,8 @@ class EodStatusDomainServiceTest {
     @DisplayName("更新阶段状态成功")
     void updateStage_success() {
         LocalDate date = LocalDate.of(2026, 10, 8);
-        eodStatusDomainService.updateStage(3, date);
-        verify(eodStatusRepository).updateStatus(date, 3);
+        eodStatusDomainService.updateStage(EodStatusEnum.CLEANING, date);
+        verify(eodStatusRepository).updateStatus(date, EodStatusEnum.CLEANING);
     }
 
     @Test
@@ -87,13 +89,13 @@ class EodStatusDomainServiceTest {
     @DisplayName("查询最近已完成日切记录")
     void findLatestCompleted_success() {
         EodStatusPO po = new EodStatusPO();
-        po.setEodStatus(8);
+        po.setEodStatus(EodStatusEnum.COMPLETED);
         when(eodStatusRepository.findLatestCompleted()).thenReturn(po);
 
         EodStatusPO result = eodStatusDomainService.findLatestCompleted();
 
         assertThat(result).isNotNull();
-        assertThat(result.getEodStatus()).isEqualTo(8);
+        assertThat(result.getEodStatus()).isEqualTo(EodStatusEnum.COMPLETED);
     }
 
     @Test

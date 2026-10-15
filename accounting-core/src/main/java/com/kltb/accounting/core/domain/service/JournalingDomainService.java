@@ -16,7 +16,12 @@ import com.kltb.accounting.core.infrastructure.cache.AccountingDateCache;
 import com.kltb.accounting.core.infrastructure.persistence.repository.BusinessDetailRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.BusinessRecordRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.TransactionRepository;
+import com.kltb.accounting.api.constant.ResultCode;
+import com.kltb.accounting.core.infrastructure.persistence.entity.EodStatusPO;
+import com.kltb.accounting.core.infrastructure.persistence.repository.EodStatusRepository;
+import com.kltb.accounting.core.shared.exception.AccountException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -36,6 +41,7 @@ import java.util.Map;
  * 是否记账：是（流水持久化是记账流程入口）
  * 异常处理：幂等检查返回 null 表示首次请求，非空表示已处理过
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class JournalingDomainService {
@@ -45,6 +51,7 @@ public class JournalingDomainService {
     private final TransactionRepository transactionRepository;
     private final TransactionNoGenerator transactionNoGenerator;
     private final AccountingDateCache accountingDateCache;
+    private final EodStatusRepository eodStatusRepository;
     private final TransactionTemplate transactionTemplate;
 
     /**
@@ -68,7 +75,14 @@ public class JournalingDomainService {
      * @return 会计日期
      */
     public LocalDate determineAccountingDate(LocalDateTime tradeTime) {
-        return accountingDateCache.getCurrentDate();
+        LocalDate date = accountingDateCache.getCurrentDate();
+        EodStatusPO status = eodStatusRepository.findByDate(date);
+        if (status != null && status.isCompleted()) {
+            log.warn("[JOURNAL] 当前全局会计日 [{}] 已归档封闭，自动推进至下一会计日", date);
+            date = date.plusDays(1);
+            accountingDateCache.setCurrentDate(date);
+        }
+        return date;
     }
 
     /**
@@ -93,6 +107,12 @@ public class JournalingDomainService {
     public JournalSubmitResult persistJournal(JournalCreateCommand command) {
         if (command == null) {
             throw new IllegalArgumentException("command 不能为空");
+        }
+        // 财务核心准则：严禁向已完成日切归档封闭的会计日期写入新流水
+        EodStatusPO eodStatus = eodStatusRepository.findByDate(command.getAccountingDate());
+        if (eodStatus != null && eodStatus.isCompleted()) {
+            throw new AccountException(ResultCode.EOD_ALREADY_EXECUTED,
+                    "会计日期 [" + command.getAccountingDate() + "] 已日切归档封闭，禁止写入新交易流水");
         }
         return transactionTemplate.execute(status -> {
             // 1. 生成事务编号

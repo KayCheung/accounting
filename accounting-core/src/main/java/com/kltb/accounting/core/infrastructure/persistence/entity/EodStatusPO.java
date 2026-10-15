@@ -1,6 +1,8 @@
 package com.kltb.accounting.core.infrastructure.persistence.entity;
 
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.kltb.accounting.core.domain.enums.EodStatusEnum;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
@@ -30,7 +32,8 @@ public class EodStatusPO extends BaseEntity {
      * 1-未开始, 2-切日中, 3-清理中, 4-快照中,
      * 5-试算中, 6-结转中, 7-归档中, 8-完成, 9-失败
      */
-    private Integer eodStatus;
+    @TableField("eod_status")
+    private EodStatusEnum eodStatus;
 
     /** 切日完成时间 */
     private LocalDateTime switchDateTime;
@@ -46,4 +49,34 @@ public class EodStatusPO extends BaseEntity {
 
     /** 总耗时（毫秒） */
     private Long totalDurationMs;
+
+    /**
+     * 判断当前日切是否已完成归档
+     */
+    public boolean isCompleted() {
+        return EodStatusEnum.isCompleted(this.eodStatus);
+    }
+
+    /**
+     * 获取状态码数值（空安全）
+     */
+    public Integer getStatusCode() {
+        return this.eodStatus != null ? this.eodStatus.getCode() : null;
+    }
+
+    /**
+     * 便捷支持根据整数状态码设置枚举（兼容遗留调用）
+     */
+    public EodStatusPO setEodStatus(Integer code) {
+        this.eodStatus = EodStatusEnum.fromCode(code);
+        return this;
+    }
+
+    /**
+     * 设置枚举状态
+     */
+    public EodStatusPO setEodStatus(EodStatusEnum eodStatus) {
+        this.eodStatus = eodStatus;
+        return this;
+    }
 }

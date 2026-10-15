@@ -3,6 +3,7 @@ package com.kltb.accounting.core.infrastructure.persistence.repository;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.kltb.accounting.api.constant.ResultCode;
+import com.kltb.accounting.core.domain.enums.EodStatusEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.EodStatusPO;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.EodStatusMapper;
 import com.kltb.accounting.core.shared.exception.AccountException;
@@ -33,14 +34,14 @@ public class EodStatusRepository {
     public EodStatusPO createStatus(LocalDate accountingDate) {
         EodStatusPO existing = findByDate(accountingDate);
         if (existing != null) {
-            if (existing.getEodStatus() != null && existing.getEodStatus() == 8) {
+            if (existing.isCompleted()) {
                 throw new AccountException(ResultCode.EOD_ALREADY_EXECUTED,
                         "会计日 [" + accountingDate + "] 日切已完成，不可重复执行");
             }
             log.info("[EOD-STATUS] 会计日 [{}] 已存在日切记录(status={})，重置状态进行重试",
                     accountingDate, existing.getEodStatus());
             resetStatus(accountingDate);
-            existing.setEodStatus(1);
+            existing.setEodStatus(EodStatusEnum.NOT_STARTED);
             existing.setFailedStage("");
             existing.setFailReason("");
             existing.setTotalDurationMs(0L);
@@ -50,7 +51,7 @@ public class EodStatusRepository {
 
         EodStatusPO po = new EodStatusPO();
         po.setAccountingDate(accountingDate);
-        po.setEodStatus(1);
+        po.setEodStatus(EodStatusEnum.NOT_STARTED);
         po.setTotalDurationMs(0L);
         try {
             eodStatusMapper.insert(po);
@@ -59,12 +60,12 @@ public class EodStatusRepository {
             log.warn("[EOD-STATUS] 并发创建日切状态冲突，转为重试重置模式: date={}", accountingDate);
             EodStatusPO retryPo = findByDate(accountingDate);
             if (retryPo != null) {
-                if (retryPo.getEodStatus() != null && retryPo.getEodStatus() == 8) {
+                if (retryPo.isCompleted()) {
                     throw new AccountException(ResultCode.EOD_ALREADY_EXECUTED,
                             "会计日 [" + accountingDate + "] 日切已完成，不可重复执行");
                 }
                 resetStatus(accountingDate);
-                retryPo.setEodStatus(1);
+                retryPo.setEodStatus(EodStatusEnum.NOT_STARTED);
                 retryPo.setFailedStage("");
                 retryPo.setFailReason("");
                 retryPo.setTotalDurationMs(0L);
@@ -84,7 +85,7 @@ public class EodStatusRepository {
         int affected = eodStatusMapper.update(null,
                 new LambdaUpdateWrapper<EodStatusPO>()
                         .eq(EodStatusPO::getAccountingDate, accountingDate)
-                        .set(EodStatusPO::getEodStatus, 1)
+                        .set(EodStatusPO::getEodStatus, EodStatusEnum.NOT_STARTED)
                         .set(EodStatusPO::getFailedStage, "")
                         .set(EodStatusPO::getFailReason, "")
                         .set(EodStatusPO::getTotalDurationMs, 0L)
@@ -115,19 +116,19 @@ public class EodStatusRepository {
     public EodStatusPO findLatestCompleted() {
         return eodStatusMapper.selectOne(
                 new LambdaQueryWrapper<EodStatusPO>()
-                        .eq(EodStatusPO::getEodStatus, 8)
+                        .eq(EodStatusPO::getEodStatus, EodStatusEnum.COMPLETED)
                         .orderByDesc(EodStatusPO::getAccountingDate)
                         .last("LIMIT 1"),
                 false);
     }
 
     /**
-     * 更新日切阶段状态
+     * 更新日切阶段状态（枚举入参）
      *
      * @param accountingDate 会计日期
-     * @param status         新状态值
+     * @param status         日切状态枚举
      */
-    public void updateStatus(LocalDate accountingDate, int status) {
+    public void updateStatus(LocalDate accountingDate, EodStatusEnum status) {
         int affected = eodStatusMapper.update(null,
                 new LambdaUpdateWrapper<EodStatusPO>()
                         .eq(EodStatusPO::getAccountingDate, accountingDate)
@@ -147,7 +148,7 @@ public class EodStatusRepository {
         int affected = eodStatusMapper.update(null,
                 new LambdaUpdateWrapper<EodStatusPO>()
                         .eq(EodStatusPO::getAccountingDate, accountingDate)
-                        .set(EodStatusPO::getEodStatus, 8)
+                        .set(EodStatusPO::getEodStatus, EodStatusEnum.COMPLETED)
                         .set(EodStatusPO::getArchiveDateTime, LocalDateTime.now())
                         .set(EodStatusPO::getTotalDurationMs, durationMs));
         if (affected == 0) {
@@ -166,7 +167,7 @@ public class EodStatusRepository {
         int affected = eodStatusMapper.update(null,
                 new LambdaUpdateWrapper<EodStatusPO>()
                         .eq(EodStatusPO::getAccountingDate, accountingDate)
-                        .set(EodStatusPO::getEodStatus, 9)
+                        .set(EodStatusPO::getEodStatus, EodStatusEnum.FAILED)
                         .set(EodStatusPO::getFailedStage, failedStage)
                         .set(EodStatusPO::getFailReason, failReason));
         if (affected == 0) {

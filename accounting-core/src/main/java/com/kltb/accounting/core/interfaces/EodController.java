@@ -13,6 +13,7 @@ import com.kltb.accounting.core.application.service.EodApplicationService;
 import com.kltb.accounting.core.domain.service.AccountingDateSwitchDomainService;
 import com.kltb.accounting.core.domain.service.AccountingDateSwitchDomainService.DateSwitchResult;
 import com.kltb.accounting.core.domain.service.EodStatusDomainService;
+import com.kltb.accounting.core.domain.enums.EodStatusEnum;
 import com.kltb.accounting.core.infrastructure.cache.AccountingDateCache;
 import com.kltb.accounting.core.infrastructure.persistence.entity.EodStatusPO;
 import io.swagger.v3.oas.annotations.Operation;
@@ -72,7 +73,7 @@ public class EodController {
             // 当日尚未发起日切时，返回默认未开始（正常营业）状态，避免报 404/500
             return ApiResponse.ok(EodStatusResponse.from(
                     queryDate.toString(),
-                    1, // 1: 未开始
+                    EodStatusEnum.NOT_STARTED.getCode(),
                     null,
                     null,
                     null,
@@ -81,7 +82,7 @@ public class EodController {
         }
         return ApiResponse.ok(EodStatusResponse.from(
                 po.getAccountingDate().toString(),
-                po.getEodStatus(),
+                po.getStatusCode(),
                 po.getSwitchDateTime(),
                 po.getArchiveDateTime(),
                 po.getFailedStage(),

@@ -17,6 +17,10 @@ import com.kltb.accounting.core.domain.service.TrialBalanceDomainService.Balance
 import com.kltb.accounting.core.domain.service.TrialBalanceDomainService.GlReconciliationResult;
 import com.kltb.accounting.core.domain.service.TrialBalanceDomainService.TrialBalanceResult;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountBalancePO;
+import com.kltb.accounting.core.domain.service.AccountingDateSwitchDomainService;
+import com.kltb.accounting.core.infrastructure.cache.AccountingDateCache;
+import com.kltb.accounting.core.infrastructure.persistence.entity.EodStatusPO;
+import com.kltb.accounting.core.domain.enums.EodStatusEnum;
 import com.kltb.accounting.core.domain.enums.TransferRecordStatusEnum;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +41,8 @@ public class EodApplicationService {
     private final PeriodEndTransferDomainService periodEndTransferDomainService;
     private final EodStatusDomainService eodStatusDomainService;
     private final EodArchiveDomainService eodArchiveDomainService;
+    private final AccountingDateSwitchDomainService accountingDateSwitchDomainService;
+    private final AccountingDateCache accountingDateCache;
     private final EodAssembler eodAssembler;
 
     public EodExecuteResponse executeEod(EodExecuteRequest request) {
@@ -48,7 +54,7 @@ public class EodApplicationService {
             eodStatusDomainService.createStatus(accountingDate);
 
             // Step 1: 存量清理
-            eodStatusDomainService.updateStage(3, accountingDate);
+            eodStatusDomainService.updateStage(EodStatusEnum.CLEANING, accountingDate);
             EodPreCheckResult checkResult = null;
             boolean preCheckPassed = false;
             if (!request.isSkipPreCheck()) {
@@ -63,7 +69,7 @@ public class EodApplicationService {
             }
 
             // Step 2: 余额计算 + upsert
-            eodStatusDomainService.updateStage(4, accountingDate);
+            eodStatusDomainService.updateStage(EodStatusEnum.SNAPSHOT, accountingDate);
             List<AccountBalancePO> balances = eodDomainService.calculateDailyBalances(accountingDate);
             eodDomainService.upsertDailyBalances(accountingDate, balances);
 
@@ -71,7 +77,7 @@ public class EodApplicationService {
             int snapshotCount = eodDomainService.generateDailySnapshot(accountingDate);
 
             // Step 4: 借贷平衡
-            eodStatusDomainService.updateStage(5, accountingDate);
+            eodStatusDomainService.updateStage(EodStatusEnum.TRIAL_BALANCE, accountingDate);
             TrialBalanceResult trialResult = trialBalanceDomainService.executeTrialBalance(accountingDate);
             boolean trialBalancePassed = trialResult.isPassed();
             if (!trialBalancePassed) {
@@ -101,7 +107,7 @@ public class EodApplicationService {
             // Step 7: 期末结转（可选）
             List<TransferRuleResult> transferResults = List.of();
             if (request.isExecuteTransfer() && trialBalancePassed) {
-                eodStatusDomainService.updateStage(6, accountingDate);
+                eodStatusDomainService.updateStage(EodStatusEnum.TRANSFER, accountingDate);
                 transferResults = periodEndTransferDomainService.executeTransferRules(accountingDate);
                 boolean hasActualTransfer = transferResults.stream()
                         .anyMatch(r -> r.getStatus() == TransferRecordStatusEnum.SUCCESS
@@ -115,10 +121,18 @@ public class EodApplicationService {
             }
 
             // Step 8: 归档（NEW）
-            eodStatusDomainService.updateStage(7, accountingDate);
+            eodStatusDomainService.updateStage(EodStatusEnum.ARCHIVING, accountingDate);
             long duration = System.currentTimeMillis() - startTime;
             eodArchiveDomainService.archive(accountingDate, duration);
             eodStatusDomainService.markCompleted(accountingDate, duration);
+
+            // 联动瞬间切日：若当前全局会计日期未超过已日切归档日期，自动推进全局会计日至 T+1
+            LocalDate currentGlobalDate = accountingDateCache.getCurrentDate();
+            if (!currentGlobalDate.isAfter(accountingDate)) {
+                LocalDate nextDate = accountingDate.plusDays(1);
+                log.info("[EOD-APP] 日切完成，自动触发切日推进全局会计日期: oldDate={}, nextDate={}", currentGlobalDate, nextDate);
+                accountingDateSwitchDomainService.switchDate(nextDate);
+            }
 
             log.info("[EOD-APP] 执行完成: preCheck={}, balanceCount={}, trialBalance={}, "
                             + "glReconciled=true, balanceReconciled=true, transferRules={}, snapshotCount={}, duration={}ms",
@@ -147,6 +161,21 @@ public class EodApplicationService {
     }
 
     public EodPreCheckResponse getPreCheckResult(LocalDate accountingDate) {
+        // 若指定会计日期已日切归档完成，说明日切已闭环，直接返回全部通过（0 阻断），避免受当前未决全局状态干扰
+        EodStatusPO status = eodStatusDomainService.findByDate(accountingDate);
+        if (status != null && status.isCompleted()) {
+            return EodPreCheckResponse.builder()
+                    .accountingDate(accountingDate)
+                    .allPassed(true)
+                    .checks(List.of(
+                            EodPreCheckResponse.CheckItem.builder().name("BUFFER_DETAIL").count(0).passed(true).build(),
+                            EodPreCheckResponse.CheckItem.builder().name("PENDING_TRANSACTION").count(0).passed(true).build(),
+                            EodPreCheckResponse.CheckItem.builder().name("UNPOSTED_VOUCHER").count(0).passed(true).build(),
+                            EodPreCheckResponse.CheckItem.builder().name("PENDING_JOURNAL").count(0).passed(true).build(),
+                            EodPreCheckResponse.CheckItem.builder().name("EXPIRED_FREEZE").count(0).passed(true).build()
+                    ))
+                    .build();
+        }
         EodPreCheckResult result = eodCheckDomainService.checkEodPreconditions(accountingDate);
         return eodAssembler.toPreCheckResponse(result);
     }

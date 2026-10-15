@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.kltb.accounting.api.constant.ResultCode;
+import com.kltb.accounting.core.domain.enums.EodStatusEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.EodStatusPO;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.EodStatusMapper;
 import com.kltb.accounting.core.shared.exception.AccountException;
@@ -59,7 +60,7 @@ class EodStatusRepositoryTest {
 
         assertThat(result).isNotNull();
         assertThat(result.getAccountingDate()).isEqualTo(date);
-        assertThat(result.getEodStatus()).isEqualTo(1);
+        assertThat(result.getEodStatus()).isEqualTo(EodStatusEnum.NOT_STARTED);
         assertThat(result.getTotalDurationMs()).isEqualTo(0L);
         verify(eodStatusMapper).insert(any(EodStatusPO.class));
     }
@@ -71,7 +72,7 @@ class EodStatusRepositoryTest {
         EodStatusPO failedPo = new EodStatusPO();
         failedPo.setId(100L);
         failedPo.setAccountingDate(date);
-        failedPo.setEodStatus(9); // 9-失败
+        failedPo.setEodStatus(EodStatusEnum.FAILED);
         failedPo.setFailedStage("CLEANUP");
         failedPo.setFailReason("Column 'tenant_id' cannot be null");
         failedPo.setTotalDurationMs(1234L);
@@ -84,12 +85,11 @@ class EodStatusRepositoryTest {
 
         assertThat(result).isNotNull();
         assertThat(result.getAccountingDate()).isEqualTo(date);
-        assertThat(result.getEodStatus()).isEqualTo(1); // 已重置为1 未开始
-        assertThat(result.getFailedStage()).isEqualTo(""); // 已清空
-        assertThat(result.getFailReason()).isEqualTo(""); // 已清空
-        assertThat(result.getTotalDurationMs()).isEqualTo(0L); // 已重置
+        assertThat(result.getEodStatus()).isEqualTo(EodStatusEnum.NOT_STARTED);
+        assertThat(result.getFailedStage()).isEqualTo("");
+        assertThat(result.getFailReason()).isEqualTo("");
+        assertThat(result.getTotalDurationMs()).isEqualTo(0L);
         assertThat(result.getArchiveDateTime()).isNull();
-        // 验证没有调用 insert，避免 uk_eod_date 冲突
         verify(eodStatusMapper, never()).insert(any(EodStatusPO.class));
         verify(eodStatusMapper).update(isNull(), any());
     }
@@ -101,7 +101,7 @@ class EodStatusRepositoryTest {
         EodStatusPO completedPo = new EodStatusPO();
         completedPo.setId(100L);
         completedPo.setAccountingDate(date);
-        completedPo.setEodStatus(8); // 8-完成
+        completedPo.setEodStatus(EodStatusEnum.COMPLETED);
 
         when(eodStatusMapper.selectOne(any(), eq(false))).thenReturn(completedPo);
 
@@ -121,11 +121,10 @@ class EodStatusRepositoryTest {
         EodStatusPO failedPo = new EodStatusPO();
         failedPo.setId(100L);
         failedPo.setAccountingDate(date);
-        failedPo.setEodStatus(9);
+        failedPo.setEodStatus(EodStatusEnum.FAILED);
         failedPo.setFailedStage("CLEANUP");
         failedPo.setFailReason("并发失败");
 
-        // 第一次查为 null，后续查返回已有记录
         when(eodStatusMapper.selectOne(any(), eq(false)))
                 .thenReturn(null)
                 .thenReturn(failedPo);
@@ -136,7 +135,7 @@ class EodStatusRepositoryTest {
         EodStatusPO result = eodStatusRepository.createStatus(date);
 
         assertThat(result).isNotNull();
-        assertThat(result.getEodStatus()).isEqualTo(1);
+        assertThat(result.getEodStatus()).isEqualTo(EodStatusEnum.NOT_STARTED);
         assertThat(result.getFailReason()).isEqualTo("");
         verify(eodStatusMapper).update(isNull(), any());
     }

@@ -1,5 +1,6 @@
 package com.kltb.accounting.core.domain.service;
 
+import com.kltb.accounting.core.domain.enums.EodStatusEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.EodStatusPO;
 import com.kltb.accounting.core.infrastructure.persistence.repository.EodStatusRepository;
 import lombok.RequiredArgsConstructor;
@@ -40,12 +41,12 @@ public class EodStatusDomainService {
     /**
      * 更新日切阶段状态
      *
-     * @param status 状态码（2~7）
+     * @param status 日切状态枚举
      * @param accountingDate 会计日期
      */
-    public void updateStage(int status, LocalDate accountingDate) {
+    public void updateStage(EodStatusEnum status, LocalDate accountingDate) {
         eodStatusRepository.updateStatus(accountingDate, status);
-        log.debug("[EOD-STATUS] 阶段更新: date={}, status={}", accountingDate, status);
+        log.debug("[EOD-STATUS] 阶段更新: date={}, status={}", accountingDate, status != null ? status.getDesc() : null);
     }
 
     /**
