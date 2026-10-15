@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.kltb.accounting.api.constant.Constants;
 import com.kltb.accounting.api.constant.DictTypeEnum;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.api.request.VoucherGenerateRequest;
@@ -35,6 +36,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -458,6 +460,19 @@ public class VoucheringApplicationService {
         AccountingVoucherPO voucher = accountingVoucherRepository.selectByVoucherNo(voucherNo);
         if (voucher == null) {
             return null;
+        }
+
+        // 自动补全历史遗留数据中的过账时间：若已过账但 post_time 为空或 1970
+        if (voucher.getStatus() == VoucherStatusEnum.POSTED || voucher.getStatus() == VoucherStatusEnum.REVERSED) {
+            LocalDateTime pt = voucher.getPostTime();
+            if (pt == null || pt.isEqual(Constants.EPOCH_DATE_TIME) || pt.getYear() <= 1970) {
+                LocalDateTime fallbackTime = voucher.getUpdateTime();
+                if (fallbackTime == null || fallbackTime.isEqual(Constants.EPOCH_DATE_TIME) || fallbackTime.getYear() <= 1970) {
+                    fallbackTime = voucher.getCreateTime() != null ? voucher.getCreateTime() : LocalDateTime.now();
+                }
+                voucher.setPostTime(fallbackTime);
+                accountingVoucherRepository.updateById(voucher);
+            }
         }
 
         List<AccountingVoucherEntryPO> entries = accountingVoucherRepository.selectEntriesByVoucherNo(voucherNo);

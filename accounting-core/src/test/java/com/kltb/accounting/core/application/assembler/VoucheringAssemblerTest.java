@@ -61,4 +61,23 @@ class VoucheringAssemblerTest {
         VoucherPageItemResponse pageItem = assembler.toPageItem(po, Collections.emptyList(), null, null);
         assertThat(pageItem.getPostTime()).isEqualTo(now);
     }
+
+    @Test
+    @DisplayName("toPageItem: 已过账凭证若 postTime 为空或 1970，自动回退到 updateTime")
+    void toPageItem_postedWithNullPostTime_shouldFallbackToUpdateTime() {
+        VoucheringAssembler assembler = new VoucheringAssembler(dictionaryComponent);
+
+        LocalDateTime updateTime = LocalDateTime.of(2026, 9, 30, 16, 0, 0);
+        AccountingVoucherPO po = new AccountingVoucherPO();
+        po.setId(3L);
+        po.setVoucherNo("VOU20260930000003");
+        po.setAmount(new BigDecimal("300.00"));
+        po.setStatus(VoucherStatusEnum.POSTED);
+        po.setAccountingDate(LocalDate.of(2026, 9, 30));
+        po.setPostTime(null);
+        po.setUpdateTime(updateTime);
+
+        VoucherPageItemResponse pageItem = assembler.toPageItem(po, Collections.emptyList(), null, null);
+        assertThat(pageItem.getPostTime()).isEqualTo(updateTime);
+    }
 }

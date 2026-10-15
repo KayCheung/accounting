@@ -76,25 +76,59 @@ public class AuxiliaryLedgerApplicationService {
             return Collections.emptyList();
         }
         List<AuxiliaryItemStatBO> statList = auxiliaryRepository.selectDistinctItems(auxType, startDate, endDate, voucherStatus);
-        return statList.stream()
-                .map(stat -> {
-                    BigDecimal debit = stat.getDebitAmount() != null ? stat.getDebitAmount() : BigDecimal.ZERO;
-                    BigDecimal credit = stat.getCreditAmount() != null ? stat.getCreditAmount() : BigDecimal.ZERO;
+        if (statList == null || statList.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Map<String, AuxiliaryItemResponse> mergedMap = new LinkedHashMap<>();
+        for (AuxiliaryItemStatBO stat : statList) {
+            if (stat.getAuxCode() == null || stat.getAuxCode().isBlank()) {
+                continue;
+            }
+            String code = stat.getAuxCode().trim();
+            BigDecimal debit = stat.getDebitAmount() != null ? stat.getDebitAmount() : BigDecimal.ZERO;
+            BigDecimal credit = stat.getCreditAmount() != null ? stat.getCreditAmount() : BigDecimal.ZERO;
+            BigDecimal total = stat.getTotalAmount() != null ? stat.getTotalAmount() : BigDecimal.ZERO;
+            long count = stat.getRecordCount() != null ? stat.getRecordCount() : 0L;
+            String resolvedName = resolveAuxName(auxType, code, stat.getAuxName());
+
+            mergedMap.compute(code, (k, existing) -> {
+                if (existing == null) {
                     BigDecimal net = debit.subtract(credit).abs();
                     String netDirection = BalanceDirectionEnum.determineDirection(debit, credit).getDesc();
-                    String resolvedName = resolveAuxName(auxType, stat.getAuxCode(), stat.getAuxName());
                     return AuxiliaryItemResponse.builder()
-                            .auxCode(stat.getAuxCode())
+                            .auxCode(code)
                             .auxName(resolvedName)
-                            .recordCount(stat.getRecordCount())
-                            .totalAmount(stat.getTotalAmount() != null ? stat.getTotalAmount() : BigDecimal.ZERO)
+                            .recordCount(count)
+                            .totalAmount(total)
                             .debitAmount(debit)
                             .creditAmount(credit)
                             .netAmount(net)
                             .netDirectionDesc(netDirection)
                             .build();
-                })
-                .collect(Collectors.toList());
+                } else {
+                    BigDecimal newDebit = existing.getDebitAmount().add(debit);
+                    BigDecimal newCredit = existing.getCreditAmount().add(credit);
+                    BigDecimal newTotal = existing.getTotalAmount().add(total);
+                    long newCount = (existing.getRecordCount() != null ? existing.getRecordCount() : 0L) + count;
+                    BigDecimal net = newDebit.subtract(newCredit).abs();
+                    String netDirection = BalanceDirectionEnum.determineDirection(newDebit, newCredit).getDesc();
+                    String finalName = (StrUtil.isNotBlank(existing.getAuxName()) && !existing.getAuxName().equals(code))
+                            ? existing.getAuxName() : resolvedName;
+                    return AuxiliaryItemResponse.builder()
+                            .auxCode(code)
+                            .auxName(finalName)
+                            .recordCount(newCount)
+                            .totalAmount(newTotal)
+                            .debitAmount(newDebit)
+                            .creditAmount(newCredit)
+                            .netAmount(net)
+                            .netDirectionDesc(netDirection)
+                            .build();
+                }
+            });
+        }
+        return new ArrayList<>(mergedMap.values());
     }
 
     /**

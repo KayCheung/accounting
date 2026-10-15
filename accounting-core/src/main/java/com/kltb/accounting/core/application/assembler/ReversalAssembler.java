@@ -53,9 +53,25 @@ public class ReversalAssembler {
                 .accountingDate(voucher.getAccountingDate())
                 .summary(voucher.getSummary())
                 .status(Optional.ofNullable(voucher.getStatus()).map(VoucherStatusEnum::getCode).orElse(null))
-                .postTime(sanitizePostTime(voucher.getPostTime()))
+                .postTime(resolvePostTime(voucher))
                 .bookkeeperName(voucher.getBookkeeperName())
                 .build();
+    }
+
+    private LocalDateTime resolvePostTime(AccountingVoucherPO voucher) {
+        LocalDateTime sanitized = sanitizePostTime(voucher.getPostTime());
+        if (sanitized != null) {
+            return sanitized;
+        }
+        if (voucher.getStatus() == VoucherStatusEnum.POSTED || voucher.getStatus() == VoucherStatusEnum.REVERSED
+                || (voucher.getStatus() != null && (voucher.getStatus().getCode() == 3 || voucher.getStatus().getCode() == 5))) {
+            LocalDateTime updateTime = sanitizePostTime(voucher.getUpdateTime());
+            if (updateTime != null) {
+                return updateTime;
+            }
+            return sanitizePostTime(voucher.getCreateTime());
+        }
+        return null;
     }
 
     private LocalDateTime sanitizePostTime(LocalDateTime postTime) {

@@ -132,6 +132,38 @@ class AuxiliaryLedgerApplicationServiceTest {
     }
 
     @Test
+    @DisplayName("查询核算项目项列表测试-存在重复auxCode时合并去重并累加金额")
+    void testGetAuxiliaryItems_withDuplicates_shouldMergeByAuxCode() {
+        AuxiliaryItemStatBO s1 = new AuxiliaryItemStatBO();
+        s1.setAuxCode("PRJ_001");
+        s1.setAuxName("研发项目A");
+        s1.setRecordCount(10L);
+        s1.setTotalAmount(new BigDecimal("1000.00"));
+        s1.setDebitAmount(new BigDecimal("1000.00"));
+        s1.setCreditAmount(BigDecimal.ZERO);
+
+        AuxiliaryItemStatBO s2 = new AuxiliaryItemStatBO();
+        s2.setAuxCode("PRJ_001");
+        s2.setAuxName("研发项目A-别名");
+        s2.setRecordCount(5L);
+        s2.setTotalAmount(new BigDecimal("500.00"));
+        s2.setDebitAmount(BigDecimal.ZERO);
+        s2.setCreditAmount(new BigDecimal("500.00"));
+
+        when(auxiliaryRepository.selectDistinctItems(eq("PROJECT"), any(), any(), any()))
+                .thenReturn(List.of(s1, s2));
+
+        List<AuxiliaryItemResponse> items = auxiliaryService.getAuxiliaryItems("PROJECT", null, null);
+        assertThat(items).hasSize(1);
+        assertThat(items.get(0).getAuxCode()).isEqualTo("PRJ_001");
+        assertThat(items.get(0).getRecordCount()).isEqualTo(15L);
+        assertThat(items.get(0).getTotalAmount()).isEqualByComparingTo("1500.00");
+        assertThat(items.get(0).getDebitAmount()).isEqualByComparingTo("1000.00");
+        assertThat(items.get(0).getCreditAmount()).isEqualByComparingTo("500.00");
+        assertThat(items.get(0).getNetAmount()).isEqualByComparingTo("500.00");
+    }
+
+    @Test
     @DisplayName("查询账簿统计概览与Top占比测试")
     void testGetAuxiliarySummary() {
         AuxiliaryLedgerQueryRequest req = new AuxiliaryLedgerQueryRequest();

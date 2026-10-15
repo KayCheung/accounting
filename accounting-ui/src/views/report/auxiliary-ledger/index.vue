@@ -960,7 +960,24 @@ async function loadAuxItems() {
       endDate: dateRange.value ? dateRange.value[1] : undefined,
       voucherStatus: queryForm.voucherStatus
     })
-    auxItems.value = items || []
+    const itemMap = new Map<string, AuxiliaryItemResponse>()
+    for (const item of (items || [])) {
+      if (!item.auxCode) continue
+      const code = item.auxCode.trim()
+      if (!itemMap.has(code)) {
+        itemMap.set(code, { ...item, auxCode: code })
+      } else {
+        const existing = itemMap.get(code)!
+        existing.totalAmount = (existing.totalAmount || 0) + (item.totalAmount || 0)
+        existing.debitAmount = (existing.debitAmount || 0) + (item.debitAmount || 0)
+        existing.creditAmount = (existing.creditAmount || 0) + (item.creditAmount || 0)
+        existing.recordCount = (existing.recordCount || 0) + (item.recordCount || 0)
+        if (!existing.auxName || existing.auxName === code) {
+          existing.auxName = item.auxName
+        }
+      }
+    }
+    auxItems.value = Array.from(itemMap.values())
   } catch (err: any) {
     console.error('加载核算项目失败:', err)
   }

@@ -1,6 +1,7 @@
 package com.kltb.accounting.core.application.assembler;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.kltb.accounting.api.constant.Constants;
 import com.kltb.accounting.api.response.*;
 import com.kltb.accounting.core.domain.enums.BufferStatusEnum;
 import com.kltb.accounting.core.domain.service.BufferPostingEngineDomainService.BatchPostingResult;
@@ -8,6 +9,7 @@ import com.kltb.accounting.core.infrastructure.persistence.entity.BufferPostingD
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -142,10 +144,17 @@ public class BufferPostingAssembler {
         }
         resp.setRetryCount(po.getRetryCount());
         resp.setFailReason(po.getFailReason());
-        resp.setStartTime(po.getStartTime());
-        resp.setCompleteTime(po.getCompleteTime());
+        resp.setStartTime(sanitizeTime(po.getStartTime()));
+        resp.setCompleteTime(sanitizeTime(po.getCompleteTime()));
         resp.setCreateTime(po.getCreateTime());
         return resp;
+    }
+
+    private LocalDateTime sanitizeTime(LocalDateTime time) {
+        if (time == null || time.isEqual(Constants.EPOCH_DATE_TIME) || time.getYear() <= 1970) {
+            return null;
+        }
+        return time;
     }
 
     /**

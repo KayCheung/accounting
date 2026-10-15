@@ -190,6 +190,7 @@ public class PostingApplicationService {
                 if (!hasAsync) {
                     // 无异步分录：凭证状态=已过账
                     voucher.setStatus(VoucherStatusEnum.POSTED);
+                    voucher.setPostTime(LocalDateTime.now());
                     accountingVoucherRepository.updateById(voucher);
                 }
                 // 有异步分录：凭证状态保持 2(过账中)，等待 MQ 消费完成后联动更新

@@ -51,6 +51,26 @@ public class VoucheringAssembler {
     }
 
     /**
+     * 解析凭证过账时间：
+     * 若已设置 postTime 则清洗后返回；若凭证为已过账/已冲销但 postTime 缺失，回退使用 updateTime 或 createTime
+     */
+    private LocalDateTime resolvePostTime(AccountingVoucherPO po) {
+        LocalDateTime sanitized = sanitizePostTime(po.getPostTime());
+        if (sanitized != null) {
+            return sanitized;
+        }
+        if (po.getStatus() == VoucherStatusEnum.POSTED || po.getStatus() == VoucherStatusEnum.REVERSED
+                || (po.getStatus() != null && (po.getStatus().getCode() == 3 || po.getStatus().getCode() == 5))) {
+            LocalDateTime updateTime = sanitizePostTime(po.getUpdateTime());
+            if (updateTime != null) {
+                return updateTime;
+            }
+            return sanitizePostTime(po.getCreateTime());
+        }
+        return null;
+    }
+
+    /**
      * 将凭证生成结果组装为响应 DTO
      */
     public VoucherGenerateResponse toResponse(
@@ -153,7 +173,7 @@ public class VoucheringAssembler {
                 .amount(po.getAmount())
                 .status(po.getStatus() != null ? po.getStatus().getCode() : null)
                 .statusDesc(po.getStatus() != null ? po.getStatus().getDesc() : null)
-                .postTime(sanitizePostTime(po.getPostTime()))
+                .postTime(resolvePostTime(po))
                 .accountingDate(po.getAccountingDate())
                 .summary(po.getSummary())
                 .attachmentCount(po.getAttachmentCount())

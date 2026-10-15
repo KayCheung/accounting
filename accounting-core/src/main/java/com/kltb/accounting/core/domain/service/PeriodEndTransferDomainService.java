@@ -552,6 +552,7 @@ public class PeriodEndTransferDomainService {
 
                 // 更新凭证为已过账
                 voucher.setStatus(VoucherStatusEnum.POSTED);
+                voucher.setPostTime(LocalDateTime.now());
                 voucherRepository.updateById(voucher);
 
                 // 7. 驱动日余额自然计算与 upsert（基于全部分录汇总，借贷轧差源科目自然为 0，目标科目自然增加）
