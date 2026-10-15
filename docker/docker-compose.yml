@@ -106,6 +106,7 @@ services:
     image: apache/rocketmq:${ROCKETMQ_VERSION:-5.3.1}
     container_name: accounting-rmq-namesrv
     restart: unless-stopped
+    user: root
     environment:
       JAVA_OPT_EXT: "-Xms512M -Xmx512M -Xmn256M"
       TZ: Asia/Shanghai
@@ -122,17 +123,17 @@ services:
     image: apache/rocketmq:${ROCKETMQ_VERSION:-5.3.1}
     container_name: accounting-rmq-broker
     restart: unless-stopped
+    user: root
     environment:
       NAMESRV_ADDR: rocketmq-namesrv:9876
       JAVA_OPT_EXT: "-Xms512M -Xmx512M -Xmn256M"
       TZ: Asia/Shanghai
-    # 不在命令行指定 -c 路径，改用环境变量 + 默认路径挂载，规避路径解析 NPE
-    command: ["sh", "mqbroker", "-c", "/etc/rocketmq/broker.conf"]
+    command: ["sh", "mqbroker", "-n", "rocketmq-namesrv:9876", "-c", "/home/rocketmq/broker.conf"]
     ports:
       - "10909:10909"
       - "10911:10911"
     volumes:
-      - ./rocketmq/conf/broker.conf:/etc/rocketmq/broker.conf:ro
+      - ./rocketmq/conf/broker.conf:/home/rocketmq/broker.conf:ro
       - rmq_broker_store:/home/rocketmq/store
     networks:
       - accounting-net
