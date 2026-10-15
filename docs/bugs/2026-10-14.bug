@@ -20,3 +20,27 @@ BUG261014-009：“日切与试算平衡” 界面中 ”科目发生额试算�
 
 BUG261014-010：”辅助核算账簿“ 界面中的 “项目辅助列表” 会显示重复的项。
 
+BUG261014-011：容器部署报如下异常
+18:06:23.413 [main] INFO com.alibaba.nacos.plugin.auth.spi.client.ClientAuthPluginManager -- [ClientAuthPluginManager] Load ClientAuthService com.alibaba.nacos.client.auth.ram.RamClientAuthServiceImpl success.
+Logging system failed to initialize using configuration from 'null'
+java.lang.IllegalStateException: Logback configuration error detected:
+ERROR in ch.qos.logback.core.model.processor.ImplicitModelHandler - Could not create component [timeBasedFileNamingAndTriggeringPolicy] of type [ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP] java.lang.ClassNotFoundException: ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP
+ERROR in c.q.l.core.rolling.DefaultTimeBasedFileNamingAndTriggeringPolicy - Filename pattern [./logs/accounting-core.%d{yyyy-MM-dd}.%i.log.gz] contains an integer token converter, i.e. %i, INCOMPATIBLE with this configuration. Remove it.
+ERROR in ch.qos.logback.core.model.processor.ImplicitModelHandler - Could not create component [timeBasedFileNamingAndTriggeringPolicy] of type [ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP] java.lang.ClassNotFoundException: ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP
+ERROR in c.q.l.core.rolling.DefaultTimeBasedFileNamingAndTriggeringPolicy - Filename pattern [./logs/accounting-core-error.%d{yyyy-MM-dd}.%i.log.gz] contains an integer token converter, i.e. %i, INCOMPATIBLE with this configuration. Remove it.
+
+Nacos v3.2.1 版本启动报如下异常
++ echo 'env NACOS_AUTH_TOKEN must be set with Base64 String.'
+env NACOS_AUTH_TOKEN must be set with Base64 String.
++ exit 255
+
+RocketMQ（accounting-rmq-broker） 启动报异常
+18:10:15,158 |-INFO in org.apache.rocketmq.common.logging.JoranConfiguratorExt@670b40af - Registering current configuration as safe fallback point
+
+java.lang.NullPointerException
+        at org.apache.rocketmq.broker.schedule.ScheduleMessageService.configFilePath(ScheduleMessageService.java:272)
+        at org.apache.rocketmq.common.ConfigManager.persist(ConfigManager.java:79)
+        at org.apache.rocketmq.broker.BrokerController.shutdownBasicService(BrokerController.java:1480)
+        at org.apache.rocketmq.broker.BrokerController.shutdown(BrokerController.java:1567)
+        at org.apache.rocketmq.broker.BrokerStartup.createBrokerController(BrokerStartup.java:250)
+        at org.apache.rocketmq.broker.BrokerStartup.main(BrokerStartup.java:52)

@@ -39,9 +39,11 @@
     </springProfile>
 
     <!-- ==================== test/prod 环境：输出到文件（滚动策略） ==================== -->
+    <!-- 注意：Spring Boot 3.3.x 内置 Logback 1.5.x，已移除 SizeAndTimeBasedFNATP。
+         必须使用 SizeAndTimeBasedRollingPolicy 替代原来的 TimeBasedRollingPolicy + SizeAndTimeBasedFNATP 组合。 -->
     <springProfile name="test,prod">
 
-        <!-- 普通日志文件（INFO 及以上） -->
+        <!-- 普通日志文件（INFO 及以上，排除 ERROR） -->
         <appender name="FILE_INFO" class="ch.qos.logback.core.rolling.RollingFileAppender">
             <file>${LOG_PATH}/${APP_NAME}.log</file>
             <filter class="ch.qos.logback.classic.filter.LevelFilter">
@@ -49,14 +51,13 @@
                 <onMatch>DENY</onMatch>
                 <onMismatch>ACCEPT</onMismatch>
             </filter>
-            <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-                <!-- 按天滚动，保留 30 天 -->
+            <!-- Logback 1.5.x：SizeAndTimeBasedRollingPolicy 合并按时间+按大小两种策略 -->
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <!-- 文件名中 %i 是 SizeAndTimeBasedRollingPolicy 必须的序号占位符 -->
                 <fileNamePattern>${LOG_PATH}/${APP_NAME}.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
-                <timeBasedFileNamingAndTriggeringPolicy
-                        class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
-                    <!-- 单文件最大 200MB -->
-                    <maxFileSize>200MB</maxFileSize>
-                </timeBasedFileNamingAndTriggeringPolicy>
+                <!-- 单文件最大 200MB -->
+                <maxFileSize>200MB</maxFileSize>
+                <!-- 保留 30 天 -->
                 <maxHistory>30</maxHistory>
                 <!-- 总日志上限 10GB -->
                 <totalSizeCap>10GB</totalSizeCap>
@@ -73,12 +74,9 @@
             <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
                 <level>ERROR</level>
             </filter>
-            <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
                 <fileNamePattern>${LOG_PATH}/${APP_NAME}-error.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
-                <timeBasedFileNamingAndTriggeringPolicy
-                        class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
-                    <maxFileSize>100MB</maxFileSize>
-                </timeBasedFileNamingAndTriggeringPolicy>
+                <maxFileSize>100MB</maxFileSize>
                 <maxHistory>90</maxHistory>
                 <totalSizeCap>5GB</totalSizeCap>
             </rollingPolicy>

@@ -69,7 +69,7 @@ services:
   # 3. Nacos 3.x 注册与配置中心 (Standalone 模式，集成 MySQL 持久化)
   # ==============================================================================
   nacos:
-    image: nacos/nacos-server:${NACOS_VERSION:-v3.0.0}
+    image: nacos/nacos-server:${NACOS_VERSION:-v3.2.1}
     container_name: accounting-nacos
     restart: unless-stopped
     environment:
@@ -81,8 +81,11 @@ services:
       MYSQL_SERVICE_USER: root
       MYSQL_SERVICE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-dev@1234}
       MYSQL_SERVICE_DB_PARAM: characterEncoding=utf8&connectTimeout=1000&socketTimeout=3000&autoReconnect=true&useUnicode=true&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      # Nacos 3.2.x 强制要求以下三个鉴权变量，即使关闭鉴权也必须提供，否则容器启动脚本 exit 255
       NACOS_AUTH_ENABLE: "false"
-      PRE_AUTH_USER_ENABLE: "true"
+      NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN:-QWNjb3VudGluZ05hY29zU2VjcmV0S2V5MjAyNkBrbHRi}
+      NACOS_AUTH_IDENTITY_KEY: ${NACOS_AUTH_IDENTITY_KEY:-nacos}
+      NACOS_AUTH_IDENTITY_VALUE: ${NACOS_AUTH_IDENTITY_VALUE:-nacos}
       JVM_XMS: 512m
       JVM_XMX: 512m
       JVM_XMN: 256m
@@ -123,12 +126,13 @@ services:
       NAMESRV_ADDR: rocketmq-namesrv:9876
       JAVA_OPT_EXT: "-Xms512M -Xmx512M -Xmn256M"
       TZ: Asia/Shanghai
-    command: ["sh", "mqbroker", "-c", "/home/rocketmq/rocketmq-5.3.1/conf/broker.conf"]
+    # 不在命令行指定 -c 路径，改用环境变量 + 默认路径挂载，规避路径解析 NPE
+    command: ["sh", "mqbroker", "-c", "/etc/rocketmq/broker.conf"]
     ports:
       - "10909:10909"
       - "10911:10911"
     volumes:
-      - ./rocketmq/conf/broker.conf:/home/rocketmq/rocketmq-5.3.1/conf/broker.conf:ro
+      - ./rocketmq/conf/broker.conf:/etc/rocketmq/broker.conf:ro
       - rmq_broker_store:/home/rocketmq/store
     networks:
       - accounting-net
