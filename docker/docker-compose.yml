@@ -133,7 +133,7 @@ services:
     user: root
     environment:
       NAMESRV_ADDR: rocketmq-namesrv:9876
-      JAVA_OPT_EXT: "-Xms512M -Xmx512M -Xmn256M"
+      JAVA_OPT_EXT: "-Xms512M -Xmx512M -Xmn256M -Drocketmq.broker.diskSpaceWarningLevelRatio=0.99 -Drocketmq.broker.diskSpaceCleanForciblyRatio=0.98"
       TZ: Asia/Shanghai
     command: ["sh", "mqbroker", "-n", "rocketmq-namesrv:9876", "-c", "/home/rocketmq/broker.conf"]
     ports:
