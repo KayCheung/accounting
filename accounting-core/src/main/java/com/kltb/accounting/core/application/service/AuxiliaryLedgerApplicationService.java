@@ -431,24 +431,17 @@ public class AuxiliaryLedgerApplicationService {
         }
         boolean hasDistinctName = StrUtil.isNotBlank(rawAuxName) && !rawAuxName.equalsIgnoreCase(auxCode);
 
-        // 优先从字典反查中文名称
+        // 优先从字典反查中文名称（走 L1/L2 二级缓存优先，未命中再降级兜底）
         if (StrUtil.isNotBlank(auxType)) {
-            DictionaryPO dict = null;
-            if (dictionaryComponent != null) {
+            DictionaryPO dict = findDictFromCache(auxType, auxCode);
+            if (dict == null) {
+                dict = findDictFromCache(auxType.toLowerCase(), auxCode);
+            }
+            if (dict == null) {
+                dict = findDictFromCache(auxType.toUpperCase(), auxCode);
+            }
+            if (dict == null) {
                 dict = dictionaryComponent.findByTypeAndCodeOrName(auxType, auxCode);
-                if (dict == null) {
-                    dict = dictionaryComponent.findByTypeAndCodeOrName(auxType.toLowerCase(), auxCode);
-                }
-                if (dict == null) {
-                    dict = dictionaryComponent.findByTypeAndCodeOrName(auxType.toUpperCase(), auxCode);
-                }
-            } else if (dictionaryCacheService != null) {
-                List<DictionaryPO> list = dictionaryCacheService.getByType(auxType);
-                if (list != null) {
-                    dict = list.stream()
-                            .filter(d -> auxCode.equalsIgnoreCase(d.getDictCode()))
-                            .findFirst().orElse(null);
-                }
             }
             if (dict != null && StrUtil.isNotBlank(dict.getDictName())) {
                 return dict.getDictName();
@@ -459,5 +452,18 @@ public class AuxiliaryLedgerApplicationService {
             return rawAuxName;
         }
         return StrUtil.isNotBlank(rawAuxName) ? rawAuxName : auxCode;
+    }
+
+    private DictionaryPO findDictFromCache(String auxType, String auxCode) {
+        List<DictionaryPO> list = dictionaryCacheService.getByType(auxType);
+        if (list == null || list.isEmpty()) {
+            return null;
+        }
+        for (DictionaryPO po : list) {
+            if (auxCode.equalsIgnoreCase(po.getDictCode()) || auxCode.equals(po.getDictName())) {
+                return po;
+            }
+        }
+        return null;
     }
 }

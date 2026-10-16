@@ -42,10 +42,7 @@ public class AccountingRuleRepository {
      * @return 规则PO，不存在时返回null
      */
     public AccountingRulePO selectByBusinessKey(String businessCode, String tradingCode, String payChannel) {
-        if (accountingRuleCacheService != null) {
-            return accountingRuleCacheService.getByBusinessKey(businessCode, tradingCode, payChannel);
-        }
-        return ruleMapper.selectByBusinessKey(businessCode, tradingCode, payChannel);
+        return accountingRuleCacheService.getByBusinessKey(businessCode, tradingCode, payChannel);
     }
 
     /**
@@ -70,7 +67,7 @@ public class AccountingRuleRepository {
      */
     public void insertRule(AccountingRulePO rule) {
         ruleMapper.insert(rule);
-        if (accountingRuleCacheService != null && rule != null) {
+        if (rule != null) {
             accountingRuleCacheService.evictCache(rule.getBusinessCode(), rule.getTradingCode(), rule.getPayChannel());
         }
     }
@@ -80,7 +77,7 @@ public class AccountingRuleRepository {
      */
     public boolean updateRuleById(AccountingRulePO rule) {
         boolean ok = ruleMapper.updateById(rule) > 0;
-        if (accountingRuleCacheService != null && rule != null) {
+        if (rule != null) {
             accountingRuleCacheService.evictCache(rule.getBusinessCode(), rule.getTradingCode(), rule.getPayChannel());
         }
         return ok;

@@ -371,4 +371,18 @@ class AuxiliaryLedgerApplicationServiceTest {
         String resolvedFallback = auxiliaryService.resolveAuxName("UNKNOWN", "UNK_01", "UNK_01");
         assertThat(resolvedFallback).isEqualTo("UNK_01");
     }
+
+    @Test
+    @DisplayName("resolveAuxName: 优先命中字典二级缓存返回中文名称")
+    void testResolveAuxNameWithCache() {
+        DictionaryPO cacheDict = new DictionaryPO();
+        cacheDict.setDictType("PROJECT");
+        cacheDict.setDictCode("PRJ_CORE");
+        cacheDict.setDictName("账务核心重构项目");
+
+        when(dictionaryCacheService.getByType("PROJECT")).thenReturn(List.of(cacheDict));
+
+        String resolved = auxiliaryService.resolveAuxName("PROJECT", "PRJ_CORE", "PRJ_CORE");
+        assertThat(resolved).isEqualTo("账务核心重构项目");
+    }
 }
