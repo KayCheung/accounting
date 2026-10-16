@@ -37,6 +37,18 @@ public class RocketMqProperties {
     /** SecretKey（可选，用于启用 ACL）。 */
     private String secretKey;
 
+    /** 消费者配置 */
+    private ConsumerProperties consumer = new ConsumerProperties();
+
+    @Getter
+    @Setter
+    public static class ConsumerProperties {
+        /** 异步过账消费组 */
+        private String postingGroup = "GID_ACCOUNTING_POSTING";
+        /** 异步过账 Topic */
+        private String postingTopic = "posting_topic";
+    }
+
     /**
      * 启用状态下校验必填项。
      */
