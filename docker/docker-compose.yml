@@ -95,6 +95,12 @@ services:
       - "${NACOS_GRPC_PORT:-9848}:9848"
     networks:
       - accounting-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:8848/nacos/ || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+      start_period: 20s
     depends_on:
       mysql:
         condition: service_healthy
@@ -227,7 +233,7 @@ services:
       redis:
         condition: service_healthy
       nacos:
-        condition: service_started
+        condition: service_healthy
       rocketmq-broker:
         condition: service_started
       xxl-job-admin:
