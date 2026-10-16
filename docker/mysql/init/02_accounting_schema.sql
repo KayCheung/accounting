@@ -511,8 +511,8 @@ CREATE TABLE t_account_template (
     account_type VARCHAR(32) NOT NULL COMMENT '账户类型(字典CODE)',
     currency VARCHAR(32) NOT NULL DEFAULT 'CNY' COMMENT '币种(字典CODE)',
     balance_direction TINYINT NOT NULL COMMENT '余额方向：1-借,2-贷',
-    acct_no_rule VARCHAR(32) NOT NULL COMMENT '账户编号生成规则',
-    acct_name_rule VARCHAR(32) NOT NULL COMMENT '账户名称生成规则',
+    acct_no_rule VARCHAR(255) NOT NULL COMMENT '账户编号生成规则',
+    acct_name_rule VARCHAR(255) NOT NULL COMMENT '账户名称生成规则',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     create_id VARCHAR(32) NOT NULL DEFAULT '' COMMENT '创建人ID',
@@ -1341,4 +1341,13 @@ ALTER TABLE `t_account`
 
 ALTER TABLE `t_sub_account`
     MODIFY COLUMN `balance_direction` TINYINT NOT NULL COMMENT '余额方向：0-平/无, 1-借, 2-贷';
+
+-- ==================== Migration: V28__alter_template_rule_length.sql ====================
+
+USE `accounting`;
+
+-- V28: 扩充开户模板表 t_account_template 中账号与户名生成规则字段长度至 255 位
+ALTER TABLE `t_account_template`
+    MODIFY COLUMN `acct_no_rule` VARCHAR(255) NOT NULL COMMENT '账户编号生成规则',
+    MODIFY COLUMN `acct_name_rule` VARCHAR(255) NOT NULL COMMENT '账户名称生成规则';
 

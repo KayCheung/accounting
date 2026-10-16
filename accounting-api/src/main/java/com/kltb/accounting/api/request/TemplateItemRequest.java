@@ -45,12 +45,12 @@ public class TemplateItemRequest implements Serializable {
     private Integer balanceDirection;
 
     @NotBlank(message = "账户编号生成规则不能为空")
-    @Size(max = 32, message = "账户编号生成规则长度不能超过32")
+    @Size(max = 255, message = "账户编号生成规则长度不能超过255")
     @Schema(description = "账户编号生成规则", example = "CASH-{yyyyMMdd}-{seq}")
     private String acctNoRule;
 
     @NotBlank(message = "账户名称生成规则不能为空")
-    @Size(max = 32, message = "账户名称生成规则长度不能超过32")
+    @Size(max = 255, message = "账户名称生成规则长度不能超过255")
     @Schema(description = "账户名称生成规则", example = "{subjectName}-{ownerName}")
     private String acctNameRule;
 }

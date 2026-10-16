@@ -435,24 +435,24 @@
             </el-table-column>
 
             <!-- 账号规则 -->
-            <el-table-column label="账号生成规则" min-width="190">
+            <el-table-column label="账号生成规则" min-width="240">
               <template #default="{ row }">
                 <el-input
                   v-model="row.acctNoRule"
                   placeholder="如: {accountType}-{currency}-{seq5}"
-                  maxlength="32"
+                  maxlength="255"
                   clearable
                 />
               </template>
             </el-table-column>
 
             <!-- 户名规则 -->
-            <el-table-column label="户名生成规则" min-width="190">
+            <el-table-column label="户名生成规则" min-width="240">
               <template #default="{ row }">
                 <el-input
                   v-model="row.acctNameRule"
                   placeholder="如: {ownerName}-{accountTypeName}"
-                  maxlength="32"
+                  maxlength="255"
                   clearable
                 />
               </template>
