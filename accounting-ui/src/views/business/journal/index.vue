@@ -449,11 +449,11 @@
               </el-tag>
             </div>
 
-            <el-steps :active="getStepIndex(overviewData.processStage)" :process-status="getStepStatus(overviewData.processStage)" finish-status="success" align-center>
+            <el-steps :active="getStepIndex(overviewData)" :process-status="getStepStatus(overviewData.processStage)" finish-status="success" align-center>
               <el-step title="业务流水接收" description="流水已校验持久化" />
               <el-step title="规则匹配&凭证" description="推导会计科目与分录" />
               <el-step title="过账引擎调度" description="实时/异步/缓冲过账" />
-              <el-step :title="overviewData.processStage === 'FAILED' ? '记账失败' : '最终入账成功'" :description="overviewData.processStage === 'FAILED' ? '可人工重试/回滚' : '双子账户余额已更新'" />
+              <el-step title="最终入账成功" description="双子账户余额已更新" />
             </el-steps>
           </div>
 
@@ -1104,13 +1104,21 @@ function getTradeTypeTag(type: number): '' | 'primary' | 'warning' | 'danger' | 
   }
 }
 
-function getStepIndex(stage: string): number {
-  switch (stage) {
+function getStepIndex(overview: any): number {
+  if (!overview) return 1
+  if (overview.processStage === 'FAILED') {
+    // 若未生成凭证，说明失败在第 2 步（规则匹配&凭证，el-steps index=1）
+    if (!overview.vouchers || overview.vouchers.length === 0) {
+      return 1
+    }
+    // 若已生成凭证但失败，说明在第 3 步（过账引擎调度，el-steps index=2）失败
+    return 2
+  }
+  switch (overview.processStage) {
     case 'RECORDED': return 1
     case 'VOUCHERED': return 2
     case 'POSTING': return 2
     case 'SUCCESS': return 4
-    case 'FAILED': return 3
     default: return 1
   }
 }

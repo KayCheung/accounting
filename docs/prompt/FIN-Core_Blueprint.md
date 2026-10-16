@@ -1151,6 +1151,18 @@
            - 全工程 424 个后端单元测试 100% 通过（0 Failure / 0 Error）；
            - 前端 `vue-tsc` 类型校验与 `vite build` 生产构建 0 错误通过。
 - [x] **Step 23** · 业务功能页面开发全量交付完毕（100% 完成）
+      - **记账规则可选款项分录动态跳过机制与全流程全景看板阶段高亮治理**：
+        1. **后端凭证生成引擎可选款项支持（VoucheringApplicationService & VoucheringDomainService）**：
+           - 业务流水提交时，若某款项类型未上送（如免息未传利息）或分录计算金额 <= 0，引擎动态跳过该行分录生成，不再机械抛出 `RULE_NOT_FOUND("记账规则不存在")`；
+           - 在 `VoucheringDomainService.validateDebitCreditBalance` 增补有效分录非空与借贷发生额大于 0 强校验，以会计借贷恒等作为终极兜底保障财务安全；
+           - 修复 `JournalingApplicationService` 异常捕获透传：使用 `e.getMessage()` 替代 `e.getResultCode().getMessage()`，彻底消除真实业务异常被枚举默认文案覆盖的隐患；
+           - 优化 `JournalingAssembler.toOverviewResponse`：当流水失败时根据凭证是否存在准确标记 `stageDesc`（“凭证生成失败” / “过账执行失败”）与实际完成进度。
+        2. **前端全景看板流转阶段准确高亮（accounting-ui）**：
+           - 步骤条恢复标准固定节点（最终入账成功）；
+           - 重构 `getStepIndex(overviewData)`：根据凭证存在性精准将失败节点落在第 2 步“规则匹配&凭证”（index=1）或第 3 步“过账引擎调度”（index=2），前置成功步骤标绿，中断步骤标红，后续未执行步骤置灰；
+        3. **测试验证与质量保障**：
+           - `VoucheringApplicationServiceTest` 增补未上传款项跳过与 0 元分录跳过单元测试；
+           - 前后端编译与单元测试 100% 通过。
 
 
 

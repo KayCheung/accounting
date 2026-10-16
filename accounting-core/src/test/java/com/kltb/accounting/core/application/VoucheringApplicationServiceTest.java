@@ -584,4 +584,211 @@ class VoucheringApplicationServiceTest {
         assertThat(savedAuxList.get(0).getVoucherNo()).isEqualTo("VOU_AUX_001");
         assertThat(savedAuxList.get(0).getEntryId()).isEqualTo("ENT_AUX_001");
     }
+
+    @Test
+    @DisplayName("generateVoucher: 规则配置多款项分录但流水仅上传部分款项时，动态跳过未上传款项分录且借贷平衡生成凭证")
+    void generateVoucher_withOptionalFundsType_shouldSkipMissingAndGenerateVoucher() {
+        VoucherGenerateRequest req = new VoucherGenerateRequest();
+        req.setTraceNo("TRC_OPT_001");
+        req.setAccountMapping(Map.of("CUST_A:1001", "ACC_001", "CUST_A:2001", "ACC_002"));
+
+        BusinessRecordPO journal = new BusinessRecordPO();
+        journal.setTraceNo("TRC_OPT_001");
+        journal.setStatus(BusinessRecordStatusEnum.PROCESSING);
+        journal.setBusinessCode("LOAN");
+        journal.setTradingCode("REPAY");
+        journal.setPayChannel("BANK");
+        journal.setAccountingDate(LocalDate.now());
+
+        // 业务流水明细仅传了本金 PRINCIPAL，未传利息 INTEREST
+        BusinessDetailPO dPrincipal = new BusinessDetailPO();
+        dPrincipal.setFundsType("PRINCIPAL");
+        dPrincipal.setCustomerId("CUST_A");
+        dPrincipal.setAmount(new BigDecimal("1000.00"));
+
+        VoucheringDomainService.JournalWithDetails jwd = new VoucheringDomainService.JournalWithDetails(
+                journal, List.of(dPrincipal));
+        when(voucheringDomainService.loadJournal("TRC_OPT_001")).thenReturn(jwd);
+
+        AccountingRulePO rule = new AccountingRulePO();
+        rule.setId(10L);
+
+        // 规则行 1: 借方 银行存款（本金款项）
+        AccountingRuleDetailPO rd1 = new AccountingRuleDetailPO();
+        rd1.setId(101L);
+        rd1.setRowNum(1);
+        rd1.setFundsType("PRINCIPAL");
+        rd1.setSubjectCode("1001");
+        rd1.setDebitCredit(DebitCreditEnum.DEBIT);
+        rd1.setCurrency("CNY");
+
+        // 规则行 2: 贷方 贷款本金（本金款项）
+        AccountingRuleDetailPO rd2 = new AccountingRuleDetailPO();
+        rd2.setId(102L);
+        rd2.setRowNum(2);
+        rd2.setFundsType("PRINCIPAL");
+        rd2.setSubjectCode("2001");
+        rd2.setDebitCredit(DebitCreditEnum.CREDIT);
+        rd2.setCurrency("CNY");
+
+        // 规则行 3: 贷方 利息收入（利息款项，本次交易未发生且未上送）
+        AccountingRuleDetailPO rd3 = new AccountingRuleDetailPO();
+        rd3.setId(103L);
+        rd3.setRowNum(3);
+        rd3.setFundsType("INTEREST");
+        rd3.setSubjectCode("6011");
+        rd3.setDebitCredit(DebitCreditEnum.CREDIT);
+        rd3.setCurrency("CNY");
+
+        VoucheringDomainService.AccountingRuleWithDetails rwd = new VoucheringDomainService.AccountingRuleWithDetails(
+                rule, List.of(rd1, rd2, rd3), Collections.emptyMap());
+        when(voucheringDomainService.matchRule("LOAN", "REPAY", "BANK")).thenReturn(rwd);
+
+        TransactionPO txn = new TransactionPO();
+        txn.setTxnNo("TXN_OPT_001");
+        when(transactionRepository.selectByTraceNo("TRC_OPT_001")).thenReturn(txn);
+
+        AccountSubjectPO sub1 = new AccountSubjectPO();
+        sub1.setSubjectCode("1001");
+        sub1.setDebitCredit(SubjectBalanceDirectionEnum.DEBIT);
+        AccountSubjectPO sub2 = new AccountSubjectPO();
+        sub2.setSubjectCode("2001");
+        sub2.setDebitCredit(SubjectBalanceDirectionEnum.CREDIT);
+        when(subjectRepository.selectByCode("1001")).thenReturn(sub1);
+        when(subjectRepository.selectByCode("2001")).thenReturn(sub2);
+
+        when(voucheringDomainService.calculateEntryAmount(eq(rd1), any(), eq(journal)))
+                .thenReturn(new BigDecimal("1000.00"));
+        when(voucheringDomainService.calculateEntryAmount(eq(rd2), any(), eq(journal)))
+                .thenReturn(new BigDecimal("1000.00"));
+
+        when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> cb = invocation.getArgument(0);
+            return cb.doInTransaction(null);
+        });
+
+        org.mockito.ArgumentCaptor<List<VoucherEntryData>> entriesCaptor = org.mockito.ArgumentCaptor.forClass(List.class);
+        when(voucheringDomainService.persistVoucher(any(), any(), entriesCaptor.capture(), any())).thenReturn("VOU_OPT_001");
+        when(accountingVoucherRepository.updateTxnNoByVoucherNo("VOU_OPT_001", "TXN_OPT_001")).thenReturn(1);
+
+        AccountingVoucherPO savedVoucher = new AccountingVoucherPO();
+        savedVoucher.setVoucherNo("VOU_OPT_001");
+        savedVoucher.setAmount(new BigDecimal("1000.00"));
+        when(accountingVoucherRepository.selectByTraceNo("TRC_OPT_001")).thenReturn(List.of(savedVoucher));
+
+        VoucherGenerateResponse resp = service.generateVoucher(req);
+        assertThat(resp).isNotNull();
+
+        List<VoucherEntryData> captured = entriesCaptor.getValue();
+        // 验证只生成了 2 条分录（未上传的利息分录 rd3 被动态跳过，不报规则不存在）
+        assertThat(captured).hasSize(2);
+        assertThat(captured.get(0).getSubjectCode()).isEqualTo("1001");
+        assertThat(captured.get(1).getSubjectCode()).isEqualTo("2001");
+        verify(voucheringDomainService).validateDebitCreditBalance(captured);
+    }
+
+    @Test
+    @DisplayName("generateVoucher: 分录计算金额为 0 时动态跳过生成 0 元分录")
+    void generateVoucher_withZeroCalculatedAmount_shouldSkipZeroAmountEntry() {
+        VoucherGenerateRequest req = new VoucherGenerateRequest();
+        req.setTraceNo("TRC_ZERO_001");
+        req.setAccountMapping(Map.of("CUST_A:1001", "ACC_001", "CUST_A:2001", "ACC_002", "CUST_A:6011", "ACC_003"));
+
+        BusinessRecordPO journal = new BusinessRecordPO();
+        journal.setTraceNo("TRC_ZERO_001");
+        journal.setStatus(BusinessRecordStatusEnum.PROCESSING);
+        journal.setBusinessCode("LOAN");
+        journal.setTradingCode("REPAY");
+        journal.setPayChannel("BANK");
+        journal.setAccountingDate(LocalDate.now());
+
+        BusinessDetailPO dPrincipal = new BusinessDetailPO();
+        dPrincipal.setFundsType("PRINCIPAL");
+        dPrincipal.setCustomerId("CUST_A");
+        dPrincipal.setAmount(new BigDecimal("1000.00"));
+
+        BusinessDetailPO dInterest = new BusinessDetailPO();
+        dInterest.setFundsType("INTEREST");
+        dInterest.setCustomerId("CUST_A");
+        dInterest.setAmount(BigDecimal.ZERO);
+
+        VoucheringDomainService.JournalWithDetails jwd = new VoucheringDomainService.JournalWithDetails(
+                journal, List.of(dPrincipal, dInterest));
+        when(voucheringDomainService.loadJournal("TRC_ZERO_001")).thenReturn(jwd);
+
+        AccountingRulePO rule = new AccountingRulePO();
+        rule.setId(10L);
+
+        AccountingRuleDetailPO rd1 = new AccountingRuleDetailPO();
+        rd1.setId(101L);
+        rd1.setRowNum(1);
+        rd1.setFundsType("PRINCIPAL");
+        rd1.setSubjectCode("1001");
+        rd1.setDebitCredit(DebitCreditEnum.DEBIT);
+        rd1.setCurrency("CNY");
+
+        AccountingRuleDetailPO rd2 = new AccountingRuleDetailPO();
+        rd2.setId(102L);
+        rd2.setRowNum(2);
+        rd2.setFundsType("PRINCIPAL");
+        rd2.setSubjectCode("2001");
+        rd2.setDebitCredit(DebitCreditEnum.CREDIT);
+        rd2.setCurrency("CNY");
+
+        AccountingRuleDetailPO rd3 = new AccountingRuleDetailPO();
+        rd3.setId(103L);
+        rd3.setRowNum(3);
+        rd3.setFundsType("INTEREST");
+        rd3.setSubjectCode("6011");
+        rd3.setDebitCredit(DebitCreditEnum.CREDIT);
+        rd3.setCurrency("CNY");
+
+        VoucheringDomainService.AccountingRuleWithDetails rwd = new VoucheringDomainService.AccountingRuleWithDetails(
+                rule, List.of(rd1, rd2, rd3), Collections.emptyMap());
+        when(voucheringDomainService.matchRule("LOAN", "REPAY", "BANK")).thenReturn(rwd);
+
+        TransactionPO txn = new TransactionPO();
+        txn.setTxnNo("TXN_ZERO_001");
+        when(transactionRepository.selectByTraceNo("TRC_ZERO_001")).thenReturn(txn);
+
+        AccountSubjectPO sub1 = new AccountSubjectPO();
+        sub1.setSubjectCode("1001");
+        sub1.setDebitCredit(SubjectBalanceDirectionEnum.DEBIT);
+        AccountSubjectPO sub2 = new AccountSubjectPO();
+        sub2.setSubjectCode("2001");
+        sub2.setDebitCredit(SubjectBalanceDirectionEnum.CREDIT);
+        when(subjectRepository.selectByCode("1001")).thenReturn(sub1);
+        when(subjectRepository.selectByCode("2001")).thenReturn(sub2);
+
+        when(voucheringDomainService.calculateEntryAmount(eq(rd1), any(), eq(journal)))
+                .thenReturn(new BigDecimal("1000.00"));
+        when(voucheringDomainService.calculateEntryAmount(eq(rd2), any(), eq(journal)))
+                .thenReturn(new BigDecimal("1000.00"));
+        // rd3 计算金额为 0
+        when(voucheringDomainService.calculateEntryAmount(eq(rd3), any(), eq(journal)))
+                .thenReturn(BigDecimal.ZERO);
+
+        when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> cb = invocation.getArgument(0);
+            return cb.doInTransaction(null);
+        });
+
+        org.mockito.ArgumentCaptor<List<VoucherEntryData>> entriesCaptor = org.mockito.ArgumentCaptor.forClass(List.class);
+        when(voucheringDomainService.persistVoucher(any(), any(), entriesCaptor.capture(), any())).thenReturn("VOU_ZERO_001");
+        when(accountingVoucherRepository.updateTxnNoByVoucherNo("VOU_ZERO_001", "TXN_ZERO_001")).thenReturn(1);
+
+        AccountingVoucherPO savedVoucher = new AccountingVoucherPO();
+        savedVoucher.setVoucherNo("VOU_ZERO_001");
+        savedVoucher.setAmount(new BigDecimal("1000.00"));
+        when(accountingVoucherRepository.selectByTraceNo("TRC_ZERO_001")).thenReturn(List.of(savedVoucher));
+
+        VoucherGenerateResponse resp = service.generateVoucher(req);
+        assertThat(resp).isNotNull();
+
+        List<VoucherEntryData> captured = entriesCaptor.getValue();
+        // 验证金额为 0 的利息分录被动态跳过，未生成 0 元分录
+        assertThat(captured).hasSize(2);
+        assertThat(captured.stream().map(VoucherEntryData::getSubjectCode).toList())
+                .containsExactly("1001", "2001");
+    }
 }

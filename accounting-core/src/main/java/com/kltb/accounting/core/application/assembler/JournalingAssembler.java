@@ -364,8 +364,13 @@ public class JournalingAssembler {
 
         if (isFailed) {
             response.setProcessStage("FAILED");
-            response.setStageDesc("记账失败");
-            response.setProgressPercent(100);
+            if (vouchers == null || vouchers.isEmpty()) {
+                response.setStageDesc("凭证生成失败");
+                response.setProgressPercent(25);
+            } else {
+                response.setStageDesc("过账执行失败");
+                response.setProgressPercent(75);
+            }
             response.setCanRetry(record != null && record.getId() != null);
             // 失败流水仅在存在待清理半成品数据（凭证未作废/分录未作废/预冻结未解冻）时才允许回滚；已彻底回滚干净则禁止重复回滚
             boolean hasPendingRollback = (record != null && record.getStatus() == BusinessRecordStatusEnum.PROCESSING)

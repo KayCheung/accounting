@@ -29,6 +29,7 @@ import com.kltb.accounting.core.shared.exception.AccountException;
 import com.kltb.accounting.core.shared.exception.ServiceException;
 import com.kltb.accounting.core.shared.util.AccountingEntryUtil;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -40,6 +41,7 @@ import java.util.stream.Collectors;
 /**
  * 凭证生成应用服务（P1-1 修复：统一事务边界在此处控制）
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class VoucheringApplicationService {
@@ -108,13 +110,22 @@ public class VoucheringApplicationService {
             BusinessDetailPO matchedDetail = findMatchingDetail(
                     businessDetails, ruleDetail.getFundsType());
             if (matchedDetail == null) {
-                throw new AccountException(ResultCode.RULE_NOT_FOUND,
-                        "未找到匹配的款项类型: fundsType=" + ruleDetail.getFundsType());
+                // 核心业务设计：若本次交易流水未上传该款项明细（例如免息未上送利息），动态跳过可选分录生成
+                log.info("[Voucher] 流水明细未包含款项类型，动态跳过可选分录生成: fundsType={}, subjectCode={}",
+                        ruleDetail.getFundsType(), ruleDetail.getSubjectCode());
+                continue;
             }
 
             // 计算分录金额（支持 SpEL 与主单/明细扩展属性透传）
             BigDecimal amount = voucheringDomainService.calculateEntryAmount(
                     ruleDetail, matchedDetail, journal);
+
+            // 核心财务律法：若分录计算金额为 0 或非正数，动态跳过（绝对值法则严禁 0 元或负数分录过账）
+            if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+                log.info("[Voucher] 分录计算金额 <= 0，动态跳过分录生成: fundsType={}, amount={}",
+                        ruleDetail.getFundsType(), amount);
+                continue;
+            }
 
             // 确定账户编号（优先从内存字典匹配真实 accountNo，未命中则走仓储查询）
             String accountNo = resolveAccountNo(ruleDetail, matchedDetail, request.getAccountMapping());

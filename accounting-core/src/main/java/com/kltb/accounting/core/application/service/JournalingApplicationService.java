@@ -108,9 +108,10 @@ public class JournalingApplicationService {
             TransactionPO txn = transactionRepository.selectByTraceNo(request.getTraceNo());
             return assembler.toIdempotentResponse(existing, txn);
         } catch (AccountException e) {
+            String errorMsg = StrUtil.isNotBlank(e.getMessage()) ? e.getMessage() : e.getResultCode().getMessage();
             log.warn("[Journal] 流水记账业务异常，执行整笔流水回滚: traceNo={} error={}",
-                    request.getTraceNo(), e.getResultCode().getMessage());
-            rollbackDomainService.executeFullJournalRollback(request.getTraceNo(), e.getResultCode().getMessage());
+                    request.getTraceNo(), errorMsg);
+            rollbackDomainService.executeFullJournalRollback(request.getTraceNo(), errorMsg);
             throw e;
         } catch (RuntimeException e) {
             log.error("[Journal] 流水记账系统异常，执行整笔流水回滚: traceNo={} error={}",
@@ -230,7 +231,8 @@ public class JournalingApplicationService {
             }
             return assembler.toFreezeResponse(existing, freezeDetail);
         } catch (AccountException e) {
-            markJournalFailed(request.getTraceNo(), e.getResultCode().getMessage());
+            String errorMsg = StrUtil.isNotBlank(e.getMessage()) ? e.getMessage() : e.getResultCode().getMessage();
+            markJournalFailed(request.getTraceNo(), errorMsg);
             throw e;
         } catch (RuntimeException e) {
             log.error("[JournalFreeze] 预冻结异常: traceNo={} error={}", request.getTraceNo(), e.getMessage(), e);
@@ -622,7 +624,8 @@ public class JournalingApplicationService {
 
                 return getJournalOverview(traceNo);
             } catch (AccountException e) {
-                markJournalFailed(traceNo, e.getResultCode().getMessage());
+                String errorMsg = StrUtil.isNotBlank(e.getMessage()) ? e.getMessage() : e.getResultCode().getMessage();
+                markJournalFailed(traceNo, errorMsg);
                 throw e;
             } catch (RuntimeException e) {
                 log.error("[Journal] 重试记账异常，恢复 FAILED: traceNo={} error={}", traceNo, e.getMessage(), e);

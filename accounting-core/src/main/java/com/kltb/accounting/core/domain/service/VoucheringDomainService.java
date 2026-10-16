@@ -148,6 +148,10 @@ public class VoucheringDomainService {
      * 借贷平衡校验
      */
     public void validateDebitCreditBalance(List<VoucherEntryData> entries) {
+        if (entries == null || entries.isEmpty()) {
+            throw new AccountException(ResultCode.VOUCHER_NOT_BALANCED, "凭证有效分录为空，无法生成记账凭证");
+        }
+
         BigDecimal totalDebit = entries.stream()
                 .filter(e -> e.getDebitCredit() != null && e.getDebitCredit() == 1)
                 .map(VoucherEntryData::getAmount)
@@ -157,6 +161,10 @@ public class VoucheringDomainService {
                 .filter(e -> e.getDebitCredit() != null && e.getDebitCredit() == 2)
                 .map(VoucherEntryData::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        if (totalDebit.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new AccountException(ResultCode.VOUCHER_NOT_BALANCED, "凭证借贷发生额必须大于0");
+        }
 
         if (totalDebit.compareTo(totalCredit) != 0) {
             BigDecimal diff = totalDebit.subtract(totalCredit).abs();
