@@ -19,15 +19,16 @@
     <property name="FILE_PATTERN"
               value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%tid] %logger{50} - %msg%n"/>
 
+    <!-- ==================== 控制台日志 Appender（所有环境通用，支持 docker logs） ==================== -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${CONSOLE_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
     <!-- ==================== local 环境：仅输出到控制台 ==================== -->
     <springProfile name="local">
-        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
-            <encoder>
-                <pattern>${CONSOLE_PATTERN}</pattern>
-                <charset>UTF-8</charset>
-            </encoder>
-        </appender>
-
         <root level="INFO">
             <appender-ref ref="CONSOLE"/>
         </root>
@@ -100,12 +101,14 @@
         </appender>
 
         <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ASYNC_INFO"/>
             <appender-ref ref="ASYNC_ERROR"/>
         </root>
 
         <!-- 业务包 INFO，框架包 WARN，减少噪音 -->
         <logger name="com.kltb.accounting" level="INFO" additivity="false">
+            <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ASYNC_INFO"/>
             <appender-ref ref="ASYNC_ERROR"/>
         </logger>
