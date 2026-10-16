@@ -17,6 +17,7 @@ public class SubjectResponse {
     private Long parentSubjectId;
     private Integer subjectCategory;
     private Integer debitCredit;
+    private String debitCreditDesc;
     private Boolean leaf;
     private Boolean allowPost;
     private Boolean allowOpenAccount;

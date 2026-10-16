@@ -137,7 +137,7 @@ class FinancialReportDomainServiceTest {
         sub1.setSubjectCode("1002");
         sub1.setSubjectName("银行存款");
         sub1.setSubjectLevel(1);
-        sub1.setDebitCredit(com.kltb.accounting.core.domain.enums.DebitCreditEnum.DEBIT);
+        sub1.setDebitCredit(com.kltb.accounting.core.domain.enums.SubjectBalanceDirectionEnum.DEBIT);
 
         when(subjectRepository.selectAllSubjects()).thenReturn(List.of(sub1));
 
@@ -170,7 +170,7 @@ class FinancialReportDomainServiceTest {
         AccountSubjectPO sub = new AccountSubjectPO();
         sub.setSubjectCode("1002");
         sub.setSubjectName("银行存款");
-        sub.setDebitCredit(com.kltb.accounting.core.domain.enums.DebitCreditEnum.DEBIT);
+        sub.setDebitCredit(com.kltb.accounting.core.domain.enums.SubjectBalanceDirectionEnum.DEBIT);
         when(subjectRepository.selectByCode("1002")).thenReturn(sub);
 
         // 期初日余额

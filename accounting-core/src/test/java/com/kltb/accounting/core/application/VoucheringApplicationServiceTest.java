@@ -11,6 +11,7 @@ import com.kltb.accounting.core.application.service.VoucheringApplicationService
 import com.kltb.accounting.core.domain.enums.ChangeDirectionEnum;
 import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
 import com.kltb.accounting.core.domain.enums.PostingTypeEnum;
+import com.kltb.accounting.core.domain.enums.SubjectBalanceDirectionEnum;
 import com.kltb.accounting.core.domain.enums.TradeTypeEnum;
 import com.kltb.accounting.core.domain.enums.VoucherStatusEnum;
 import com.kltb.accounting.core.domain.service.AuxiliaryDomainService;
@@ -296,7 +297,7 @@ class VoucheringApplicationServiceTest {
 
         AccountSubjectPO subject = new AccountSubjectPO();
         subject.setSubjectCode("1001");
-        subject.setDebitCredit(DebitCreditEnum.DEBIT);
+        subject.setDebitCredit(SubjectBalanceDirectionEnum.DEBIT);
         when(subjectRepository.selectByCode("1001")).thenReturn(subject);
 
         when(voucheringDomainService.calculateEntryAmount(eq(rd1), eq(d1), eq(journal)))
@@ -368,7 +369,7 @@ class VoucheringApplicationServiceTest {
 
         AccountSubjectPO subject = new AccountSubjectPO();
         subject.setSubjectCode("1001");
-        subject.setDebitCredit(DebitCreditEnum.DEBIT);
+        subject.setDebitCredit(SubjectBalanceDirectionEnum.DEBIT);
         when(subjectRepository.selectByCode("1001")).thenReturn(subject);
 
         when(voucheringDomainService.calculateEntryAmount(eq(rd1), eq(d1), eq(journal)))
@@ -455,10 +456,10 @@ class VoucheringApplicationServiceTest {
 
         AccountSubjectPO sub1 = new AccountSubjectPO();
         sub1.setSubjectCode("1001");
-        sub1.setDebitCredit(DebitCreditEnum.DEBIT); // 借方余额方向
+        sub1.setDebitCredit(SubjectBalanceDirectionEnum.DEBIT); // 借方余额方向
         AccountSubjectPO sub2 = new AccountSubjectPO();
         sub2.setSubjectCode("2001");
-        sub2.setDebitCredit(DebitCreditEnum.CREDIT); // 贷方余额方向
+        sub2.setDebitCredit(SubjectBalanceDirectionEnum.CREDIT); // 贷方余额方向
         when(subjectRepository.selectByCode("1001")).thenReturn(sub1);
         when(subjectRepository.selectByCode("2001")).thenReturn(sub2);
 
@@ -542,7 +543,7 @@ class VoucheringApplicationServiceTest {
 
         AccountSubjectPO sub1 = new AccountSubjectPO();
         sub1.setSubjectCode("1001");
-        sub1.setDebitCredit(DebitCreditEnum.DEBIT);
+        sub1.setDebitCredit(SubjectBalanceDirectionEnum.DEBIT);
         when(subjectRepository.selectByCode("1001")).thenReturn(sub1);
 
         when(voucheringDomainService.calculateEntryAmount(eq(rd1), any(), eq(journal)))

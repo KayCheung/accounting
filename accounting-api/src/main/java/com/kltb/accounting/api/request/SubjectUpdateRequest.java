@@ -28,7 +28,7 @@ public class SubjectUpdateRequest {
     @Schema(description = "是否允许建明细账户")
     private Boolean allowOpenAccount;
 
-    @Schema(description = "余额方向：1=借方，2=贷方")
+    @Schema(description = "余额方向：0=无(表外)，1=借方，2=贷方，3=双向")
     private Integer debitCredit;
 
     @Schema(description = "状态：1=启用，2=停用")

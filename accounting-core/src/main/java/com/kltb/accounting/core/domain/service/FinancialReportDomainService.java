@@ -5,6 +5,7 @@ import com.kltb.accounting.api.request.GeneralLedgerQueryRequest;
 import com.kltb.accounting.api.request.IncomeStatementQueryRequest;
 import com.kltb.accounting.api.request.SubsidiaryLedgerQueryRequest;
 import com.kltb.accounting.api.response.*;
+import com.kltb.accounting.core.domain.enums.SubjectBalanceDirectionEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountBalancePO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountSubjectPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherEntryPO;
@@ -526,9 +527,9 @@ public class FinancialReportDomainService {
                 continue;
             }
 
-            // 方向：1-借, 2-贷
+            // 方向：0-无, 1-借, 2-贷, 3-双向
             int defaultDir = subject.getDebitCredit() != null ? subject.getDebitCredit().getCode() : 1;
-            String dirDesc = defaultDir == 1 ? "借" : "贷";
+            String dirDesc = SubjectBalanceDirectionEnum.getDescByCode(defaultDir);
             if (endBal.compareTo(ZERO) == 0) {
                 dirDesc = "平";
             }
@@ -584,7 +585,7 @@ public class FinancialReportDomainService {
         String subjectName = subject != null ? subject.getSubjectName() : subjectCode;
         int level = subject != null && subject.getSubjectLevel() != null ? subject.getSubjectLevel() : 1;
         int defaultDir = subject != null && subject.getDebitCredit() != null ? subject.getDebitCredit().getCode() : 1;
-        String dirDesc = defaultDir == 1 ? "借" : "贷";
+        String dirDesc = SubjectBalanceDirectionEnum.getDescByCode(defaultDir);
 
         LocalDate startDate = request.getStartDate();
         LocalDate endDate = request.getEndDate();

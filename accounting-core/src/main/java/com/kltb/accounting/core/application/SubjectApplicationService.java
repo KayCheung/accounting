@@ -11,6 +11,7 @@ import com.kltb.accounting.api.response.PageResponse;
 import com.kltb.accounting.core.application.converter.SubjectConverter;
 import com.kltb.accounting.core.application.dto.SubjectResponse;
 import com.kltb.accounting.core.domain.enums.AvailableStatusEnum;
+import com.kltb.accounting.core.domain.enums.SubjectBalanceDirectionEnum;
 import com.kltb.accounting.core.domain.enums.SubjectCategoryEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountSubjectPO;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountMapper;
@@ -83,7 +84,10 @@ public class SubjectApplicationService {
                             "科目编码已存在：" + request.getSubjectCode());
                 }
 
-                // 3. 构建 PO 并插入
+                // 3. 校验账类与余额方向合法性
+                validateCategoryAndBalanceDirection(request.getSubjectCategory(), request.getDebitCredit(), true);
+
+                // 4. 构建 PO 并插入
                 AccountSubjectPO po = SubjectConverter.toPO(request);
                 subjectRepository.insertSubject(po);
 
@@ -127,6 +131,10 @@ public class SubjectApplicationService {
                 if (Boolean.TRUE.equals(request.getLeaf()) && subjectRepository.existsSubjectByParentCode(subjectCode)) {
                     throw new ServiceException(ResultCode.OPERATION_NOT_ALLOWED, "该科目存在子科目，无法设为末级科目");
                 }
+                // 3.1 校验更新余额方向合法性
+                Integer newCategory = request.getSubjectCategory() != null ? request.getSubjectCategory()
+                        : (po.getSubjectCategory() != null ? po.getSubjectCategory().getCode() : null);
+                validateCategoryAndBalanceDirection(newCategory, request.getDebitCredit(), false);
                 // 4. 更新允许修改的字段
                 SubjectConverter.updatePO(request, po);
                 // 非末级科目强制不允许记账和开户
@@ -266,5 +274,40 @@ public class SubjectApplicationService {
      */
     private boolean hasLinkedAccounts(String subjectCode) {
         return accountMapper.countBySubjectCode(subjectCode) > 0;
+    }
+
+    /**
+     * 校验账类与余额方向合法性，消除魔法值
+     *
+     * @param categoryCode    账类编码（来自 SubjectCategoryEnum）
+     * @param debitCreditCode 余额方向编码（来自 SubjectBalanceDirectionEnum）
+     * @param isCreate        是否为创建操作
+     */
+    private void validateCategoryAndBalanceDirection(Integer categoryCode, Integer debitCreditCode, boolean isCreate) {
+        if (categoryCode == null) {
+            return;
+        }
+        SubjectCategoryEnum category = SubjectCategoryEnum.fromCode(categoryCode);
+        boolean isOffBalance = (category == SubjectCategoryEnum.OFF_BALANCE);
+        if (isOffBalance) {
+            // 表外科目强制无方向，Converter 会自动处理；若为更新且明确传了非 0 方向则拦截
+            if (!isCreate && debitCreditCode != null && !SubjectBalanceDirectionEnum.NONE.getCode().equals(debitCreditCode)) {
+                throw new ServiceException(ResultCode.PARAM_ERROR, "表外科目余额方向必须为无");
+            }
+            return;
+        }
+
+        // 表内科目校验
+        if (debitCreditCode == null) {
+            if (isCreate) {
+                throw new ServiceException(ResultCode.PARAM_ERROR, "表内科目必须指定借贷或双向余额方向");
+            }
+            return;
+        }
+
+        SubjectBalanceDirectionEnum direction = SubjectBalanceDirectionEnum.fromCode(debitCreditCode);
+        if (direction == null || direction.isOffBalance()) {
+            throw new ServiceException(ResultCode.PARAM_ERROR, "表内科目不允许设置为无余额方向或未知方向");
+        }
     }
 }

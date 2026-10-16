@@ -255,7 +255,14 @@ public class VoucheringDomainService {
         try {
             AccountSubjectPO subject = subjectRepository.selectByCode(subjectCode);
             if (subject != null && subject.getDebitCredit() != null) {
-                return (debitCredit == subject.getDebitCredit())
+                SubjectBalanceDirectionEnum sDir = subject.getDebitCredit();
+                if (sDir.isOffBalance()) {
+                    return (debitCredit == DebitCreditEnum.DEBIT) ? ChangeDirectionEnum.INCREASE : ChangeDirectionEnum.DECREASE;
+                }
+                if (sDir.isBidirectional()) {
+                    return ChangeDirectionEnum.INCREASE;
+                }
+                return (sDir.getCode().equals(debitCredit.getCode()))
                         ? ChangeDirectionEnum.INCREASE
                         : ChangeDirectionEnum.DECREASE;
             }

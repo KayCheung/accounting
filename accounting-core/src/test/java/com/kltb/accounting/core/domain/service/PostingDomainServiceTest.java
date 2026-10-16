@@ -2,9 +2,11 @@ package com.kltb.accounting.core.domain.service;
 
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.AccountStatusEnum;
+import com.kltb.accounting.core.domain.enums.BalanceDirectionEnum;
 import com.kltb.accounting.core.domain.enums.BalanceTypeEnum;
 import com.kltb.accounting.core.domain.enums.ChangeDirectionEnum;
 import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
+import com.kltb.accounting.core.domain.enums.SubjectBalanceDirectionEnum;
 import com.kltb.accounting.core.domain.enums.VoucherEntryStatusEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountDetailRepository;
@@ -45,6 +47,7 @@ class PostingDomainServiceTest {
     @Mock private com.kltb.accounting.core.infrastructure.persistence.repository.BusinessRecordRepository businessRecordRepository;
     @Mock private com.kltb.accounting.core.infrastructure.persistence.repository.FreezeDetailRepository freezeDetailRepository;
     @Mock private com.kltb.accounting.core.infrastructure.persistence.repository.AccountingRuleRepository accountingRuleRepository;
+    @Mock private com.kltb.accounting.core.infrastructure.persistence.repository.SubjectRepository subjectRepository;
     @Mock private com.kltb.accounting.core.infrastructure.account.FreezeIdGenerator freezeIdGenerator;
 
     @InjectMocks private PostingDomainService postingDomainService;
@@ -275,6 +278,75 @@ class PostingDomainServiceTest {
         // 验证可用子账户精准更新
         assertThat(availSub.getBalance()).isEqualTo(new BigDecimal("4000"));
         verify(subAccountRepository).updateById(availSub);
+    }
+
+    @Test
+    @DisplayName("实时过账: 双向科目发生跨零超额冲减 -> 余额翻转为贷方且金额始终为绝对值正数")
+    void executeRealTimePosting_bothDirectionSubject_directionFlip() {
+        AccountingVoucherPO voucher = buildVoucher("VOU_BOTH");
+        AccountingVoucherEntryPO entry = buildEntry("E_BOTH", "VOU_BOTH", "A002", 2, new BigDecimal("250")); // 贷方250
+        entry.setSubjectCode("3001");
+
+        AccountPO account = buildAccount("A002", new BigDecimal("100"), AccountStatusEnum.NORMAL);
+        account.setSubjectCode("3001");
+        account.setBalanceDirection(BalanceDirectionEnum.DEBIT); // 当前借方100
+
+        SubAccountPO subAccount = buildSubAccount("A002");
+        subAccount.setBalance(new BigDecimal("100"));
+        subAccount.setBalanceDirection(BalanceDirectionEnum.DEBIT);
+
+        AccountSubjectPO subject = new AccountSubjectPO();
+        subject.setSubjectCode("3001");
+        subject.setDebitCredit(SubjectBalanceDirectionEnum.BOTH);
+
+        when(accountRepository.selectForUpdateBatch(List.of("A002"))).thenReturn(List.of(account));
+        when(subAccountRepository.selectForUpdate("A002")).thenReturn(List.of(subAccount));
+        when(subjectRepository.selectByCode("3001")).thenReturn(subject);
+
+        postingDomainService.executeRealTimePosting(voucher, List.of(entry));
+
+        // 100 借方 - 250 贷方 = 150 贷方 (翻转)
+        assertThat(account.getBalance()).isEqualByComparingTo(new BigDecimal("150"));
+        assertThat(account.getBalanceDirection()).isEqualTo(BalanceDirectionEnum.CREDIT);
+        assertThat(subAccount.getBalance()).isEqualByComparingTo(new BigDecimal("150"));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<AccountDetailPO>> detailCaptor = ArgumentCaptor.forClass(List.class);
+        verify(accountDetailRepository).batchInsert(detailCaptor.capture());
+        AccountDetailPO detail = detailCaptor.getValue().get(0);
+        assertThat(detail.getPreBalance()).isEqualByComparingTo(new BigDecimal("100"));
+        assertThat(detail.getPostBalance()).isEqualByComparingTo(new BigDecimal("150"));
+        assertThat(detail.getChangeDirection()).isEqualTo(ChangeDirectionEnum.INCREASE);
+    }
+
+    @Test
+    @DisplayName("实时过账: 表外科目借增贷减过账成功")
+    void executeRealTimePosting_offBalanceSubject() {
+        AccountingVoucherPO voucher = buildVoucher("VOU_OFF");
+        AccountingVoucherEntryPO entry = buildEntry("E_OFF", "VOU_OFF", "A003", 1, new BigDecimal("800")); // 借方800增加
+        entry.setSubjectCode("0001");
+
+        AccountPO account = buildAccount("A003", new BigDecimal("200"), AccountStatusEnum.NORMAL);
+        account.setSubjectCode("0001");
+        account.setBalanceDirection(BalanceDirectionEnum.FLAT);
+
+        SubAccountPO subAccount = buildSubAccount("A003");
+        subAccount.setBalance(new BigDecimal("200"));
+
+        AccountSubjectPO subject = new AccountSubjectPO();
+        subject.setSubjectCode("0001");
+        subject.setDebitCredit(SubjectBalanceDirectionEnum.NONE);
+
+        when(accountRepository.selectForUpdateBatch(List.of("A003"))).thenReturn(List.of(account));
+        when(subAccountRepository.selectForUpdate("A003")).thenReturn(List.of(subAccount));
+        when(subjectRepository.selectByCode("0001")).thenReturn(subject);
+
+        postingDomainService.executeRealTimePosting(voucher, List.of(entry));
+
+        // 200 + 800 = 1000
+        assertThat(account.getBalance()).isEqualByComparingTo(new BigDecimal("1000"));
+        assertThat(account.getBalanceDirection()).isEqualTo(BalanceDirectionEnum.FLAT);
+        assertThat(subAccount.getBalance()).isEqualByComparingTo(new BigDecimal("1000"));
     }
 
     private SubAccountPO buildSubAccount(String accountNo) {

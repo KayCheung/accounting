@@ -213,7 +213,7 @@ class JournalingApplicationServiceTest {
 
         AccountSubjectPO subject = new AccountSubjectPO();
         subject.setSubjectCode("200101");
-        subject.setDebitCredit(DebitCreditEnum.CREDIT); // 负债类余额方向为贷
+        subject.setDebitCredit(SubjectBalanceDirectionEnum.CREDIT); // 负债类余额方向为贷
         when(subjectRepository.selectByCode("200101")).thenReturn(subject);
 
         AccountPO account = new AccountPO();

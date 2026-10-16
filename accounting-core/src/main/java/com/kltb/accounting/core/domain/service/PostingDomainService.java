@@ -2,11 +2,9 @@ package com.kltb.accounting.core.domain.service;
 
 import cn.hutool.core.util.StrUtil;
 import com.kltb.accounting.api.constant.ResultCode;
-import com.kltb.accounting.core.domain.enums.AccountStatusEnum;
-import com.kltb.accounting.core.domain.enums.BalanceTypeEnum;
-import com.kltb.accounting.core.domain.enums.ChangeDirectionEnum;
-import com.kltb.accounting.core.domain.enums.VoucherEntryStatusEnum;
+import com.kltb.accounting.core.domain.enums.*;
 import com.kltb.accounting.core.infrastructure.account.AccountBalanceCalculator;
+import com.kltb.accounting.core.infrastructure.account.AccountBalanceResult;
 import com.kltb.accounting.core.infrastructure.account.AccountValidator;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
 import com.kltb.accounting.core.infrastructure.persistence.repository.*;
@@ -46,6 +44,7 @@ public class PostingDomainService {
     private final BusinessRecordRepository businessRecordRepository;
     private final FreezeDetailRepository freezeDetailRepository;
     private final AccountingRuleRepository accountingRuleRepository;
+    private final SubjectRepository subjectRepository;
     private final com.kltb.accounting.core.infrastructure.account.FreezeIdGenerator freezeIdGenerator;
 
     /**
@@ -139,16 +138,35 @@ public class PostingDomainService {
                     && rule.getFreezeDuration() > 0
                     && ChangeDirectionEnum.INCREASE.equals(entry.getChangeDirection()));
 
-            // 计算主账户余额
+            // 获取科目方向配置（若未注入或查询为空，从账户现有方向兜底）
+            SubjectBalanceDirectionEnum subjectDir = null;
+            if (subjectRepository != null && StrUtil.isNotBlank(entry.getSubjectCode())) {
+                AccountSubjectPO subj = subjectRepository.selectByCode(entry.getSubjectCode());
+                if (subj != null) {
+                    subjectDir = subj.getDebitCredit();
+                }
+            }
+            if (subjectDir == null) {
+                subjectDir = (account.getBalanceDirection() == BalanceDirectionEnum.CREDIT)
+                        ? SubjectBalanceDirectionEnum.CREDIT
+                        : (account.getBalanceDirection() == BalanceDirectionEnum.FLAT ? SubjectBalanceDirectionEnum.NONE : SubjectBalanceDirectionEnum.DEBIT);
+            }
+
+            // 计算主账户余额与方向（遵循绝对值法则，支持表外及双向翻转）
             BigDecimal oldBalance = account.getBalance();
-            BigDecimal newBalance = AccountBalanceCalculator.calculateNewBalance(
+            AccountBalanceResult mainResult = AccountBalanceCalculator.calculate(
                 oldBalance,
-                entry.getAmount(),
-                entry.getChangeDirection()
+                account.getBalanceDirection(),
+                subjectDir,
+                entry.getDebitCredit(),
+                entry.getChangeDirection(),
+                entry.getAmount()
             );
+            BigDecimal newBalance = mainResult.getNewBalance();
 
             // 更新主账户（乐观锁版本号由 MyBatis-Plus 插件自动管理，严禁业务层手动自增破坏 CAS 校验）
             account.setBalance(newBalance);
+            account.setBalanceDirection(mainResult.getNewDirection());
             accountRepository.updateById(account);
 
             // 确定目标子账户类型（常规：AVAILABLE；预冻结核销或入金冻结：FROZEN）
@@ -164,12 +182,20 @@ public class PostingDomainService {
 
             if (subAccount != null) {
                 subOldBalance = subAccount.getBalance();
-                subNewBalance = AccountBalanceCalculator.calculateNewBalance(
+                BalanceDirectionEnum subDir = subAccount.getBalanceDirection() != null
+                        ? subAccount.getBalanceDirection()
+                        : account.getBalanceDirection();
+                AccountBalanceResult subResult = AccountBalanceCalculator.calculate(
                     subOldBalance,
-                    entry.getAmount(),
-                    entry.getChangeDirection()
+                    subDir,
+                    subjectDir,
+                    entry.getDebitCredit(),
+                    entry.getChangeDirection(),
+                    entry.getAmount()
                 );
+                subNewBalance = subResult.getNewBalance();
                 subAccount.setBalance(subNewBalance);
+                subAccount.setBalanceDirection(subResult.getNewDirection());
                 subAccountRepository.updateById(subAccount);
             }
 
@@ -227,7 +253,7 @@ public class PostingDomainService {
                 .setTradeType(voucher.getTradeType())
                 .setTradeTime(voucher.getTradeTime())
                 .setDebitCredit(entry.getDebitCredit())
-                .setChangeDirection(entry.getChangeDirection())
+                .setChangeDirection(mainResult.getChangeDirection())
                 .setCurrency(entry.getCurrency())
                 .setPreBalance(oldBalance)
                 .setAmount(entry.getAmount())
@@ -251,7 +277,7 @@ public class PostingDomainService {
                     .setTradeType(voucher.getTradeType())
                     .setTradeTime(voucher.getTradeTime())
                     .setDebitCredit(entry.getDebitCredit())
-                    .setChangeDirection(entry.getChangeDirection())
+                    .setChangeDirection(mainResult.getChangeDirection())
                     .setCurrency(entry.getCurrency())
                     .setPreBalance(subOldBalance)
                     .setAmount(entry.getAmount())

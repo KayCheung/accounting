@@ -4,7 +4,7 @@ package com.kltb.accounting.core.infrastructure.persistence.entity;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.kltb.accounting.core.domain.enums.AvailableStatusEnum;
-import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
+import com.kltb.accounting.core.domain.enums.SubjectBalanceDirectionEnum;
 import com.kltb.accounting.core.domain.enums.SubjectCategoryEnum;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -37,8 +37,8 @@ public class AccountSubjectPO extends BaseEntity {
     /** 账类：资产/负债/权益/共同/成本/损益/表外 */
     private SubjectCategoryEnum subjectCategory;
 
-    /** 借贷方向：借/贷（复用 Java-A 定义的 DebitCreditEnum） */
-    private DebitCreditEnum debitCredit;
+    /** 余额方向：0-无, 1-借, 2-贷, 3-双向 */
+    private SubjectBalanceDirectionEnum debitCredit;
 
     /**
      * 是否末级科目
@@ -75,4 +75,20 @@ public class AccountSubjectPO extends BaseEntity {
 
     /** 更新人姓名 */
     private String updateName;
+
+    public boolean isBoth() {
+        return debitCredit != null && debitCredit.isBoth();
+    }
+
+    public boolean isOffBalance() {
+        return debitCredit != null && debitCredit.isOffBalance();
+    }
+
+    public boolean isDebit() {
+        return debitCredit != null && debitCredit.isDebit();
+    }
+
+    public boolean isCredit() {
+        return debitCredit != null && debitCredit.isCredit();
+    }
 }

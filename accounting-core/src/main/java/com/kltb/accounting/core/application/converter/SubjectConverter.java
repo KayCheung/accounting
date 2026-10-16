@@ -5,7 +5,7 @@ import com.kltb.accounting.api.request.SubjectCreateRequest;
 import com.kltb.accounting.api.request.SubjectUpdateRequest;
 import com.kltb.accounting.core.application.dto.SubjectResponse;
 import com.kltb.accounting.core.domain.enums.AvailableStatusEnum;
-import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
+import com.kltb.accounting.core.domain.enums.SubjectBalanceDirectionEnum;
 import com.kltb.accounting.core.domain.enums.SubjectCategoryEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountSubjectPO;
 import com.kltb.accounting.core.shared.context.TenantContext;
@@ -30,10 +30,16 @@ public class SubjectConverter {
         po.setSubjectName(request.getSubjectName());
         po.setSubjectLevel(request.getSubjectLevel());
         po.setParentSubjectId(request.getParentSubjectId());
-        po.setSubjectCategory(Optional.ofNullable(SubjectCategoryEnum.fromCode(request.getSubjectCategory()))
-                .orElse(SubjectCategoryEnum.OFF_BALANCE));
-        po.setDebitCredit(Optional.ofNullable(DebitCreditEnum.fromCode(request.getDebitCredit()))
-                .orElse(DebitCreditEnum.DEBIT));
+        SubjectCategoryEnum category = Optional.ofNullable(SubjectCategoryEnum.fromCode(request.getSubjectCategory()))
+                .orElse(SubjectCategoryEnum.OFF_BALANCE);
+        po.setSubjectCategory(category);
+        if (category == SubjectCategoryEnum.OFF_BALANCE) {
+            // 表外科目强制无余额方向
+            po.setDebitCredit(SubjectBalanceDirectionEnum.NONE);
+        } else {
+            po.setDebitCredit(Optional.ofNullable(SubjectBalanceDirectionEnum.fromCode(request.getDebitCredit()))
+                    .orElse(SubjectBalanceDirectionEnum.DEBIT));
+        }
         po.setLeaf(request.getLeaf() != null && request.getLeaf());
         po.setAllowPost(request.getAllowPost() != null && request.getAllowPost());
         po.setAllowOpenAccount(request.getAllowOpenAccount() != null && request.getAllowOpenAccount());
@@ -59,8 +65,12 @@ public class SubjectConverter {
                     .ifPresent(po::setSubjectCategory);
         }
         if (request.getDebitCredit() != null) {
-            Optional.ofNullable(DebitCreditEnum.fromCode(request.getDebitCredit()))
+            Optional.ofNullable(SubjectBalanceDirectionEnum.fromCode(request.getDebitCredit()))
                     .ifPresent(po::setDebitCredit);
+        }
+        // 若为表外科目，强制无余额方向
+        if (po.getSubjectCategory() == SubjectCategoryEnum.OFF_BALANCE) {
+            po.setDebitCredit(SubjectBalanceDirectionEnum.NONE);
         }
         if (request.getLeaf() != null) {
             po.setLeaf(request.getLeaf());
@@ -90,7 +100,8 @@ public class SubjectConverter {
         resp.setSubjectLevel(po.getSubjectLevel());
         resp.setParentSubjectId(po.getParentSubjectId());
         resp.setSubjectCategory(Optional.ofNullable(po.getSubjectCategory()).map(SubjectCategoryEnum::getCode).orElse(null));
-        resp.setDebitCredit(Optional.ofNullable(po.getDebitCredit()).map(DebitCreditEnum::getCode).orElse(null));
+        resp.setDebitCredit(Optional.ofNullable(po.getDebitCredit()).map(SubjectBalanceDirectionEnum::getCode).orElse(null));
+        resp.setDebitCreditDesc(Optional.ofNullable(po.getDebitCredit()).map(SubjectBalanceDirectionEnum::getDesc).orElse(null));
         resp.setLeaf(po.getLeaf());
         resp.setAllowPost(po.getAllowPost());
         resp.setAllowOpenAccount(po.getAllowOpenAccount());

@@ -11,6 +11,7 @@ import com.kltb.accounting.core.application.service.PostingApplicationService;
 import com.kltb.accounting.core.domain.enums.ChangeDirectionEnum;
 import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
 import com.kltb.accounting.core.domain.enums.ManualVoucherApplyStatusEnum;
+import com.kltb.accounting.core.domain.enums.SubjectBalanceDirectionEnum;
 import com.kltb.accounting.core.domain.enums.TradeTypeEnum;
 import com.kltb.accounting.core.infrastructure.account.BusinessNoGenerator;
 import com.kltb.accounting.core.infrastructure.account.RedisSequenceGenerator;
@@ -108,7 +109,7 @@ class ManualVoucherApplicationServiceTest {
         sub1.setSubjectName("银行存款-工行");
         sub1.setLeaf(true);
         sub1.setAllowPost(true);
-        sub1.setDebitCredit(DebitCreditEnum.DEBIT);
+        sub1.setDebitCredit(SubjectBalanceDirectionEnum.DEBIT);
         when(subjectRepository.selectByCode("100201")).thenReturn(sub1);
 
         AccountSubjectPO sub2 = new AccountSubjectPO();
@@ -116,7 +117,7 @@ class ManualVoucherApplicationServiceTest {
         sub2.setSubjectName("主营业务收入");
         sub2.setLeaf(true);
         sub2.setAllowPost(true);
-        sub2.setDebitCredit(DebitCreditEnum.CREDIT);
+        sub2.setDebitCredit(SubjectBalanceDirectionEnum.CREDIT);
         when(subjectRepository.selectByCode("600101")).thenReturn(sub2);
 
         // mock 账户推导

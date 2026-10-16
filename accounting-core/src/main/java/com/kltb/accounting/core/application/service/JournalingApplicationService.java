@@ -280,12 +280,18 @@ public class JournalingApplicationService {
         List<AccountingRuleDetailPO> payoutRuleDetails = new ArrayList<>();
         for (AccountingRuleDetailPO detail : ruleDetails) {
             AccountSubjectPO subject = subjectRepository.selectByCode(detail.getSubjectCode());
-            DebitCreditEnum subjectDir = (subject != null && subject.getDebitCredit() != null)
-                    ? subject.getDebitCredit() : DebitCreditEnum.CREDIT;
+            SubjectBalanceDirectionEnum subjectDir = (subject != null && subject.getDebitCredit() != null)
+                    ? subject.getDebitCredit() : SubjectBalanceDirectionEnum.CREDIT;
             DebitCreditEnum entryDc = detail.getDebitCredit();
-            boolean isDecrease = (subjectDir == DebitCreditEnum.DEBIT)
-                    ? (entryDc == DebitCreditEnum.CREDIT)
-                    : (entryDc == DebitCreditEnum.DEBIT);
+            boolean isDecrease;
+            if (subjectDir.isOffBalance()) {
+                isDecrease = (entryDc == DebitCreditEnum.CREDIT);
+            } else if (subjectDir.isBidirectional()) {
+                isDecrease = false;
+            } else {
+                boolean isDebitSubject = (subjectDir == SubjectBalanceDirectionEnum.DEBIT);
+                isDecrease = isDebitSubject ? (entryDc == DebitCreditEnum.CREDIT) : (entryDc == DebitCreditEnum.DEBIT);
+            }
             if (isDecrease) {
                 payoutRuleDetails.add(detail);
             }

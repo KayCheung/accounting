@@ -183,7 +183,7 @@ class PeriodEndTransferDomainServiceTest {
         AccountSubjectPO targetSubject = new AccountSubjectPO();
         targetSubject.setSubjectCode("410301");
         targetSubject.setSubjectName("本年利润");
-        targetSubject.setDebitCredit(DebitCreditEnum.CREDIT);
+        targetSubject.setDebitCredit(SubjectBalanceDirectionEnum.CREDIT);
         when(subjectRepository.selectByCode("410301")).thenReturn(targetSubject);
 
         when(eodDomainService.calculateDailyBalances(date)).thenReturn(List.of(balance));

@@ -137,6 +137,7 @@ public class ManualVoucherController {
                 .subjectName(sub.getSubjectName())
                 .subjectLevel(sub.getSubjectLevel())
                 .balanceDirection(sub.getDebitCredit() != null ? sub.getDebitCredit().getCode() : 1)
+                .balanceDirectionDesc(sub.getDebitCredit() != null ? sub.getDebitCredit().getDesc() : "借")
                 .build()
         ).collect(Collectors.toList());
         return ApiResponse.ok(list);

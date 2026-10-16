@@ -29,6 +29,9 @@ public class LeafSubjectResponse implements Serializable {
     @Schema(description = "科目级次", example = "2")
     private Integer subjectLevel;
 
-    @Schema(description = "余额方向：1-借方(Debit), 2-贷方(Credit)", example = "1")
+    @Schema(description = "余额方向：0-无(表外), 1-借方(Debit), 2-贷方(Credit), 3-双向(Both)", example = "1")
     private Integer balanceDirection;
+
+    @Schema(description = "余额方向描述", example = "借")
+    private String balanceDirectionDesc;
 }

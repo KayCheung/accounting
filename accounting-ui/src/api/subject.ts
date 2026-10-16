@@ -11,7 +11,8 @@ export interface SubjectItem {
   subjectLevel: number
   parentSubjectId: number
   subjectCategory: number // 0=表外, 1=资产, 2=负债, 3=权益, 4=共同, 5=成本, 6=损益
-  debitCredit: number     // 1=借, 2=贷
+  debitCredit: number     // 0=无, 1=借, 2=贷, 3=双向
+  debitCreditDesc?: string
   leaf: boolean
   allowPost: boolean
   allowOpenAccount: boolean
@@ -31,7 +32,7 @@ export interface SubjectCreateRequest {
   subjectLevel: number
   parentSubjectId: number
   subjectCategory: number
-  debitCredit: number
+  debitCredit?: number
   leaf?: boolean
   allowPost?: boolean
   allowOpenAccount?: boolean
@@ -107,8 +108,10 @@ export const SUBJECT_CATEGORIES = [
  * 借贷方向常量定义
  */
 export const DEBIT_CREDIT_TYPES = [
+  { value: 0, label: '无', tagType: 'info' },
   { value: 1, label: '借', tagType: 'primary' },
-  { value: 2, label: '贷', tagType: 'success' }
+  { value: 2, label: '贷', tagType: 'success' },
+  { value: 3, label: '双向', tagType: 'warning' }
 ] as const
 
 // ==================== 科目基础与树形接口 ====================

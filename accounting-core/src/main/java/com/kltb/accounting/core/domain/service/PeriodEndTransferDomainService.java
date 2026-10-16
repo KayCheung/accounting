@@ -457,8 +457,8 @@ public class PeriodEndTransferDomainService {
                 // 5. 构造转出与转入分录列表
                 List<AccountingVoucherEntryPO> entries = new ArrayList<>();
                 boolean isDebitToCredit = rule.getTransferDirection() == TransferDirectionEnum.DEBIT_TO_CREDIT;
-                DebitCreditEnum targetSubjectDir = (targetSubject != null && targetSubject.getDebitCredit() != null)
-                        ? targetSubject.getDebitCredit() : DebitCreditEnum.CREDIT;
+                SubjectBalanceDirectionEnum targetSubjectDir = (targetSubject != null && targetSubject.getDebitCredit() != null)
+                        ? targetSubject.getDebitCredit() : SubjectBalanceDirectionEnum.CREDIT;
 
                 BigDecimal totalDebit = BigDecimal.ZERO;
                 BigDecimal totalCredit = BigDecimal.ZERO;
@@ -505,8 +505,15 @@ public class PeriodEndTransferDomainService {
 
                 // 目标科目汇总分录（复合分录：多借一贷或一借多贷）
                 DebitCreditEnum targetDc = isDebitToCredit ? DebitCreditEnum.DEBIT : DebitCreditEnum.CREDIT;
-                ChangeDirectionEnum targetChangeDir = (targetDc == targetSubjectDir)
-                        ? ChangeDirectionEnum.INCREASE : ChangeDirectionEnum.DECREASE;
+                ChangeDirectionEnum targetChangeDir;
+                if (targetSubjectDir.isBoth()) {
+                    targetChangeDir = ChangeDirectionEnum.INCREASE;
+                } else if (targetSubjectDir.isOffBalance()) {
+                    targetChangeDir = (targetDc == DebitCreditEnum.DEBIT) ? ChangeDirectionEnum.INCREASE : ChangeDirectionEnum.DECREASE;
+                } else {
+                    targetChangeDir = (targetDc.getCode().equals(targetSubjectDir.getCode()))
+                            ? ChangeDirectionEnum.INCREASE : ChangeDirectionEnum.DECREASE;
+                }
 
                 rowNum++;
                 AccountingVoucherEntryPO targetEntry = new AccountingVoucherEntryPO();

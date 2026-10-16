@@ -50,6 +50,7 @@ class AsyncPostingDomainServiceTest {
     @Mock private RocketMqProducerTemplate rocketMqProducerTemplate;
     @Mock private RollbackDomainService rollbackDomainService;
     @Mock private com.kltb.accounting.core.infrastructure.persistence.repository.BusinessRecordRepository businessRecordRepository;
+    @Mock private com.kltb.accounting.core.infrastructure.persistence.repository.SubjectRepository subjectRepository;
 
     @InjectMocks private AsyncPostingDomainService asyncPostingDomainService;
 

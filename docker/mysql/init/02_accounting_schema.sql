@@ -1324,3 +1324,21 @@ SET @sql = IF(@col_exists > 0,
     'ALTER TABLE `t_account_subject` DROP COLUMN `nature`',
     'SELECT \'Column nature already removed, skip drop\' AS msg');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- ==================== Migration: V27__alter_subject_balance_direction.sql ====================
+
+USE `accounting`;
+
+-- 1. 更新会计科目表 t_account_subject 余额方向字段注释并更新历史表外数据
+ALTER TABLE `t_account_subject`
+    MODIFY COLUMN `debit_credit` TINYINT NOT NULL COMMENT '余额方向：0-无(表外), 1-借, 2-贷, 3-双向';
+
+UPDATE `t_account_subject` SET `debit_credit` = 0 WHERE `subject_category` = 0;
+
+-- 2. 更新账户表与子账户表余额方向字段注释
+ALTER TABLE `t_account`
+    MODIFY COLUMN `balance_direction` TINYINT NOT NULL COMMENT '余额方向：0-平/无, 1-借, 2-贷';
+
+ALTER TABLE `t_sub_account`
+    MODIFY COLUMN `balance_direction` TINYINT NOT NULL COMMENT '余额方向：0-平/无, 1-借, 2-贷';
+

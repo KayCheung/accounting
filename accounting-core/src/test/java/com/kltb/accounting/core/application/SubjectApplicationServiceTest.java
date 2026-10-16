@@ -1,9 +1,10 @@
 package com.kltb.accounting.core.application;
 
 import com.kltb.accounting.api.constant.ResultCode;
+import com.kltb.accounting.api.request.SubjectCreateRequest;
 import com.kltb.accounting.api.request.SubjectUpdateRequest;
 import com.kltb.accounting.core.domain.enums.AvailableStatusEnum;
-import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
+import com.kltb.accounting.core.domain.enums.SubjectBalanceDirectionEnum;
 import com.kltb.accounting.core.domain.enums.SubjectCategoryEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountSubjectPO;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountMapper;
@@ -59,7 +60,7 @@ class SubjectApplicationServiceTest {
         po.setSubjectCode("1001");
         po.setSubjectName("库存现金");
         po.setSubjectCategory(SubjectCategoryEnum.ASSET);
-        po.setDebitCredit(DebitCreditEnum.DEBIT);
+        po.setDebitCredit(SubjectBalanceDirectionEnum.DEBIT);
         po.setLeaf(true);
         po.setStatus(AvailableStatusEnum.ENABLED);
 
@@ -74,7 +75,68 @@ class SubjectApplicationServiceTest {
         verify(subjectRepository).updateSubjectById(captor.capture());
 
         AccountSubjectPO updated = captor.getValue();
-        assertThat(updated.getDebitCredit()).isEqualTo(DebitCreditEnum.CREDIT);
+        assertThat(updated.getDebitCredit()).isEqualTo(SubjectBalanceDirectionEnum.CREDIT);
+    }
+
+    @Test
+    @DisplayName("更新科目: 表内科目不允许更新为无余额方向(0)")
+    void update_onBalance_cannotBeNone() {
+        AccountSubjectPO po = new AccountSubjectPO();
+        po.setId(100L);
+        po.setSubjectCode("1001");
+        po.setSubjectName("库存现金");
+        po.setSubjectCategory(SubjectCategoryEnum.ASSET);
+        po.setDebitCredit(SubjectBalanceDirectionEnum.DEBIT);
+        po.setLeaf(true);
+        po.setStatus(AvailableStatusEnum.ENABLED);
+
+        when(subjectRepository.selectByCode("1001")).thenReturn(po);
+
+        SubjectUpdateRequest request = new SubjectUpdateRequest();
+        request.setDebitCredit(0); // 试图设为无方向
+
+        assertThatThrownBy(() -> subjectApplicationService.update("1001", request))
+                .isInstanceOf(ServiceException.class)
+                .satisfies(ex -> assertThat(((ServiceException) ex).getResultCode()).isEqualTo(ResultCode.PARAM_ERROR));
+    }
+
+    @Test
+    @DisplayName("创建科目: 表内科目不允许设置为无余额方向(0)")
+    void create_onBalance_cannotBeNone() {
+        SubjectCreateRequest request = new SubjectCreateRequest();
+        request.setSubjectCode("1002");
+        request.setSubjectName("银行存款");
+        request.setSubjectCategory(1); // 资产类
+        request.setDebitCredit(0);     // 试图设为 0
+        request.setSubjectLevel(1);
+        request.setParentSubjectId(0L);
+
+        when(subjectRepository.selectByCode("1002")).thenReturn(null);
+
+        assertThatThrownBy(() -> subjectApplicationService.create(request))
+                .isInstanceOf(ServiceException.class)
+                .satisfies(ex -> assertThat(((ServiceException) ex).getResultCode()).isEqualTo(ResultCode.PARAM_ERROR));
+    }
+
+    @Test
+    @DisplayName("创建科目: 表外科目(0)自动强制设置为无余额方向(0)")
+    void create_offBalance_forceNone() {
+        SubjectCreateRequest request = new SubjectCreateRequest();
+        request.setSubjectCode("0001");
+        request.setSubjectName("重要空白凭证");
+        request.setSubjectCategory(0); // 表外
+        request.setDebitCredit(1);     // 外部传入 1，应被重置为 0
+        request.setSubjectLevel(1);
+        request.setParentSubjectId(0L);
+
+        when(subjectRepository.selectByCode("0001")).thenReturn(null);
+
+        subjectApplicationService.create(request);
+
+        ArgumentCaptor<AccountSubjectPO> captor = ArgumentCaptor.forClass(AccountSubjectPO.class);
+        verify(subjectRepository).insertSubject(captor.capture());
+        AccountSubjectPO po = captor.getValue();
+        assertThat(po.getDebitCredit()).isEqualTo(SubjectBalanceDirectionEnum.NONE);
     }
 
     @Test

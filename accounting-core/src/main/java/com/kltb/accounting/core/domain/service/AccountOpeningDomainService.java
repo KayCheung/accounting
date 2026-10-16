@@ -385,9 +385,17 @@ public class AccountOpeningDomainService {
         account.setSubjectCode(subjectCode);
         account.setAccountType("INTERNAL");
         account.setCurrency(Constants.DEFAULT_CURRENCY);
-        account.setBalanceDirection(subject.getDebitCredit() != null
-                ? BalanceDirectionEnum.fromCode(subject.getDebitCredit().getCode())
-                : BalanceDirectionEnum.DEBIT);
+        BalanceDirectionEnum initDir = BalanceDirectionEnum.DEBIT;
+        if (subject.getDebitCredit() != null) {
+            if (subject.getDebitCredit().isBidirectional() || subject.getDebitCredit().isOffBalance()) {
+                initDir = BalanceDirectionEnum.FLAT;
+            } else if (subject.getDebitCredit() == com.kltb.accounting.core.domain.enums.SubjectBalanceDirectionEnum.CREDIT) {
+                initDir = BalanceDirectionEnum.CREDIT;
+            } else {
+                initDir = BalanceDirectionEnum.DEBIT;
+            }
+        }
+        account.setBalanceDirection(initDir);
         account.setOpeningBalance(BigDecimal.ZERO);
         account.setBalance(BigDecimal.ZERO);
         account.setStatus(AccountStatusEnum.NORMAL);

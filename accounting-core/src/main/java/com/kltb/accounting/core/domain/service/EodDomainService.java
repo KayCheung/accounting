@@ -125,11 +125,19 @@ public class EodDomainService {
             } else {
                 // 首次记账或首日日切，从账户或科目获取方向与期初
                 BalanceDirectionEnum direction = account.getBalanceDirection();
+                AccountSubjectPO subject = subjectRepository.selectByCode(subjectCode);
                 if (direction == null) {
-                    AccountSubjectPO subject = subjectRepository.selectByCode(subjectCode);
-                    direction = (subject != null && subject.getDebitCredit() == DebitCreditEnum.CREDIT)
-                            ? BalanceDirectionEnum.CREDIT
-                            : BalanceDirectionEnum.DEBIT;
+                    if (subject != null && subject.getDebitCredit() != null) {
+                        if (subject.getDebitCredit().isBidirectional() || subject.getDebitCredit().isOffBalance()) {
+                            direction = BalanceDirectionEnum.FLAT;
+                        } else if (subject.getDebitCredit() == com.kltb.accounting.core.domain.enums.SubjectBalanceDirectionEnum.CREDIT) {
+                            direction = BalanceDirectionEnum.CREDIT;
+                        } else {
+                            direction = BalanceDirectionEnum.DEBIT;
+                        }
+                    } else {
+                        direction = BalanceDirectionEnum.DEBIT;
+                    }
                 }
                 balance.setBalanceDirection(direction);
 
@@ -155,15 +163,43 @@ public class EodDomainService {
             BigDecimal beginBalance = balance.getBeginBalance();
             BalanceDirectionEnum direction = balance.getBalanceDirection();
 
+            AccountSubjectPO subject = subjectRepository.selectByCode(subjectCode);
+            boolean isBidirectional = subject != null && subject.getDebitCredit() != null && subject.getDebitCredit().isBidirectional();
+            boolean isOffBalance = subject != null && subject.getDebitCredit() != null && subject.getDebitCredit().isOffBalance();
+
             BigDecimal endBalance;
-            if (direction == BalanceDirectionEnum.DEBIT) {
+            BalanceDirectionEnum endDirection = direction;
+            if (isBidirectional) {
+                // 双向科目：跨方向动态轧差与翻转
+                BigDecimal signedBegin = (direction == BalanceDirectionEnum.DEBIT)
+                        ? beginBalance
+                        : (direction == BalanceDirectionEnum.CREDIT ? beginBalance.negate() : BigDecimal.ZERO);
+                BigDecimal signedNet = signedBegin.add(debitAmount).subtract(creditAmount);
+                if (signedNet.compareTo(BigDecimal.ZERO) > 0) {
+                    endBalance = signedNet;
+                    endDirection = BalanceDirectionEnum.DEBIT;
+                } else if (signedNet.compareTo(BigDecimal.ZERO) < 0) {
+                    endBalance = signedNet.abs();
+                    endDirection = BalanceDirectionEnum.CREDIT;
+                } else {
+                    endBalance = BigDecimal.ZERO;
+                    endDirection = BalanceDirectionEnum.FLAT;
+                }
+            } else if (isOffBalance) {
+                // 表外科目：借增贷减
                 endBalance = beginBalance.add(debitAmount).subtract(creditAmount);
+                endDirection = BalanceDirectionEnum.FLAT;
             } else {
-                endBalance = beginBalance.add(creditAmount).subtract(debitAmount);
+                // 单向科目：遵循传统资产/负债方向
+                if (direction == BalanceDirectionEnum.DEBIT) {
+                    endBalance = beginBalance.add(debitAmount).subtract(creditAmount);
+                } else {
+                    endBalance = beginBalance.add(creditAmount).subtract(debitAmount);
+                }
             }
 
-            // 负数余额校验
-            if (endBalance.compareTo(BigDecimal.ZERO) < 0) {
+            // 负数余额校验（双向科目已翻转为绝对值，仅对非双向科目校验）
+            if (!isBidirectional && endBalance.compareTo(BigDecimal.ZERO) < 0) {
                 log.error("[EOD-BALANCE-NEGATIVE] accountNo={}, subjectCode={}, endBalance={}, "
                                 + "beginBalance={}, debitAmount={}, creditAmount={}",
                         accountNo, subjectCode, endBalance, beginBalance, debitAmount, creditAmount);
@@ -171,6 +207,7 @@ public class EodDomainService {
                         "日余额计算出现负值: accountNo=" + accountNo + ", subjectCode=" + subjectCode);
             }
 
+            balance.setBalanceDirection(endDirection);
             balance.setEndBalance(endBalance);
             balances.add(balance);
         }
@@ -207,8 +244,14 @@ public class EodDomainService {
             } else {
                 AccountSubjectPO subject = subjectRepository.selectByCode(subjectCode);
                 balance.setBeginBalance(BigDecimal.ZERO);
-                if (subject != null && subject.getDebitCredit() == DebitCreditEnum.CREDIT) {
-                    balance.setBalanceDirection(BalanceDirectionEnum.CREDIT);
+                if (subject != null && subject.getDebitCredit() != null) {
+                    if (subject.getDebitCredit().isBidirectional() || subject.getDebitCredit().isOffBalance()) {
+                        balance.setBalanceDirection(BalanceDirectionEnum.FLAT);
+                    } else if (subject.getDebitCredit() == com.kltb.accounting.core.domain.enums.SubjectBalanceDirectionEnum.CREDIT) {
+                        balance.setBalanceDirection(BalanceDirectionEnum.CREDIT);
+                    } else {
+                        balance.setBalanceDirection(BalanceDirectionEnum.DEBIT);
+                    }
                 } else {
                     balance.setBalanceDirection(BalanceDirectionEnum.DEBIT);
                 }
@@ -217,14 +260,43 @@ public class EodDomainService {
             BigDecimal beginBalance = balance.getBeginBalance();
             BalanceDirectionEnum direction = balance.getBalanceDirection();
 
+            AccountSubjectPO subject = subjectRepository.selectByCode(subjectCode);
+            boolean isBidirectional = subject != null && subject.getDebitCredit() != null && subject.getDebitCredit().isBidirectional();
+            boolean isOffBalance = subject != null && subject.getDebitCredit() != null && subject.getDebitCredit().isOffBalance();
+
             BigDecimal endBalance;
-            if (direction == BalanceDirectionEnum.DEBIT) {
+            BalanceDirectionEnum endDirection = direction;
+            if (isBidirectional) {
+                // 双向科目：跨方向动态轧差与翻转
+                BigDecimal signedBegin = (direction == BalanceDirectionEnum.DEBIT)
+                        ? beginBalance
+                        : (direction == BalanceDirectionEnum.CREDIT ? beginBalance.negate() : BigDecimal.ZERO);
+                BigDecimal signedNet = signedBegin.add(debitAmount).subtract(creditAmount);
+                if (signedNet.compareTo(BigDecimal.ZERO) > 0) {
+                    endBalance = signedNet;
+                    endDirection = BalanceDirectionEnum.DEBIT;
+                } else if (signedNet.compareTo(BigDecimal.ZERO) < 0) {
+                    endBalance = signedNet.abs();
+                    endDirection = BalanceDirectionEnum.CREDIT;
+                } else {
+                    endBalance = BigDecimal.ZERO;
+                    endDirection = BalanceDirectionEnum.FLAT;
+                }
+            } else if (isOffBalance) {
+                // 表外科目：借增贷减
                 endBalance = beginBalance.add(debitAmount).subtract(creditAmount);
+                endDirection = BalanceDirectionEnum.FLAT;
             } else {
-                endBalance = beginBalance.add(creditAmount).subtract(debitAmount);
+                // 单向科目：遵循传统资产/负债方向
+                if (direction == BalanceDirectionEnum.DEBIT) {
+                    endBalance = beginBalance.add(debitAmount).subtract(creditAmount);
+                } else {
+                    endBalance = beginBalance.add(creditAmount).subtract(debitAmount);
+                }
             }
 
-            if (endBalance.compareTo(BigDecimal.ZERO) < 0) {
+            // 负数余额校验（双向科目已翻转为绝对值，仅对非双向科目校验）
+            if (!isBidirectional && endBalance.compareTo(BigDecimal.ZERO) < 0) {
                 log.error("[EOD-BALANCE-NEGATIVE] accountNo={}, subjectCode={}, endBalance={}, "
                                 + "beginBalance={}, debitAmount={}, creditAmount={}",
                         key, subjectCode, endBalance, beginBalance, debitAmount, creditAmount);
@@ -232,6 +304,7 @@ public class EodDomainService {
                         "日余额计算出现负值: subjectCode=" + subjectCode);
             }
 
+            balance.setBalanceDirection(endDirection);
             balance.setEndBalance(endBalance);
             balances.add(balance);
         }

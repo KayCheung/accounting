@@ -95,11 +95,11 @@
         <el-table-column prop="debitCredit" label="余额方向" width="90" align="center">
           <template #default="{ row }">
             <el-tag
-              :type="row.debitCredit === 1 ? 'primary' : 'success'"
+              :type="getDebitCreditMeta(row.debitCredit)?.tagType || 'info'"
               size="small"
               effect="plain"
             >
-              {{ row.debitCredit === 1 ? '借' : '贷' }}
+              {{ getDebitCreditMeta(row.debitCredit)?.label || row.debitCreditDesc || '-' }}
             </el-tag>
           </template>
         </el-table-column>
@@ -240,6 +240,7 @@
                 placeholder="请选择账类"
                 style="width: 100%;"
                 :disabled="Boolean(currentParent)"
+                @change="handleCategoryChange"
               >
                 <el-option
                   v-for="cat in SUBJECT_CATEGORIES"
@@ -255,10 +256,15 @@
             <el-form-item label="余额方向" prop="debitCredit">
               <el-radio-group
                 v-model="subjectForm.debitCredit"
-                :disabled="!isEditMode && Boolean(currentParent)"
+                :disabled="(!isEditMode && Boolean(currentParent)) || subjectForm.subjectCategory === 0"
               >
-                <el-radio :value="1">借方</el-radio>
-                <el-radio :value="2">贷方</el-radio>
+                <el-radio
+                  v-for="item in availableDebitCreditOptions"
+                  :key="item.value"
+                  :value="item.value"
+                >
+                  {{ item.label }}
+                </el-radio>
               </el-radio-group>
             </el-form-item>
           </el-col>
@@ -451,6 +457,7 @@ import {
   updateSubjectAuxiliary,
   deleteSubjectAuxiliary,
   SUBJECT_CATEGORIES,
+  DEBIT_CREDIT_TYPES,
   type SubjectItem,
   type SubjectCreateRequest,
   type SubjectUpdateRequest,
@@ -478,6 +485,10 @@ const filteredTableData = computed(() => tableData.value)
 
 function getCategoryMeta(categoryCode: number) {
   return SUBJECT_CATEGORIES.find((c) => c.value === categoryCode)
+}
+
+function getDebitCreditMeta(debitCredit: number) {
+  return DEBIT_CREDIT_TYPES.find((c) => c.value === debitCredit)
 }
 
 /**
@@ -630,6 +641,33 @@ const parentSubjectDisplay = computed(() => {
   return `[${currentParent.value.subjectCode}] ${currentParent.value.subjectName || ''}`
 })
 
+const availableDebitCreditOptions = computed(() => {
+  if (subjectForm.subjectCategory === 0) {
+    return DEBIT_CREDIT_TYPES.filter((item) => item.value === 0)
+  }
+  return DEBIT_CREDIT_TYPES.filter((item) => item.value !== 0)
+})
+
+function handleCategoryChange(val: number) {
+  if (val === 0) {
+    subjectForm.debitCredit = 0
+  } else if (val === 4) {
+    // 共同类推荐双向
+    subjectForm.debitCredit = 3
+  } else if (val === 1 || val === 5) {
+    // 资产、成本默认借方
+    subjectForm.debitCredit = 1
+  } else if (val === 2 || val === 3) {
+    // 负债、权益默认贷方
+    subjectForm.debitCredit = 2
+  } else {
+    // 其他表内科目，若当前方向为 0 则重置为借方
+    if (subjectForm.debitCredit === 0) {
+      subjectForm.debitCredit = 1
+    }
+  }
+}
+
 const formRules: FormRules = {
   subjectCode: [
     { required: true, message: '请输入科目编码', trigger: 'blur' },
@@ -660,7 +698,27 @@ const formRules: FormRules = {
     { max: 64, message: '科目名称最大 64 个字符', trigger: 'blur' }
   ],
   subjectCategory: [{ required: true, message: '请选择账类', trigger: 'change' }],
-  debitCredit: [{ required: true, message: '请选择余额方向', trigger: 'change' }]
+  debitCredit: [
+    {
+      required: true,
+      validator: (_rule, value, callback) => {
+        if (value === undefined || value === null) {
+          return callback(new Error('请选择余额方向'))
+        }
+        if (subjectForm.subjectCategory === 0) {
+          if (value !== 0) {
+            return callback(new Error('表外科目余额方向必须为无'))
+          }
+        } else {
+          if (value === 0) {
+            return callback(new Error('表内科目余额方向不能为无'))
+          }
+        }
+        callback()
+      },
+      trigger: 'change'
+    }
+  ]
 }
 
 function handleLeafChange(val: boolean | string | number) {
@@ -680,13 +738,22 @@ function openCreateTopDialog() {
   const defaultCategory =
     activeCategoryTab.value === 'all' ? 1 : Number(activeCategoryTab.value)
 
+  let defaultDebitCredit = 1
+  if (defaultCategory === 0) {
+    defaultDebitCredit = 0
+  } else if (defaultCategory === 4) {
+    defaultDebitCredit = 3
+  } else if (defaultCategory === 2 || defaultCategory === 3) {
+    defaultDebitCredit = 2
+  }
+
   Object.assign(subjectForm, {
     subjectCode: '',
     subjectName: '',
     subjectLevel: 1,
     parentSubjectId: 0,
     subjectCategory: defaultCategory,
-    debitCredit: 1,
+    debitCredit: defaultDebitCredit,
     leaf: true,
     allowPost: true,
     allowOpenAccount: true,

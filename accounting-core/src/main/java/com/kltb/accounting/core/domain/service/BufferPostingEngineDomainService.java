@@ -298,10 +298,7 @@ public class BufferPostingEngineDomainService {
                 DebitCreditEnum debitCredit = detail.getDebitCredit();
                 BigDecimal amount = detail.getAmount();
 
-                int changeDirection = calculateChangeDirection(balanceDirection, debitCredit);
-                ChangeDirectionEnum changeDirectionEnum = (changeDirection == 1
-                        ? ChangeDirectionEnum.INCREASE
-                        : ChangeDirectionEnum.DECREASE);
+                ChangeDirectionEnum changeDirection = calculateChangeDirection(balanceDirection, debitCredit);
 
                 // 3. 计算新余额（遵循绝对值法则）
                 BigDecimal newAccountBalance = AccountBalanceCalculator.calculateNewBalance(
@@ -331,7 +328,7 @@ public class BufferPostingEngineDomainService {
                         .setTradeType(detail.getTradeType())
                         .setTradeTime(detail.getTradeTime() != null ? detail.getTradeTime() : LocalDateTime.now())
                         .setDebitCredit(debitCredit)
-                        .setChangeDirection(changeDirectionEnum)
+                        .setChangeDirection(changeDirection)
                         .setCurrency(detail.getCurrency() != null ? detail.getCurrency() : "CNY")
                         .setPreBalance(oldAccountBalance)
                         .setAmount(amount)
@@ -353,7 +350,7 @@ public class BufferPostingEngineDomainService {
                         .setTradeType(detail.getTradeType())
                         .setTradeTime(detail.getTradeTime() != null ? detail.getTradeTime() : LocalDateTime.now())
                         .setDebitCredit(debitCredit)
-                        .setChangeDirection(changeDirectionEnum)
+                        .setChangeDirection(changeDirection)
                         .setCurrency(detail.getCurrency())
                         .setPreBalance(oldSubBalance)
                         .setAmount(amount)
@@ -431,10 +428,7 @@ public class BufferPostingEngineDomainService {
                 for (BufferPostingDetailPO detail : sortedDetails) {
                     DebitCreditEnum debitCredit = detail.getDebitCredit();
                     BigDecimal amount = detail.getAmount();
-                    int changeDirection = calculateChangeDirection(balanceDirection, debitCredit);
-                    ChangeDirectionEnum changeDirectionEnum = (changeDirection == 1
-                            ? ChangeDirectionEnum.INCREASE
-                            : ChangeDirectionEnum.DECREASE);
+                    ChangeDirectionEnum changeDirection = calculateChangeDirection(balanceDirection, debitCredit);
 
                     BigDecimal preAccount = runningAccountBalance;
                     BigDecimal postAccount = AccountBalanceCalculator.calculateNewBalance(
@@ -461,7 +455,7 @@ public class BufferPostingEngineDomainService {
                             .setTradeType(detail.getTradeType())
                             .setTradeTime(detail.getTradeTime() != null ? detail.getTradeTime() : LocalDateTime.now())
                             .setDebitCredit(debitCredit)
-                            .setChangeDirection(changeDirectionEnum)
+                            .setChangeDirection(changeDirection)
                             .setCurrency(detail.getCurrency() != null ? detail.getCurrency() : "CNY")
                             .setPreBalance(preAccount)
                             .setAmount(amount)
@@ -483,7 +477,7 @@ public class BufferPostingEngineDomainService {
                             .setTradeType(detail.getTradeType())
                             .setTradeTime(detail.getTradeTime() != null ? detail.getTradeTime() : LocalDateTime.now())
                             .setDebitCredit(debitCredit)
-                            .setChangeDirection(changeDirectionEnum)
+                            .setChangeDirection(changeDirection)
                             .setCurrency(detail.getCurrency())
                             .setPreBalance(preSub)
                             .setAmount(amount)
@@ -533,10 +527,13 @@ public class BufferPostingEngineDomainService {
     /**
      * 计算增减方向
      */
-    private int calculateChangeDirection(BalanceDirectionEnum balanceDirection, DebitCreditEnum debitCredit) {
-        int bd = balanceDirection != null ? balanceDirection.getCode() : 1;
-        int dc = debitCredit != null ? debitCredit.getCode() : 1;
-        return (bd == dc) ? 1 : 2;
+    private ChangeDirectionEnum calculateChangeDirection(BalanceDirectionEnum balanceDirection, DebitCreditEnum debitCredit) {
+        if (balanceDirection == null || balanceDirection == BalanceDirectionEnum.FLAT) {
+            return (debitCredit == DebitCreditEnum.DEBIT) ? ChangeDirectionEnum.INCREASE : ChangeDirectionEnum.DECREASE;
+        }
+        boolean isSame = (balanceDirection == BalanceDirectionEnum.DEBIT && debitCredit == DebitCreditEnum.DEBIT)
+                || (balanceDirection == BalanceDirectionEnum.CREDIT && debitCredit == DebitCreditEnum.CREDIT);
+        return isSame ? ChangeDirectionEnum.INCREASE : ChangeDirectionEnum.DECREASE;
     }
 
     private String buildLockKey(String accountNo) {

@@ -1112,6 +1112,44 @@
         3. **转换器与单元测试**：重构 `SubjectConverter` 与 `SubjectTreeConverter`，清理 `SubjectApplicationServiceTest`；
         4. **前端管理台同步精简（accounting-ui）**：从 `src/api/subject.ts` 中删除 `nature` 及 `SUBJECT_NATURES` 常量；从 `views/config/subject/index.vue` 中移除科目表格「科目性质」列、表单下拉项、校验规则及初始状态，优雅对齐「账类」与「余额方向」网格排版；
       - **测试保障与构建验证**：全工程 Maven 402 个单元与集成测试 100% 绿色通过（0 失败 0 错误）；前端 `vue-tsc` 类型检查与 `vite build` 生产构建 0 错误打包通过。
+    - **会计科目余额方向扩展（0-无/表外, 3-双向/共同类）与全链路入账试算及方向动态翻转核心改造（REQ261015-002）**：
+      - **全链路根因剖析与业务诉求**：
+        1. 历史科目余额方向仅支持借（1）和贷（2），对于共同类科目（如 3001 清算资金往来、跨行清算往来等）其余额方向随着业务借贷发生额动态变化，并非固定借方或贷方；
+        2. 表外科目（账类 0）核算备查类、抵质押品、重要空白凭证等业务，无借贷平衡约束，无余额借贷方向（应为 0-无 / 不适用），传统的“同向相加、异向相减”在表外科目中不适用；
+        3. 双向科目的账户余额方向是可变的，当发生异向冲减且冲减金额超过当前余额时，严格遵循绝对值法则（余额绝不能为负数），必须自动完成方向穿透翻转（Direction Flip，从借方翻转为贷方或反之），并在明细账与子账户中同步记录新方向。
+      - **全维度加固治理落地**：
+        1. **枚举定义与领域模型升级**：
+           - 新建 `SubjectBalanceDirectionEnum`（`0-NONE 无`, `1-DEBIT 借`, `2-CREDIT 贷`, `3-BOTH 双向`），实现 `isBoth()`、`isBidirectional()`、`isOffBalance()`、`isDebit()`、`isCredit()` 等语义化方法；
+           - 严格执行枚举物理隔离：分录上的记账方向使用 `DebitCreditEnum`（仅 1-借, 2-贷）；科目上的全局属性使用 `SubjectBalanceDirectionEnum`；账户的当前余额方向使用 `BalanceDirectionEnum`（0-平, 1-借, 2-贷）；
+           - `AccountSubjectPO.debitCredit` 升级为 `SubjectBalanceDirectionEnum`；契约层 `SubjectCreateRequest`、`SubjectUpdateRequest`、`SubjectResponse`（新增 `debitCreditDesc`）全面对齐；
+           - `SubjectApplicationService` 增加防呆校验：表外科目强制无方向（0），表内科目严禁设置为无方向（0）。
+        2. **数据库与迁移脚本**：
+           - 新增 Flyway 迁移脚本 `V27__alter_subject_balance_direction.sql`，执行 `ALTER TABLE t_account_subject MODIFY COLUMN debit_credit TINYINT NOT NULL COMMENT '余额方向: 0-无, 1-借, 2-贷, 3-双向'`；
+           - 同步在 `docker/mysql/init/02_accounting_schema.sql` 追加 V27 迁移。
+        3. **核心过账余额试算纯函数重构（AccountBalanceCalculator）**：
+           - 创建 `AccountBalanceResult`（`newBalance`, `newDirection`, `changeDirection`）；
+           - 重构 `AccountBalanceCalculator.calculate(...)` 全场景试算引擎：
+             - 表外科目（NONE）：免借贷相等判定，支持根据分录显式指定的增减方向或通用收增付减惯例记账，余额方向恒为 FLAT；
+             - 双向科目（BOTH）：初始余额为 0（FLAT）时建仓并确立新方向；同向相加；异向冲减时若余额充足则扣减原方向；若恰好两清则余额为 0 且方向转为 FLAT；若超额冲减则计算差额绝对值作为新余额，并执行方向穿透翻转（Direction Flip，如借转贷或贷转借），绝对不产生负数；
+             - 单向科目（DEBIT/CREDIT）：严格同向增加、异向冲减，异向超额立即抛出 `INSUFFICIENT_BALANCE` 拦截。
+        4. **过账引擎与全链路业务适配**：
+           - `PostingDomainService` & `AsyncPostingDomainService`：实时与异步过账接入 `AccountBalanceCalculator.calculate(...)`，根据科目配置动态试算主账户与可用子账户的新余额与新方向，并在分户明细 `t_account_detail` 与 `t_sub_account_detail` 中精准写入生效的增减方向 `changeDirection`；
+           - `AccountOpeningDomainService`：内部开户遇到双向与表外科目时，初始余额方向设为 `BalanceDirectionEnum.FLAT`（0-平）；
+           - `VoucheringApplicationService` & `VoucheringDomainService` & `ManualVoucherApplicationService` & `JournalingApplicationService` & `PeriodEndTransferDomainService`：适配凭证推导与过账的增减方向推导；
+           - `EodDomainService`：日终平衡结账试算改造两处循环，双向科目支持跨方向轧差与穿透翻转，表外科目支持免借贷比对的收增付减，杜绝误触发 `DAILY_BALANCE_NEGATIVE` 异常；
+           - `FinancialReportDomainService`：科目总账与明细账支持展示 `SubjectBalanceDirectionEnum`。
+        5. **前端管理台交互适配（accounting-ui）**：
+           - `api/subject.ts`：`DEBIT_CREDIT_TYPES` 补充 `0: 无` 和 `3: 双向`；
+           - `views/config/subject/index.vue`：树表“余额方向”列根据 0/1/2/3 渲染对应颜色的 Tag；新增/编辑弹窗表单中账类与余额方向智能联动（选择表外科目自动置为 0 且不可修改；选择共同类推荐选中 3 双向；表内科目校验拦截 0）；
+           - `views/config/template/index.vue`：开户科目明细借贷方向支持选择平/无。
+        6. **质量门禁与魔法值治理**：
+           - `SubjectApplicationService`：提取 `validateCategoryAndBalanceDirection` 统一私有方法，消除创建与更新科目时的重复逻辑与 0/1/3 魔法值校验，统一使用 `SubjectCategoryEnum` 与 `SubjectBalanceDirectionEnum`；
+           - `BufferPostingEngineDomainService`：将 `calculateChangeDirection` 重构为直接返回 `ChangeDirectionEnum` 枚举，彻底消除 `(dc == 1) ? 1 : 2` 魔法值与调用方重复 int/enum 转换；
+           - `AccountBalanceCalculator`：将 `calculateNewBalance` 核心实现下沉至 `ChangeDirectionEnum` 入参方法，使用 `ChangeDirectionEnum.INCREASE` 进行语义化分支，保留数字入参方法作为代理适配层；
+           - 新建 `AccountBalanceCalculatorTest` 100% 覆盖单向借贷、双向跨零翻转、表外收增付减、负数及空参数防御；
+           - 扩充 `PostingDomainServiceTest`、`AsyncPostingDomainServiceTest`、`SubjectApplicationServiceTest` 等单元测试；
+           - 全工程 424 个后端单元测试 100% 通过（0 Failure / 0 Error）；
+           - 前端 `vue-tsc` 类型校验与 `vite build` 生产构建 0 错误通过。
 - [x] **Step 23** · 业务功能页面开发全量交付完毕（100% 完成）
 
 

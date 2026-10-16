@@ -424,9 +424,18 @@ public class ManualVoucherApplicationService {
                     throw new AccountException(ResultCode.SUBJECT_NOT_FOUND,
                             "分录科目未配置或缺少借贷余额方向: " + applyEntry.getSubjectCode());
                 }
-                ChangeDirectionEnum changeDir = (applyEntry.getDebitCredit() == subject.getDebitCredit())
-                        ? ChangeDirectionEnum.INCREASE
-                        : ChangeDirectionEnum.DECREASE;
+                ChangeDirectionEnum changeDir;
+                if (subject.getDebitCredit().isOffBalance()) {
+                    changeDir = (applyEntry.getDebitCredit() == DebitCreditEnum.DEBIT)
+                            ? ChangeDirectionEnum.INCREASE
+                            : ChangeDirectionEnum.DECREASE;
+                } else if (subject.getDebitCredit().isBidirectional()) {
+                    changeDir = ChangeDirectionEnum.INCREASE;
+                } else {
+                    changeDir = (subject.getDebitCredit().getCode().equals(applyEntry.getDebitCredit().getCode()))
+                            ? ChangeDirectionEnum.INCREASE
+                            : ChangeDirectionEnum.DECREASE;
+                }
                 entryPO.setChangeDirection(changeDir);
 
                 accountingVoucherRepository.insertEntry(entryPO);

@@ -5,6 +5,7 @@ import com.alibaba.fastjson2.JSON;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.*;
 import com.kltb.accounting.core.infrastructure.account.AccountBalanceCalculator;
+import com.kltb.accounting.core.infrastructure.account.AccountBalanceResult;
 import com.kltb.accounting.core.infrastructure.account.AccountValidator;
 import org.apache.rocketmq.client.producer.SendResult;
 import com.kltb.accounting.core.infrastructure.messaging.LocalMessageService;
@@ -52,6 +53,7 @@ public class AsyncPostingDomainService {
     private final TransactionRepository transactionRepository;
     private final RollbackDomainService rollbackDomainService;
     private final BusinessRecordRepository businessRecordRepository;
+    private final SubjectRepository subjectRepository;
 
     private static final String POSTING_TOPIC = "posting_topic";
     private static final String POSTING_TAG = "POSTING_ENTRY";
@@ -212,31 +214,57 @@ public class AsyncPostingDomainService {
         BigDecimal oldBalance = lockedAccount.getBalance();
         BigDecimal subOldBalance = subAccount != null ? subAccount.getBalance() : null;
 
-        // 8. 试算新余额（遵循绝对值法则，若余额不足在此阶段直接抛出异常，此时数据库未发生任何变更）
-        BigDecimal newBalance = AccountBalanceCalculator.calculateNewBalance(
+        // 获取科目配置（优先从仓储查，为空从账户方向兜底）
+        SubjectBalanceDirectionEnum subjectDir = null;
+        if (subjectRepository != null && StrUtil.isNotBlank(payload.getSubjectCode())) {
+            AccountSubjectPO subj = subjectRepository.selectByCode(payload.getSubjectCode());
+            if (subj != null) {
+                subjectDir = subj.getDebitCredit();
+            }
+        }
+        if (subjectDir == null) {
+            subjectDir = (lockedAccount.getBalanceDirection() == BalanceDirectionEnum.CREDIT)
+                    ? SubjectBalanceDirectionEnum.CREDIT
+                    : (lockedAccount.getBalanceDirection() == BalanceDirectionEnum.FLAT ? SubjectBalanceDirectionEnum.NONE : SubjectBalanceDirectionEnum.DEBIT);
+        }
+
+        DebitCreditEnum entryDc = DebitCreditEnum.fromCode(payload.getDebitCredit());
+        ChangeDirectionEnum entryChangeDir = ChangeDirectionEnum.fromCode(payload.getChangeDirection());
+
+        // 8. 试算新余额与方向（遵循绝对值法则，支持表外及双向翻转）
+        AccountBalanceResult mainResult = AccountBalanceCalculator.calculate(
             oldBalance,
-            payload.getAmount(),
-            payload.getChangeDirection()
+            lockedAccount.getBalanceDirection(),
+            subjectDir,
+            entryDc,
+            entryChangeDir,
+            payload.getAmount()
         );
+        BigDecimal newBalance = mainResult.getNewBalance();
 
         BigDecimal subNewBalance = null;
         if (subAccount != null) {
-            subNewBalance = AccountBalanceCalculator.calculateNewBalance(
+            BalanceDirectionEnum subDir = subAccount.getBalanceDirection() != null
+                    ? subAccount.getBalanceDirection()
+                    : lockedAccount.getBalanceDirection();
+            AccountBalanceResult subResult = AccountBalanceCalculator.calculate(
                 subOldBalance,
-                payload.getAmount(),
-                payload.getChangeDirection()
+                subDir,
+                subjectDir,
+                entryDc,
+                entryChangeDir,
+                payload.getAmount()
             );
-        }
-
-        // 9. 更新主账户余额（乐观锁版本号由 MyBatis-Plus 插件自动管理）
-        lockedAccount.setBalance(newBalance);
-        accountRepository.updateById(lockedAccount);
-
-        // 10. 更新子账户余额（乐观锁版本号由 MyBatis-Plus 插件自动管理）
-        if (subAccount != null) {
+            subNewBalance = subResult.getNewBalance();
             subAccount.setBalance(subNewBalance);
+            subAccount.setBalanceDirection(subResult.getNewDirection());
             subAccountRepository.updateById(subAccount);
         }
+
+        // 9. 更新主账户余额与方向（乐观锁版本号由 MyBatis-Plus 插件自动管理）
+        lockedAccount.setBalance(newBalance);
+        lockedAccount.setBalanceDirection(mainResult.getNewDirection());
+        accountRepository.updateById(lockedAccount);
 
         // 11. 写入 t_account_detail
         AccountDetailPO detail = new AccountDetailPO();
@@ -253,9 +281,7 @@ public class AsyncPostingDomainService {
             .setTradeType(voucher.getTradeType())
             .setTradeTime(voucher.getTradeTime())
             .setDebitCredit(DebitCreditEnum.fromCode(payload.getDebitCredit()))
-            .setChangeDirection(payload.getChangeDirection() == 1
-                ? ChangeDirectionEnum.INCREASE
-                : ChangeDirectionEnum.DECREASE)
+            .setChangeDirection(mainResult.getChangeDirection())
             .setCurrency(payload.getCurrency())
             .setPreBalance(oldBalance)
             .setAmount(payload.getAmount())

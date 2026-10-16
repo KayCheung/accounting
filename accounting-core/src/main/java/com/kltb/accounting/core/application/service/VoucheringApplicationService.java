@@ -14,10 +14,7 @@ import com.kltb.accounting.api.response.VoucherFullDetailResponse;
 import com.kltb.accounting.api.response.VoucherGenerateResponse;
 import com.kltb.accounting.api.response.VoucherPageItemResponse;
 import com.kltb.accounting.core.application.assembler.VoucheringAssembler;
-import com.kltb.accounting.core.domain.enums.BusinessRecordStatusEnum;
-import com.kltb.accounting.core.domain.enums.ChangeDirectionEnum;
-import com.kltb.accounting.core.domain.enums.TradeTypeEnum;
-import com.kltb.accounting.core.domain.enums.VoucherStatusEnum;
+import com.kltb.accounting.core.domain.enums.*;
 import com.kltb.accounting.core.domain.service.*;
 import com.kltb.accounting.core.domain.service.BufferPostingDomainService;
 import com.kltb.accounting.core.domain.service.VoucheringDomainService.AccountingRuleWithDetails;
@@ -131,9 +128,20 @@ public class VoucheringApplicationService {
                 throw new AccountException(ResultCode.SUBJECT_NOT_FOUND,
                         "分录科目未配置或缺少借贷余额方向: " + ruleDetail.getSubjectCode());
             }
-            ChangeDirectionEnum changeDir = (ruleDetail.getDebitCredit() == subject.getDebitCredit())
-                    ? ChangeDirectionEnum.INCREASE
-                    : ChangeDirectionEnum.DECREASE;
+            ChangeDirectionEnum changeDir;
+            if (subject.getDebitCredit().isOffBalance()) {
+                // 表外科目：借方=增(收入)，贷方=减(付出)
+                changeDir = (ruleDetail.getDebitCredit() == DebitCreditEnum.DEBIT)
+                        ? ChangeDirectionEnum.INCREASE
+                        : ChangeDirectionEnum.DECREASE;
+            } else if (subject.getDebitCredit().isBidirectional()) {
+                // 双向科目：凭证分录暂标 INCREASE，过账加锁后由真实账户余额动态计算实际增减
+                changeDir = ChangeDirectionEnum.INCREASE;
+            } else {
+                changeDir = (subject.getDebitCredit().getCode().equals(ruleDetail.getDebitCredit().getCode()))
+                        ? ChangeDirectionEnum.INCREASE
+                        : ChangeDirectionEnum.DECREASE;
+            }
 
             // 构建分录数据
             VoucherEntryData entry = new VoucherEntryData(
