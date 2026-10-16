@@ -107,7 +107,7 @@
                 </el-table-column>
                 <el-table-column prop="accountType" label="账户类型" min-width="140">
                   <template #default="subScope">
-                    <span class="code-tag">{{ subScope.row.accountType }}</span>
+                    <span class="code-tag">{{ getAccountTypeName(subScope.row.accountType) || subScope.row.accountType }}</span>
                   </template>
                 </el-table-column>
                 <el-table-column prop="currency" label="币种" width="90" align="center" />
@@ -527,7 +527,7 @@
             </el-table-column>
             <el-table-column prop="accountType" label="账户类型" min-width="140">
               <template #default="{ row }">
-                <span class="code-tag">{{ row.accountType }}</span>
+                <span class="code-tag">{{ getAccountTypeName(row.accountType) || row.accountType }}</span>
               </template>
             </el-table-column>
             <el-table-column prop="currency" label="币种" width="90" align="center" />
@@ -644,14 +644,14 @@ const DEFAULT_BUSINESS_CODES: SelectOption[] = [
 ]
 
 const DEFAULT_ACCOUNT_TYPES: SelectOption[] = [
-  { label: '贷款本金', value: '贷款本金' },
-  { label: '贷款逾期本金', value: '贷款逾期本金' },
-  { label: '利息账户', value: '利息账户' },
-  { label: '罚息账户', value: '罚息账户' },
-  { label: '担保费账户', value: '担保费账户' },
-  { label: '基本户', value: '基本户' },
-  { label: '专用账户', value: '专用账户' },
-  { label: '结算账户', value: '结算账户' },
+  { label: '贷款本金 (LOAN_PRI)', value: 'LOAN_PRI' },
+  { label: '贷款逾期本金 (LOAN_OVD)', value: 'LOAN_OVD' },
+  { label: '利息账户 (LOAN_INT)', value: 'LOAN_INT' },
+  { label: '罚息账户 (LOAN_PEN)', value: 'LOAN_PEN' },
+  { label: '担保费账户 (LOAN_GUA)', value: 'LOAN_GUA' },
+  { label: '基本户 (BASIC)', value: 'BASIC' },
+  { label: '专用账户 (SPECIAL)', value: 'SPECIAL' },
+  { label: '结算账户 (SETTLE)', value: 'SETTLE' },
   { label: '现金账户 (CASH)', value: 'CASH' },
   { label: '存款账户 (DEPOSIT)', value: 'DEPOSIT' }
 ]
@@ -693,6 +693,12 @@ function getSubjectName(subjectCode: string): string {
   return sub ? sub.subjectName : ''
 }
 
+function getAccountTypeName(accountType?: string): string {
+  if (!accountType) return ''
+  const item = accountTypeOptions.value.find((opt) => opt.value === accountType)
+  return item ? item.label : accountType
+}
+
 function getBusinessLabel(businessCode: string): string {
   const target = businessCodeOptions.value.find((b) => b.value === businessCode)
   return target ? target.label : businessCode
@@ -730,7 +736,7 @@ async function loadDictionaries() {
     }
     if (actList && actList.length > 0) {
       accountTypeOptions.value = actList.map((item) => ({
-        label: item.dictName,
+        label: `${item.dictName} (${item.dictCode})`,
         value: item.dictCode
       }))
     } else {
@@ -863,10 +869,11 @@ function openCreateDialog() {
   formModel.customerType = searchForm.customerType || 1
   formModel.autoOpen = true
   formModel.status = 2
+  const defaultAccountType = accountTypeOptions.value.length > 0 ? (accountTypeOptions.value[0].value as string) : 'LOAN_PRI'
   formModel.items = [
     {
       subjectCode: '',
-      accountType: '贷款本金',
+      accountType: defaultAccountType,
       currency: 'CNY',
       balanceDirection: 1,
       acctNoRule: '{accountType}-{currency}-{seq5}',
@@ -900,7 +907,7 @@ function openEditDialog(row: TemplateGroupItem) {
 function addItemRow() {
   formModel.items.push({
     subjectCode: '',
-    accountType: accountTypeOptions.value.length > 0 ? (accountTypeOptions.value[0].value as string) : 'CASH',
+    accountType: accountTypeOptions.value.length > 0 ? (accountTypeOptions.value[0].value as string) : 'LOAN_PRI',
     currency: 'CNY',
     balanceDirection: 1,
     acctNoRule: '{accountType}-{currency}-{seq5}',
@@ -919,8 +926,8 @@ function removeItemRow(index: number) {
 function onSubjectChange(val: string, row: TemplateItemRequest) {
   const sub = leafSubjects.value.find((s) => s.subjectCode === val)
   if (sub) {
-    if (!row.accountType) {
-      row.accountType = sub.subjectName
+    if (!row.accountType && accountTypeOptions.value.length > 0) {
+      row.accountType = accountTypeOptions.value[0].value as string
     }
     if (sub.debitCredit) {
       row.balanceDirection = sub.debitCredit

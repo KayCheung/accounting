@@ -1160,9 +1160,26 @@
         2. **前端全景看板流转阶段准确高亮（accounting-ui）**：
            - 步骤条恢复标准固定节点（最终入账成功）；
            - 重构 `getStepIndex(overviewData)`：根据凭证存在性精准将失败节点落在第 2 步“规则匹配&凭证”（index=1）或第 3 步“过账引擎调度”（index=2），前置成功步骤标绿，中断步骤标红，后续未执行步骤置灰；
-        3. **测试验证与质量保障**：
+        3. **重试记账流水事务状态重置与历史失败原因清理（JournalingApplicationService.retryJournal）**：
+           - 重试发起时不仅重置 `t_business_record` 为 `PROCESSING`，同步将 `t_transaction` 重置为 `PROCESSING` 并清空 `fail_reason`，彻底防止历史失败报错信息残留污染看板。
+        4. **测试验证与质量保障**：
            - `VoucheringApplicationServiceTest` 增补未上传款项跳过与 0 元分录跳过单元测试；
            - 前后端编译与单元测试 100% 通过。
+       - **开户模板账户类型编码规范化与开户账号/户名规则实时预览优化**：
+         1. **数据库字典初始化脚本修正（V9__template_dicts.sql & 02_accounting_schema.sql）**：
+            - 将 `account_type` 字典中原本误填为中文的 `dict_code`（如 `'贷款本金'`, `'基本户'`, `'结算账户'` 等）全量更正为标准的英文大写编码（`'LOAN_PRI'`, `'LOAN_OVD'`, `'LOAN_INT'`, `'LOAN_PEN'`, `'LOAN_GUA'`, `'BASIC'`, `'SPECIAL'`, `'SETTLE'`, `'CASH'`, `'DEPOSIT'`）；
+         2. **前端开户模板页面配置治理（accounting-ui/src/views/config/template/index.vue）**：
+            - `DEFAULT_ACCOUNT_TYPES` 本地兜底项的 `value` 修正为标准英文大写 CODE；
+            - 模板明细项默认初始值由中文 `'贷款本金'` 修正为标准英文大写 CODE `'LOAN_PRI'`；
+            - 移除科目变动事件 `onSubjectChange` 中错误将科目中文名 `sub.subjectName` 赋给 `row.accountType` 的代码；
+            - 模板列表与弹窗表单展示格式优化，显示 `名称 (CODE)`；
+         3. **业务开户页面规则联动预览修复与增强（accounting-ui/src/views/business/account/index.vue）**：
+            - 修复 `previewAccountName`：户名规则中的 `{accountTypeName}` 变量通过字典查询真实中文名称（而非直接取 CODE），杜绝户名中误现英文 CODE；
+            - 新增 `previewAccountNo`：单科目开户联动属性卡片新增“预计生成账号”实时预览，将 `{accountType}`（显示真实 CODE）、`{currency}`、`{subjectCode}`、`{balanceDirection}`、`{ownerType}`、日期与序号即时计算并高亮展示，所见即所得；
+         4. **全链路验证**：
+            - 前端 `vue-tsc && vite build` 0 错误编译打包通过；
+            - 后端所有账户、开户模板、编号生成器单元测试（30 个）100% 通过。
+
 
 
 

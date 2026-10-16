@@ -599,6 +599,10 @@ public class JournalingApplicationService {
         return distributedLockTemplate.execute(lockKey, 3, -1, () -> {
             try {
                 businessRecordRepository.updateStatusByTraceNo(traceNo, BusinessRecordStatusEnum.PROCESSING);
+                TransactionPO existingTxn = transactionRepository.selectByTraceNo(traceNo);
+                if (existingTxn != null) {
+                    transactionRepository.updateStatusByTxnNo(existingTxn.getTxnNo(), TransactionStatusEnum.PROCESSING, null, LocalDateTime.now());
+                }
 
                 List<AccountingVoucherPO> vouchers = accountingVoucherRepository.selectByTraceNo(traceNo);
                 AccountingVoucherPO voucher = (vouchers != null && !vouchers.isEmpty()) ? vouchers.get(0) : null;

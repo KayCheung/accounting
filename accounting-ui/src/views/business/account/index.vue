@@ -806,9 +806,9 @@
                 <span class="sub-name-text">{{ getSubjectName(row.subjectCode) }}</span>
               </template>
             </el-table-column>
-            <el-table-column prop="accountType" label="账户类型" min-width="100">
+            <el-table-column prop="accountType" label="账户类型" min-width="120">
               <template #default="{ row }">
-                <el-tag size="small" type="info">{{ row.accountType }}</el-tag>
+                <el-tag size="small" type="info">{{ getAccountTypeName(row.accountType) || row.accountType }}</el-tag>
               </template>
             </el-table-column>
             <el-table-column prop="currency" label="币种" width="65" align="center" />
@@ -844,7 +844,7 @@
               <el-option
                 v-for="item in (selectedTemplateGroup?.items || [])"
                 :key="item.subjectCode"
-                :label="`${item.subjectCode} - ${getSubjectName(item.subjectCode)} (${item.accountType})`"
+                :label="`${item.subjectCode} - ${getSubjectName(item.subjectCode)} (${getAccountTypeName(item.accountType) || item.accountType})`"
                 :value="item.subjectCode"
               />
             </el-select>
@@ -862,7 +862,7 @@
                 <span class="desc-val">{{ getSubjectName(currentSelectedTemplateItem.subjectCode) }}</span>
               </el-descriptions-item>
               <el-descriptions-item label="账户类型">
-                <el-tag size="small" type="info">{{ currentSelectedTemplateItem.accountType }}</el-tag>
+                <el-tag size="small" type="info">{{ getAccountTypeName(currentSelectedTemplateItem.accountType) || currentSelectedTemplateItem.accountType }}</el-tag>
               </el-descriptions-item>
               <el-descriptions-item label="币种">
                 <span class="desc-val">{{ currentSelectedTemplateItem.currency || 'CNY' }}</span>
@@ -877,6 +877,9 @@
               </el-descriptions-item>
               <el-descriptions-item label="户名生成规则" :span="2">
                 <span class="rule-mono highlight-rule">{{ currentSelectedTemplateItem.acctNameRule }}</span>
+              </el-descriptions-item>
+              <el-descriptions-item v-if="previewAccountNo" label="预计生成账号" :span="2">
+                <span class="preview-acct-name" style="color: #409eff;">{{ previewAccountNo }}</span>
               </el-descriptions-item>
               <el-descriptions-item v-if="previewAccountName" label="预计生成户名" :span="2">
                 <span class="preview-acct-name">{{ previewAccountName }}</span>
@@ -1148,6 +1151,12 @@ function getSubjectName(subjectCode: string): string {
   return sub ? sub.subjectName : ''
 }
 
+function getAccountTypeName(accountType?: string): string {
+  if (!accountType) return ''
+  const found = accountTypeOptions.value.find((opt) => opt.value === accountType)
+  return found ? found.label : accountType
+}
+
 function getStatusLabel(status: number): string {
   const found = ACCOUNT_STATUS_OPTIONS.find((s) => s.value === status)
   return found ? found.label : '未知'
@@ -1386,6 +1395,36 @@ const currentSelectedTemplateItem = computed<TemplateResponse | null>(() => {
   return selectedTemplateGroup.value.items.find((item) => item.subjectCode === customerOpenForm.subjectCode) || null
 })
 
+// 预计生成账号实时预览
+const previewAccountNo = computed<string>(() => {
+  if (!currentSelectedTemplateItem.value) return ''
+  const rule = currentSelectedTemplateItem.value.acctNoRule || '{accountType}-{currency}-{seq5}'
+  const acctType = currentSelectedTemplateItem.value.accountType || ''
+  const subCode = currentSelectedTemplateItem.value.subjectCode || ''
+  const currency = currentSelectedTemplateItem.value.currency || 'CNY'
+  const dirCode = currentSelectedTemplateItem.value.balanceDirection != null ? String(currentSelectedTemplateItem.value.balanceDirection) : '1'
+  const ownerType = customerOpenForm.customerType != null ? String(customerOpenForm.customerType) : '1'
+  const today = new Date()
+  const yyyy = today.getFullYear().toString()
+  const mm = (today.getMonth() + 1).toString().padStart(2, '0')
+  const dd = today.getDate().toString().padStart(2, '0')
+  const yyyyMMdd = `${yyyy}${mm}${dd}`
+  const yyyyMM = `${yyyy}${mm}`
+
+  return rule
+    .replace(/\{accountType\d*\}/g, acctType)
+    .replace(/\{currency\d*\}/g, currency)
+    .replace(/\{subjectCode\d*\}/g, subCode)
+    .replace(/\{balanceDirection\d*\}/g, dirCode)
+    .replace(/\{direction\d*\}/g, dirCode)
+    .replace(/\{ownerType\d*\}/g, ownerType)
+    .replace(/\{customerType\d*\}/g, ownerType)
+    .replace(/\{yyyyMMdd\d*\}/g, yyyyMMdd)
+    .replace(/\{yyyyMM\d*\}/g, yyyyMM)
+    .replace(/\{yyyy\d*\}/g, yyyy)
+    .replace(/\{seq\d*\}/g, '00001')
+})
+
 // 预计生成户名实时预览
 const previewAccountName = computed<string>(() => {
   if (!currentSelectedTemplateItem.value) return ''
@@ -1393,6 +1432,7 @@ const previewAccountName = computed<string>(() => {
   const custName = customerOpenForm.customerName || '【客户名称】'
   const custId = customerOpenForm.customerId || '【客户编号】'
   const acctType = currentSelectedTemplateItem.value.accountType || ''
+  const acctTypeName = getAccountTypeName(acctType) || acctType
   const subName = getSubjectName(currentSelectedTemplateItem.value.subjectCode)
   const currency = currentSelectedTemplateItem.value.currency || 'CNY'
   const dirName = currentSelectedTemplateItem.value.balanceDirection === 1 ? '借' : '贷'
@@ -1404,7 +1444,7 @@ const previewAccountName = computed<string>(() => {
     .replace(/\{customerId\d*\}/g, custId)
     .replace(/\{ownerId\d*\}/g, custId)
     .replace(/\{accountType\d*\}/g, acctType)
-    .replace(/\{accountTypeName\d*\}/g, acctType)
+    .replace(/\{accountTypeName\d*\}/g, acctTypeName)
     .replace(/\{subjectName\d*\}/g, subName)
     .replace(/\{currencyName\d*\}/g, currency === 'CNY' ? '人民币' : currency)
     .replace(/\{directionName\d*\}/g, dirName)

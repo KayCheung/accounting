@@ -803,14 +803,14 @@ INSERT IGNORE INTO t_dictionary (dict_type, dict_code, dict_name, dict_name_en, 
 
 -- 2. 账户类型字典（account_type）
 INSERT IGNORE INTO t_dictionary (dict_type, dict_code, dict_name, dict_name_en, sort_order, group_key, status, is_system, tenant_id) VALUES
-('account_type', '贷款本金', '贷款本金', 'Loan Principal', 1, 'LOAN', 1, 1, -1),
-('account_type', '贷款逾期本金', '贷款逾期本金', 'Overdue Principal', 2, 'LOAN', 1, 1, -1),
-('account_type', '利息账户', '利息账户', 'Interest Account', 3, 'LOAN', 1, 1, -1),
-('account_type', '罚息账户', '罚息账户', 'Penalty Interest', 4, 'LOAN', 1, 1, -1),
-('account_type', '担保费账户', '担保费账户', 'Guarantee Fee', 5, 'LOAN', 1, 1, -1),
-('account_type', '基本户', '基本户', 'Basic Account', 6, 'GENERAL', 1, 1, -1),
-('account_type', '专用账户', '专用账户', 'Special Account', 7, 'GENERAL', 1, 1, -1),
-('account_type', '结算账户', '结算账户', 'Settlement Account', 8, 'GENERAL', 1, 1, -1),
+('account_type', 'LOAN_PRI', '贷款本金', 'Loan Principal', 1, 'LOAN', 1, 1, -1),
+('account_type', 'LOAN_OVD', '贷款逾期本金', 'Overdue Principal', 2, 'LOAN', 1, 1, -1),
+('account_type', 'LOAN_INT', '利息账户', 'Interest Account', 3, 'LOAN', 1, 1, -1),
+('account_type', 'LOAN_PEN', '罚息账户', 'Penalty Interest', 4, 'LOAN', 1, 1, -1),
+('account_type', 'LOAN_GUA', '担保费账户', 'Guarantee Fee', 5, 'LOAN', 1, 1, -1),
+('account_type', 'BASIC', '基本户', 'Basic Account', 6, 'GENERAL', 1, 1, -1),
+('account_type', 'SPECIAL', '专用账户', 'Special Account', 7, 'GENERAL', 1, 1, -1),
+('account_type', 'SETTLE', '结算账户', 'Settlement Account', 8, 'GENERAL', 1, 1, -1),
 ('account_type', 'CASH', '现金账户', 'Cash Account', 9, 'GENERAL', 1, 1, -1),
 ('account_type', 'DEPOSIT', '存款账户', 'Deposit Account', 10, 'GENERAL', 1, 1, -1);
 
