@@ -178,10 +178,12 @@ CREATE TABLE IF NOT EXISTS `permissions` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='permissions';
 
 /******************************************/
-/*   默认数据初始化 (管理员 nacos / nacos)  */
+/*   默认数据初始化 (管理员 nacos / dev)   */
 /******************************************/
 INSERT IGNORE INTO `users` (`username`, `password`, `enabled`) VALUES
-  ('nacos', '$2a$10$EuWPZHzz32dJN7jexM34MOeYirDdFAZm2kuWj7VEOJhhZkDrxfvUu', TRUE);
+  ('nacos', '$2a$10$EuWPZHzz32dJN7jexM34MOeYirDdFAZm2kuWj7VEOJhhZkDrxfvUu', TRUE),
+  ('dev', '$2a$10$RptWoo1Dp7lYfJAFGUWXZem2hd4Jx3xOr1Z8kA4UgkViYlPt5k7pW', TRUE);
 
 INSERT IGNORE INTO `roles` (`username`, `role`) VALUES
-  ('nacos', 'ROLE_ADMIN');
+  ('nacos', 'ROLE_ADMIN'),
+  ('dev', 'ROLE_ADMIN');

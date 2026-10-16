@@ -202,6 +202,8 @@ services:
       NACOS_HOST: nacos
       NACOS_PORT: 8848
       NACOS_NAMESPACE: ${NACOS_NAMESPACE:-dev}
+      NACOS_USERNAME: ${NACOS_USERNAME:-dev}
+      NACOS_PASSWORD: ${NACOS_PASSWORD:-dev@kltb@2026}
       # MySQL 数据源
       DB_URL: jdbc:mysql://mysql:3306/accounting?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowMultiQueries=true&allowPublicKeyRetrieval=true&useSSL=false
       DB_USERNAME: root

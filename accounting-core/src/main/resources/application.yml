@@ -18,8 +18,8 @@ spring:
       config:
         # Nacos 服务地址，例如 10.36.1.100:8848
         server-addr: ${NACOS_HOST:10.36.6.252}:${NACOS_PORT:8848}
-        username: dev
-        password: dev@kltb@2026
+        username: ${NACOS_USERNAME:dev}
+        password: ${NACOS_PASSWORD:dev@kltb@2026}
         namespace: ${NACOS_NAMESPACE:dev}
         group: DEFAULT_GROUP
         file-extension: yml
