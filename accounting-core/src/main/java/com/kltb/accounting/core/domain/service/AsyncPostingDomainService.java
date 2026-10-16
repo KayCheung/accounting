@@ -214,10 +214,13 @@ public class AsyncPostingDomainService {
         BigDecimal oldBalance = lockedAccount.getBalance();
         BigDecimal subOldBalance = subAccount != null ? subAccount.getBalance() : null;
 
-        // 获取科目配置（优先从仓储查，为空从账户方向兜底）
+        // 获取科目配置（优先按消息科目查，为空按账户科目查，再查不到从账户现有方向兜底）
+        String targetSubjectCode = StrUtil.isNotBlank(payload.getSubjectCode())
+                ? payload.getSubjectCode()
+                : lockedAccount.getSubjectCode();
         SubjectBalanceDirectionEnum subjectDir = null;
-        if (subjectRepository != null && StrUtil.isNotBlank(payload.getSubjectCode())) {
-            AccountSubjectPO subj = subjectRepository.selectByCode(payload.getSubjectCode());
+        if (StrUtil.isNotBlank(targetSubjectCode)) {
+            AccountSubjectPO subj = subjectRepository.selectByCode(targetSubjectCode);
             if (subj != null) {
                 subjectDir = subj.getDebitCredit();
             }
@@ -225,7 +228,7 @@ public class AsyncPostingDomainService {
         if (subjectDir == null) {
             subjectDir = (lockedAccount.getBalanceDirection() == BalanceDirectionEnum.CREDIT)
                     ? SubjectBalanceDirectionEnum.CREDIT
-                    : (lockedAccount.getBalanceDirection() == BalanceDirectionEnum.FLAT ? SubjectBalanceDirectionEnum.NONE : SubjectBalanceDirectionEnum.DEBIT);
+                    : SubjectBalanceDirectionEnum.DEBIT;
         }
 
         DebitCreditEnum entryDc = DebitCreditEnum.fromCode(payload.getDebitCredit());
@@ -369,7 +372,7 @@ public class AsyncPostingDomainService {
             }
 
             // 更新流水状态为成功
-            if (voucher != null && StrUtil.isNotBlank(voucher.getTraceNo()) && businessRecordRepository != null) {
+            if (voucher != null && StrUtil.isNotBlank(voucher.getTraceNo())) {
                 businessRecordRepository.updateStatusByTraceNo(
                     voucher.getTraceNo(), BusinessRecordStatusEnum.SUCCESS);
             }

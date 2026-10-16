@@ -457,15 +457,12 @@ public class JournalingApplicationService {
             vouchers = accountingVoucherRepository.selectByTxnNo(txn.getTxnNo());
         }
 
-        ManualVoucherApplyPO manualApply = null;
-        if (manualVoucherApplyRepository != null) {
-            manualApply = manualVoucherApplyRepository.selectByApplyNo(traceNo);
-            if (manualApply == null && txn != null && StrUtil.isNotBlank(txn.getTraceNo())) {
-                manualApply = manualVoucherApplyRepository.selectByApplyNo(txn.getTraceNo());
-            }
-            if (manualApply == null && vouchers != null && !vouchers.isEmpty()) {
-                manualApply = manualVoucherApplyRepository.selectByApplyNo(vouchers.get(0).getTraceNo());
-            }
+        ManualVoucherApplyPO manualApply = manualVoucherApplyRepository.selectByApplyNo(traceNo);
+        if (manualApply == null && txn != null && StrUtil.isNotBlank(txn.getTraceNo())) {
+            manualApply = manualVoucherApplyRepository.selectByApplyNo(txn.getTraceNo());
+        }
+        if (manualApply == null && vouchers != null && !vouchers.isEmpty()) {
+            manualApply = manualVoucherApplyRepository.selectByApplyNo(vouchers.get(0).getTraceNo());
         }
 
         // 如果流水、事务、凭证、手工记账申请全都不存在，才返回 null
@@ -496,12 +493,10 @@ public class JournalingApplicationService {
             freezeDetail = freezeDetailRepository.selectByTraceNo(traceNo);
         }
 
-        List<BufferPostingDetailPO> bufferDetails = (bufferPostingDetailRepository != null)
-                ? bufferPostingDetailRepository.selectByTraceNo(traceNo)
-                : Collections.emptyList();
+        List<BufferPostingDetailPO> bufferDetails = bufferPostingDetailRepository.selectByTraceNo(traceNo);
 
         List<LocalMessagePO> localMessages = Collections.emptyList();
-        if (localMessageService != null && !entryMap.isEmpty()) {
+        if (!entryMap.isEmpty()) {
             List<String> entryIds = entryMap.values().stream()
                     .flatMap(List::stream)
                     .map(AccountingVoucherEntryPO::getEntryId)
@@ -837,7 +832,7 @@ public class JournalingApplicationService {
                 TransactionPO txn = transactionRepository.selectByTraceNo(traceNo);
                 List<AccountingVoucherPO> vouchers = accountingVoucherRepository.selectByTraceNo(traceNo);
                 String voucherNo = (vouchers != null && !vouchers.isEmpty()) ? vouchers.get(0).getVoucherNo() : null;
-                if (txn != null && rollbackDomainService != null) {
+                if (txn != null) {
                     rollbackDomainService.markTransactionFailed(txn.getTxnNo(), voucherNo, traceNo, reason);
                 }
                 return null;

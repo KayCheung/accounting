@@ -132,7 +132,7 @@
 
         <el-table-column prop="balanceDirectionDesc" label="方向" width="70" align="center">
           <template #default="{ row }">
-            <span :class="row.balanceDirectionDesc === '借' ? 'dir-debit' : 'dir-credit'">
+            <span :class="row.balanceDirectionDesc === '借' ? 'dir-debit' : (row.balanceDirectionDesc === '贷' ? 'dir-credit' : 'dir-flat')">
               {{ row.balanceDirectionDesc }}
             </span>
           </template>
@@ -355,6 +355,11 @@ onMounted(async () => {
 .dir-credit {
   color: #389e0d;
   font-weight: 600;
+}
+
+.dir-flat {
+  color: #8c8c8c;
+  font-weight: 500;
 }
 
 .text-debit {

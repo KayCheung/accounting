@@ -88,8 +88,8 @@
             <span class="meta-divider">|</span>
             <span class="meta-item">
               <span class="meta-label">余额方向:</span>
-              <el-tag :type="aggregateData.balanceDirection === 1 ? 'primary' : 'warning'" size="small">
-                {{ aggregateData.balanceDirection === 1 ? '借方 (Dr)' : '贷方 (Cr)' }}
+              <el-tag :type="aggregateData.balanceDirection === 1 ? 'primary' : (aggregateData.balanceDirection === 2 ? 'warning' : 'info')" size="small">
+                {{ aggregateData.balanceDirection === 1 ? '借方 (Dr)' : (aggregateData.balanceDirection === 2 ? '贷方 (Cr)' : '平 (Flat)') }}
               </el-tag>
             </span>
             <span class="meta-divider">|</span>

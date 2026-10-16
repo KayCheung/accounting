@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.*;
 import com.kltb.accounting.core.infrastructure.account.AccountBalanceCalculator;
+import com.kltb.accounting.core.infrastructure.account.AccountBalanceResult;
 import com.kltb.accounting.core.infrastructure.messaging.LocalMessageService;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
 import com.kltb.accounting.core.infrastructure.persistence.repository.*;
@@ -52,6 +53,7 @@ public class RollbackDomainService {
     private final LocalMessageService localMessageService;
     private final BufferPostingDetailRepository bufferPostingDetailRepository;
     private final DistributedLockTemplate distributedLockTemplate;
+    private final SubjectRepository subjectRepository;
 
     /**
      * 实时过账失败回滚（事务外调用，使用独立事务更新状态）
@@ -318,27 +320,65 @@ public class RollbackDomainService {
                 ? subs.stream().filter(s -> BalanceTypeEnum.AVAILABLE.equals(s.getBalanceType())).findFirst().orElse(null)
                 : null;
 
-            // 反向计算余额（changeDirection 取反）
+            // 确定反向分录借贷方向（借贷对调）与增减方向取反
+            DebitCreditEnum origDc = entry.getDebitCredit();
+            DebitCreditEnum reverseDc = (origDc == DebitCreditEnum.DEBIT) ? DebitCreditEnum.CREDIT : DebitCreditEnum.DEBIT;
             ChangeDirectionEnum reverseChangeDir = (entry.getChangeDirection() == ChangeDirectionEnum.INCREASE)
                     ? ChangeDirectionEnum.DECREASE
                     : ChangeDirectionEnum.INCREASE;
 
-            BigDecimal reversePreBalance = account.getBalance();
-            BigDecimal newBalance = AccountBalanceCalculator.calculateNewBalance(
-                reversePreBalance, entry.getAmount(), reverseChangeDir);
+            // 获取科目配置（优先从科目代码查，为空从账户方向兜底）
+            String effectiveSubjectCode = StrUtil.isNotBlank(entry.getSubjectCode())
+                    ? entry.getSubjectCode()
+                    : account.getSubjectCode();
+            SubjectBalanceDirectionEnum subjectDir = null;
+            if (StrUtil.isNotBlank(effectiveSubjectCode)) {
+                AccountSubjectPO subj = subjectRepository.selectByCode(effectiveSubjectCode);
+                if (subj != null) {
+                    subjectDir = subj.getDebitCredit();
+                }
+            }
+            if (subjectDir == null) {
+                subjectDir = (account.getBalanceDirection() == BalanceDirectionEnum.CREDIT)
+                        ? SubjectBalanceDirectionEnum.CREDIT
+                        : (account.getBalanceDirection() == BalanceDirectionEnum.FLAT ? SubjectBalanceDirectionEnum.NONE : SubjectBalanceDirectionEnum.DEBIT);
+            }
 
-            // 更新主账户余额
+            BigDecimal reversePreBalance = account.getBalance();
+            AccountBalanceResult mainResult = AccountBalanceCalculator.calculate(
+                    reversePreBalance,
+                    account.getBalanceDirection(),
+                    subjectDir,
+                    reverseDc,
+                    reverseChangeDir,
+                    entry.getAmount()
+            );
+            BigDecimal newBalance = mainResult.getNewBalance();
+
+            // 更新主账户余额与方向
             account.setBalance(newBalance);
+            account.setBalanceDirection(mainResult.getNewDirection());
             accountRepository.updateById(account);
 
-            // 更新子账户余额
+            // 更新子账户余额与方向
             BigDecimal subNewBalance = null;
             BigDecimal subReversePreBalance = null;
             if (subAccount != null) {
                 subReversePreBalance = subAccount.getBalance();
-                subNewBalance = AccountBalanceCalculator.calculateNewBalance(
-                    subReversePreBalance, entry.getAmount(), reverseChangeDir);
+                BalanceDirectionEnum subDir = subAccount.getBalanceDirection() != null
+                        ? subAccount.getBalanceDirection()
+                        : account.getBalanceDirection();
+                AccountBalanceResult subResult = AccountBalanceCalculator.calculate(
+                        subReversePreBalance,
+                        subDir,
+                        subjectDir,
+                        reverseDc,
+                        reverseChangeDir,
+                        entry.getAmount()
+                );
+                subNewBalance = subResult.getNewBalance();
                 subAccount.setBalance(subNewBalance);
+                subAccount.setBalanceDirection(subResult.getNewDirection());
                 subAccountRepository.updateById(subAccount);
             }
 
@@ -349,15 +389,15 @@ public class RollbackDomainService {
                 .setTxnNo(origVoucher.getTxnNo())
                 .setTraceNo(origVoucher.getTraceNo())
                 .setTraceSeq(origVoucher.getTraceSeq())
-                .setSubjectCode(entry.getSubjectCode())
+                .setSubjectCode(account.getSubjectCode())
                 .setAccountNo(entry.getAccountNo())
                 .setBusinessCode(origVoucher.getBusinessCode())
                 .setTradingCode(origVoucher.getTradingCode())
                 .setPayChannel(origVoucher.getPayChannel())
                 .setTradeType(origVoucher.getTradeType())
                 .setTradeTime(origVoucher.getTradeTime())
-                .setDebitCredit(entry.getDebitCredit())
-                .setChangeDirection(reverseChangeDir)
+                .setDebitCredit(reverseDc)
+                .setChangeDirection(mainResult.getChangeDirection())
                 .setCurrency(entry.getCurrency())
                 .setPreBalance(reversePreBalance)
                 .setAmount(entry.getAmount())
@@ -379,8 +419,8 @@ public class RollbackDomainService {
                     .setTradingCode(origVoucher.getTradingCode())
                     .setTradeType(origVoucher.getTradeType())
                     .setTradeTime(origVoucher.getTradeTime())
-                    .setDebitCredit(entry.getDebitCredit())
-                    .setChangeDirection(reverseChangeDir)
+                    .setDebitCredit(reverseDc)
+                    .setChangeDirection(mainResult.getChangeDirection())
                     .setCurrency(entry.getCurrency())
                     .setPreBalance(subReversePreBalance)
                     .setAmount(entry.getAmount())

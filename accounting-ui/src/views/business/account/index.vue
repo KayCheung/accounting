@@ -311,8 +311,8 @@
 
         <el-table-column prop="balanceDirection" label="方向" width="70" align="center">
           <template #default="{ row }">
-            <el-tag :type="row.balanceDirection === 1 ? 'primary' : 'warning'" size="small">
-              {{ row.balanceDirection === 1 ? '借' : '贷' }}
+            <el-tag :type="row.balanceDirection === 1 ? 'primary' : (row.balanceDirection === 2 ? 'warning' : 'info')" size="small">
+              {{ row.balanceDirection === 1 ? '借' : (row.balanceDirection === 2 ? '贷' : '平') }}
             </el-tag>
           </template>
         </el-table-column>
@@ -468,7 +468,7 @@
               {{ selectedAccount.accountTypeName || selectedAccount.accountType }}
             </el-descriptions-item>
             <el-descriptions-item label="币种 / 借贷">
-              {{ selectedAccount.currency }} / {{ selectedAccount.balanceDirection === 1 ? '借方(Debit)' : '贷方(Credit)' }}
+              {{ selectedAccount.currency }} / {{ selectedAccount.balanceDirection === 1 ? '借方(Debit)' : (selectedAccount.balanceDirection === 2 ? '贷方(Credit)' : '平(Flat)') }}
             </el-descriptions-item>
             <el-descriptions-item label="账户状态">
               <StatusTag
@@ -814,8 +814,8 @@
             <el-table-column prop="currency" label="币种" width="65" align="center" />
             <el-table-column prop="balanceDirection" label="方向" width="65" align="center">
               <template #default="{ row }">
-                <el-tag :type="row.balanceDirection === 1 ? 'primary' : 'warning'" size="small">
-                  {{ row.balanceDirection === 1 ? '借' : '贷' }}
+                <el-tag :type="row.balanceDirection === 1 ? 'primary' : (row.balanceDirection === 2 ? 'warning' : 'info')" size="small">
+                  {{ row.balanceDirection === 1 ? '借' : (row.balanceDirection === 2 ? '贷' : '平') }}
                 </el-tag>
               </template>
             </el-table-column>

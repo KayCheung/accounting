@@ -76,9 +76,9 @@ public class PostingDomainService {
 
         // 检查流水是否关联预冻结单
         AccountFreezeDetailPO origFreezeRecord = null;
-        if (StrUtil.isNotBlank(voucher.getTraceNo()) && businessRecordRepository != null) {
+        if (StrUtil.isNotBlank(voucher.getTraceNo())) {
             BusinessRecordPO businessRecord = businessRecordRepository.selectByTraceNo(voucher.getTraceNo());
-            if (businessRecord != null && StrUtil.isNotBlank(businessRecord.getOrigFreezeNo()) && freezeDetailRepository != null) {
+            if (businessRecord != null && StrUtil.isNotBlank(businessRecord.getOrigFreezeNo())) {
                 origFreezeRecord = freezeDetailRepository.selectByVoucherNo(businessRecord.getOrigFreezeNo());
                 if (origFreezeRecord == null) {
                     origFreezeRecord = freezeDetailRepository.selectByTraceNo(businessRecord.getOrigFreezeNo());
@@ -88,7 +88,7 @@ public class PostingDomainService {
 
         // 检查记账规则是否配置了入金冻结时长（freeze_duration）
         AccountingRulePO rule = null;
-        if (accountingRuleRepository != null && StrUtil.isNotBlank(voucher.getBusinessCode()) && StrUtil.isNotBlank(voucher.getTradingCode())) {
+        if (StrUtil.isNotBlank(voucher.getBusinessCode()) && StrUtil.isNotBlank(voucher.getTradingCode())) {
             rule = accountingRuleRepository.selectByBusinessKey(
                 voucher.getBusinessCode(), voucher.getTradingCode(), voucher.getPayChannel());
         }
@@ -138,10 +138,13 @@ public class PostingDomainService {
                     && rule.getFreezeDuration() > 0
                     && ChangeDirectionEnum.INCREASE.equals(entry.getChangeDirection()));
 
-            // 获取科目方向配置（若未注入或查询为空，从账户现有方向兜底）
+            // 获取科目方向配置（优先按分录科目查，为空按账户科目查，再查不到从账户现有方向兜底）
+            String targetSubjectCode = StrUtil.isNotBlank(entry.getSubjectCode())
+                    ? entry.getSubjectCode()
+                    : account.getSubjectCode();
             SubjectBalanceDirectionEnum subjectDir = null;
-            if (subjectRepository != null && StrUtil.isNotBlank(entry.getSubjectCode())) {
-                AccountSubjectPO subj = subjectRepository.selectByCode(entry.getSubjectCode());
+            if (StrUtil.isNotBlank(targetSubjectCode)) {
+                AccountSubjectPO subj = subjectRepository.selectByCode(targetSubjectCode);
                 if (subj != null) {
                     subjectDir = subj.getDebitCredit();
                 }
@@ -149,7 +152,7 @@ public class PostingDomainService {
             if (subjectDir == null) {
                 subjectDir = (account.getBalanceDirection() == BalanceDirectionEnum.CREDIT)
                         ? SubjectBalanceDirectionEnum.CREDIT
-                        : (account.getBalanceDirection() == BalanceDirectionEnum.FLAT ? SubjectBalanceDirectionEnum.NONE : SubjectBalanceDirectionEnum.DEBIT);
+                        : SubjectBalanceDirectionEnum.DEBIT;
             }
 
             // 计算主账户余额与方向（遵循绝对值法则，支持表外及双向翻转）
@@ -200,7 +203,7 @@ public class PostingDomainService {
             }
 
             // 若为预冻结出金，更新冻结记录的已扣减金额和剩余冻结金额
-            if (isPreFreezePayout && freezeDetailRepository != null) {
+            if (isPreFreezePayout) {
                 BigDecimal currentDeducted = origFreezeRecord.getDeductedAmount() != null
                         ? origFreezeRecord.getDeductedAmount() : BigDecimal.ZERO;
                 BigDecimal newDeducted = currentDeducted.add(entry.getAmount());
@@ -219,7 +222,7 @@ public class PostingDomainService {
             }
 
             // 若为规则配置入金冻结，创建新的冻结记录（由 AutoUnfreezeJobHandler 到期自动解冻）
-            if (isRuleInflowFreeze && freezeDetailRepository != null && freezeIdGenerator != null) {
+            if (isRuleInflowFreeze) {
                 AccountFreezeDetailPO inflowFreeze = new AccountFreezeDetailPO();
                 String freezeId = freezeIdGenerator.generate();
                 inflowFreeze.setVoucherNo(freezeId);

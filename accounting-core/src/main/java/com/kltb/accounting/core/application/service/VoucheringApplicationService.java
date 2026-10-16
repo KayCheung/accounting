@@ -329,24 +329,22 @@ public class VoucheringApplicationService {
         }
 
         // 2. L1 级：回源 DB 精确匹配（按 ownerId + subjectCode 查）
-        if (accountRepository != null) {
-            AccountPO account = accountRepository.selectByOwnerIdAndSubjectCode(ownerId, subjectCode);
-            if (account != null && StrUtil.isNotBlank(account.getAccountNo())) {
-                return account.getAccountNo();
-            }
+        AccountPO account = accountRepository.selectByOwnerIdAndSubjectCode(ownerId, subjectCode);
+        if (account != null && StrUtil.isNotBlank(account.getAccountNo())) {
+            return account.getAccountNo();
+        }
 
-            // 3. L2 级：若外部账户未找到且为非 INNER，尝试查找内部账户或科目默认分户
-            if (!"INNER".equals(ownerId)) {
-                AccountPO innerAccount = accountRepository.selectByOwnerIdAndSubjectCode("INNER", subjectCode);
-                if (innerAccount != null && StrUtil.isNotBlank(innerAccount.getAccountNo())) {
-                    return innerAccount.getAccountNo();
-                }
+        // 3. L2 级：若外部账户未找到且为非 INNER，尝试查找内部账户或科目默认分户
+        if (!"INNER".equals(ownerId)) {
+            AccountPO innerAccount = accountRepository.selectByOwnerIdAndSubjectCode("INNER", subjectCode);
+            if (innerAccount != null && StrUtil.isNotBlank(innerAccount.getAccountNo())) {
+                return innerAccount.getAccountNo();
             }
+        }
 
-            List<AccountPO> subjectAccounts = accountRepository.selectBySubjectCode(subjectCode);
-            if (subjectAccounts != null && !subjectAccounts.isEmpty()) {
-                return subjectAccounts.get(0).getAccountNo();
-            }
+        List<AccountPO> subjectAccounts = accountRepository.selectBySubjectCode(subjectCode);
+        if (subjectAccounts != null && !subjectAccounts.isEmpty()) {
+            return subjectAccounts.get(0).getAccountNo();
         }
 
         // 4. 防御性降级（单测兼容：若测试未 Stub 仓储且 detail 带有 customerId）

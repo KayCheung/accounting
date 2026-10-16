@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.*;
 import com.kltb.accounting.core.infrastructure.account.AccountBalanceCalculator;
+import com.kltb.accounting.core.infrastructure.account.AccountBalanceResult;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
 import com.kltb.accounting.core.infrastructure.persistence.repository.*;
 import com.kltb.accounting.core.infrastructure.redis.DistributedLockTemplate;
@@ -52,6 +53,7 @@ public class BufferPostingEngineDomainService {
     private final DistributedLockTemplate distributedLockTemplate;
     private final TransactionTemplate transactionTemplate;
     private final RunningBalanceValidator runningBalanceValidator;
+    private final SubjectRepository subjectRepository;
 
     /**
      * 逐条缓冲记账（buffer_mode=1）
@@ -291,26 +293,42 @@ public class BufferPostingEngineDomainService {
                             "子账户不存在: accountNo=" + detail.getAccountNo());
                 }
 
-                // 2. 余额计算
+                // 2. 余额计算（接入 AccountBalanceCalculator.calculate，严格遵循绝对值法则与双向翻转）
                 BigDecimal oldAccountBalance = account.getBalance();
                 BigDecimal oldSubBalance = subAccount.getBalance();
-                BalanceDirectionEnum balanceDirection = subAccount.getBalanceDirection();
                 DebitCreditEnum debitCredit = detail.getDebitCredit();
                 BigDecimal amount = detail.getAmount();
 
-                ChangeDirectionEnum changeDirection = calculateChangeDirection(balanceDirection, debitCredit);
+                SubjectBalanceDirectionEnum subjectDir = resolveSubjectDirection(account.getSubjectCode(), account);
 
-                // 3. 计算新余额（遵循绝对值法则）
-                BigDecimal newAccountBalance = AccountBalanceCalculator.calculateNewBalance(
-                        oldAccountBalance, amount, changeDirection);
-                BigDecimal newSubBalance = AccountBalanceCalculator.calculateNewBalance(
-                        oldSubBalance, amount, changeDirection);
+                AccountBalanceResult mainResult = AccountBalanceCalculator.calculate(
+                        oldAccountBalance,
+                        account.getBalanceDirection(),
+                        subjectDir,
+                        debitCredit,
+                        amount
+                );
+                BigDecimal newAccountBalance = mainResult.getNewBalance();
 
-                // 4. 更新主账户与子账户余额
+                BalanceDirectionEnum subDir = subAccount.getBalanceDirection() != null
+                        ? subAccount.getBalanceDirection()
+                        : account.getBalanceDirection();
+                AccountBalanceResult subResult = AccountBalanceCalculator.calculate(
+                        oldSubBalance,
+                        subDir,
+                        subjectDir,
+                        debitCredit,
+                        amount
+                );
+                BigDecimal newSubBalance = subResult.getNewBalance();
+
+                // 4. 更新主账户与子账户余额及方向
                 account.setBalance(newAccountBalance);
+                account.setBalanceDirection(mainResult.getNewDirection());
                 accountRepository.updateById(account);
 
                 subAccount.setBalance(newSubBalance);
+                subAccount.setBalanceDirection(subResult.getNewDirection());
                 subAccountRepository.updateById(subAccount);
 
                 // 5. 写入主账户明细流水（t_account_detail）
@@ -328,7 +346,7 @@ public class BufferPostingEngineDomainService {
                         .setTradeType(detail.getTradeType())
                         .setTradeTime(detail.getTradeTime() != null ? detail.getTradeTime() : LocalDateTime.now())
                         .setDebitCredit(debitCredit)
-                        .setChangeDirection(changeDirection)
+                        .setChangeDirection(mainResult.getChangeDirection())
                         .setCurrency(detail.getCurrency() != null ? detail.getCurrency() : "CNY")
                         .setPreBalance(oldAccountBalance)
                         .setAmount(amount)
@@ -350,7 +368,7 @@ public class BufferPostingEngineDomainService {
                         .setTradeType(detail.getTradeType())
                         .setTradeTime(detail.getTradeTime() != null ? detail.getTradeTime() : LocalDateTime.now())
                         .setDebitCredit(debitCredit)
-                        .setChangeDirection(changeDirection)
+                        .setChangeDirection(mainResult.getChangeDirection())
                         .setCurrency(detail.getCurrency())
                         .setPreBalance(oldSubBalance)
                         .setAmount(amount)
@@ -419,8 +437,13 @@ public class BufferPostingEngineDomainService {
                         .thenComparing(BufferPostingDetailPO::getId));
 
                 BigDecimal runningAccountBalance = account.getBalance();
+                BalanceDirectionEnum runningAccountDir = account.getBalanceDirection();
                 BigDecimal runningSubBalance = subAccount.getBalance();
-                BalanceDirectionEnum balanceDirection = subAccount.getBalanceDirection();
+                BalanceDirectionEnum runningSubDir = subAccount.getBalanceDirection() != null
+                        ? subAccount.getBalanceDirection()
+                        : account.getBalanceDirection();
+
+                SubjectBalanceDirectionEnum subjectDir = resolveSubjectDirection(account.getSubjectCode(), account);
 
                 List<AccountDetailPO> accountDetailsToInsert = new ArrayList<>(sortedDetails.size());
                 List<SubAccountDetailPO> subDetailsToInsert = new ArrayList<>(sortedDetails.size());
@@ -428,17 +451,28 @@ public class BufferPostingEngineDomainService {
                 for (BufferPostingDetailPO detail : sortedDetails) {
                     DebitCreditEnum debitCredit = detail.getDebitCredit();
                     BigDecimal amount = detail.getAmount();
-                    ChangeDirectionEnum changeDirection = calculateChangeDirection(balanceDirection, debitCredit);
 
                     BigDecimal preAccount = runningAccountBalance;
-                    BigDecimal postAccount = AccountBalanceCalculator.calculateNewBalance(
-                            preAccount, amount, changeDirection);
-                    runningAccountBalance = postAccount;
+                    AccountBalanceResult mainResult = AccountBalanceCalculator.calculate(
+                            runningAccountBalance,
+                            runningAccountDir,
+                            subjectDir,
+                            debitCredit,
+                            amount
+                    );
+                    runningAccountBalance = mainResult.getNewBalance();
+                    runningAccountDir = mainResult.getNewDirection();
 
                     BigDecimal preSub = runningSubBalance;
-                    BigDecimal postSub = AccountBalanceCalculator.calculateNewBalance(
-                            preSub, amount, changeDirection);
-                    runningSubBalance = postSub;
+                    AccountBalanceResult subResult = AccountBalanceCalculator.calculate(
+                            runningSubBalance,
+                            runningSubDir,
+                            subjectDir,
+                            debitCredit,
+                            amount
+                    );
+                    runningSubBalance = subResult.getNewBalance();
+                    runningSubDir = subResult.getNewDirection();
 
                     // 组装 t_account_detail
                     AccountDetailPO ad = new AccountDetailPO();
@@ -455,11 +489,11 @@ public class BufferPostingEngineDomainService {
                             .setTradeType(detail.getTradeType())
                             .setTradeTime(detail.getTradeTime() != null ? detail.getTradeTime() : LocalDateTime.now())
                             .setDebitCredit(debitCredit)
-                            .setChangeDirection(changeDirection)
+                            .setChangeDirection(mainResult.getChangeDirection())
                             .setCurrency(detail.getCurrency() != null ? detail.getCurrency() : "CNY")
                             .setPreBalance(preAccount)
                             .setAmount(amount)
-                            .setPostBalance(postAccount)
+                            .setPostBalance(runningAccountBalance)
                             .setAccountingDate(accountingDate)
                             .setSummary(StrUtil.isNotBlank(detail.getSummary()) ? detail.getSummary() : "缓冲记账(批量入账)");
                     accountDetailsToInsert.add(ad);
@@ -477,21 +511,23 @@ public class BufferPostingEngineDomainService {
                             .setTradeType(detail.getTradeType())
                             .setTradeTime(detail.getTradeTime() != null ? detail.getTradeTime() : LocalDateTime.now())
                             .setDebitCredit(debitCredit)
-                            .setChangeDirection(changeDirection)
+                            .setChangeDirection(mainResult.getChangeDirection())
                             .setCurrency(detail.getCurrency())
                             .setPreBalance(preSub)
                             .setAmount(amount)
-                            .setPostBalance(postSub)
+                            .setPostBalance(runningSubBalance)
                             .setAccountingDate(accountingDate)
                             .setSummary(StrUtil.isNotBlank(detail.getSummary()) ? detail.getSummary() : "缓冲记账(批量入账)");
                     subDetailsToInsert.add(sad);
                 }
 
-                // 3. 一次性更新主账户和子账户余额
+                // 3. 一次性更新主账户和子账户余额与方向
                 account.setBalance(runningAccountBalance);
+                account.setBalanceDirection(runningAccountDir);
                 accountRepository.updateById(account);
 
                 subAccount.setBalance(runningSubBalance);
+                subAccount.setBalanceDirection(runningSubDir);
                 subAccountRepository.updateById(subAccount);
 
                 // 4. 批量落库明细流水
@@ -525,15 +561,24 @@ public class BufferPostingEngineDomainService {
     }
 
     /**
-     * 计算增减方向
+     * 解析科目余额方向配置（优先根据科目代码查库，为空时安全回退至账户方向）
      */
-    private ChangeDirectionEnum calculateChangeDirection(BalanceDirectionEnum balanceDirection, DebitCreditEnum debitCredit) {
-        if (balanceDirection == null || balanceDirection == BalanceDirectionEnum.FLAT) {
-            return (debitCredit == DebitCreditEnum.DEBIT) ? ChangeDirectionEnum.INCREASE : ChangeDirectionEnum.DECREASE;
+    private SubjectBalanceDirectionEnum resolveSubjectDirection(String subjectCode, AccountPO account) {
+        String code = StrUtil.isNotBlank(subjectCode) ? subjectCode : (account != null ? account.getSubjectCode() : null);
+        if (StrUtil.isNotBlank(code)) {
+            AccountSubjectPO subj = subjectRepository.selectByCode(code);
+            if (subj != null && subj.getDebitCredit() != null) {
+                return subj.getDebitCredit();
+            }
         }
-        boolean isSame = (balanceDirection == BalanceDirectionEnum.DEBIT && debitCredit == DebitCreditEnum.DEBIT)
-                || (balanceDirection == BalanceDirectionEnum.CREDIT && debitCredit == DebitCreditEnum.CREDIT);
-        return isSame ? ChangeDirectionEnum.INCREASE : ChangeDirectionEnum.DECREASE;
+        if (account != null && account.getBalanceDirection() != null) {
+            if (account.getBalanceDirection() == BalanceDirectionEnum.CREDIT) {
+                return SubjectBalanceDirectionEnum.CREDIT;
+            } else if (account.getBalanceDirection() == BalanceDirectionEnum.FLAT) {
+                return SubjectBalanceDirectionEnum.NONE;
+            }
+        }
+        return SubjectBalanceDirectionEnum.DEBIT;
     }
 
     private String buildLockKey(String accountNo) {

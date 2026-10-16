@@ -61,6 +61,8 @@ class RollbackDomainServiceTest {
     private BufferPostingDetailRepository bufferPostingDetailRepository;
     @Mock
     private DistributedLockTemplate distributedLockTemplate;
+    @Mock
+    private SubjectRepository subjectRepository;
 
     @InjectMocks
     private RollbackDomainService rollbackDomainService;

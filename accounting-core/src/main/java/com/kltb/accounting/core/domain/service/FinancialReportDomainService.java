@@ -5,6 +5,7 @@ import com.kltb.accounting.api.request.GeneralLedgerQueryRequest;
 import com.kltb.accounting.api.request.IncomeStatementQueryRequest;
 import com.kltb.accounting.api.request.SubsidiaryLedgerQueryRequest;
 import com.kltb.accounting.api.response.*;
+import com.kltb.accounting.core.domain.enums.BalanceDirectionEnum;
 import com.kltb.accounting.core.domain.enums.SubjectBalanceDirectionEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountBalancePO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountSubjectPO;
@@ -528,34 +529,64 @@ public class FinancialReportDomainService {
             }
 
             // 方向：0-无, 1-借, 2-贷, 3-双向
-            int defaultDir = subject.getDebitCredit() != null ? subject.getDebitCredit().getCode() : 1;
-            String dirDesc = SubjectBalanceDirectionEnum.getDescByCode(defaultDir);
+            int subjectDirCode = subject.getDebitCredit() != null ? subject.getDebitCredit().getCode() : 1;
+            boolean isOffBalance = (subjectDirCode == 0);
+            boolean isBoth = (subjectDirCode == 3);
+
+            // 确定期末展示方向与期末实际方向
+            int endDirCode = subjectDirCode;
+            String endDirDesc;
             if (endBal.compareTo(ZERO) == 0) {
-                dirDesc = "平";
+                endDirDesc = "平";
+                endDirCode = 0;
+            } else if (isBoth) {
+                // 双向科目：若有明细取最新日余额方向，否则根据借贷发生额推导
+                BalanceDirectionEnum lastDir = (!list.isEmpty() && list.get(list.size() - 1).getBalanceDirection() != null)
+                        ? list.get(list.size() - 1).getBalanceDirection()
+                        : (periodDebit.compareTo(periodCredit) >= 0 ? BalanceDirectionEnum.DEBIT : BalanceDirectionEnum.CREDIT);
+                endDirCode = lastDir.getCode();
+                endDirDesc = lastDir.getDesc();
+            } else if (isOffBalance) {
+                endDirCode = 0;
+                endDirDesc = "无";
+            } else {
+                endDirDesc = SubjectBalanceDirectionEnum.getDescByCode(subjectDirCode);
             }
 
             items.add(GeneralLedgerItemResponse.builder()
                     .subjectCode(subject.getSubjectCode())
                     .subjectName(subject.getSubjectName())
                     .subjectLevel(subject.getSubjectLevel() != null ? subject.getSubjectLevel().intValue() : 1)
-                    .balanceDirection(defaultDir)
-                    .balanceDirectionDesc(dirDesc)
+                    .balanceDirection(endDirCode)
+                    .balanceDirectionDesc(endDirDesc)
                     .beginBalance(beginBal)
                     .debitAmount(periodDebit)
                     .creditAmount(periodCredit)
                     .endBalance(endBal)
                     .build());
 
-            // 统计总计
-            if (defaultDir == 1) {
-                totalBeginDebit = totalBeginDebit.add(beginBal);
-                totalEndDebit = totalEndDebit.add(endBal);
-            } else {
-                totalBeginCredit = totalBeginCredit.add(beginBal);
-                totalEndCredit = totalEndCredit.add(endBal);
+            // 统计总计（表外不计入表内借贷总计）
+            if (!isOffBalance) {
+                // 期初借贷汇总
+                BalanceDirectionEnum beginDir = (!list.isEmpty() && list.get(0).getBalanceDirection() != null)
+                        ? list.get(0).getBalanceDirection()
+                        : (subjectDirCode == 2 ? BalanceDirectionEnum.CREDIT : BalanceDirectionEnum.DEBIT);
+                if (beginDir == BalanceDirectionEnum.CREDIT) {
+                    totalBeginCredit = totalBeginCredit.add(beginBal);
+                } else if (beginDir == BalanceDirectionEnum.DEBIT) {
+                    totalBeginDebit = totalBeginDebit.add(beginBal);
+                }
+
+                // 期末借贷汇总
+                if (endDirCode == 2) {
+                    totalEndCredit = totalEndCredit.add(endBal);
+                } else if (endDirCode == 1) {
+                    totalEndDebit = totalEndDebit.add(endBal);
+                }
+
+                totalPeriodDebit = totalPeriodDebit.add(periodDebit);
+                totalPeriodCredit = totalPeriodCredit.add(periodCredit);
             }
-            totalPeriodDebit = totalPeriodDebit.add(periodDebit);
-            totalPeriodCredit = totalPeriodCredit.add(periodCredit);
         }
 
         boolean isBalanced = totalPeriodDebit.compareTo(totalPeriodCredit) == 0;
@@ -584,17 +615,48 @@ public class FinancialReportDomainService {
         AccountSubjectPO subject = subjectRepository.selectByCode(subjectCode);
         String subjectName = subject != null ? subject.getSubjectName() : subjectCode;
         int level = subject != null && subject.getSubjectLevel() != null ? subject.getSubjectLevel() : 1;
-        int defaultDir = subject != null && subject.getDebitCredit() != null ? subject.getDebitCredit().getCode() : 1;
-        String dirDesc = SubjectBalanceDirectionEnum.getDescByCode(defaultDir);
+        SubjectBalanceDirectionEnum subjectDir = subject != null && subject.getDebitCredit() != null
+                ? subject.getDebitCredit()
+                : SubjectBalanceDirectionEnum.DEBIT;
+        int defaultDir = subjectDir.getCode();
+        String dirDesc = subjectDir.getDesc();
 
         LocalDate startDate = request.getStartDate();
         LocalDate endDate = request.getEndDate();
 
         // 1. 期初余额计算
         List<AccountBalancePO> beginList = accountBalanceRepository.selectBySubjectAndDateRange(subjectCode, startDate, startDate);
-        BigDecimal currentBalance = ZERO;
+        BigDecimal beginBal = ZERO;
+        BalanceDirectionEnum beginDir = BalanceDirectionEnum.FLAT;
         if (!beginList.isEmpty()) {
-            currentBalance = beginList.get(0).getBeginBalance() != null ? beginList.get(0).getBeginBalance() : ZERO;
+            AccountBalancePO first = beginList.get(0);
+            beginBal = first.getBeginBalance() != null ? first.getBeginBalance() : ZERO;
+            if (first.getBalanceDirection() != null) {
+                beginDir = first.getBalanceDirection();
+            }
+        }
+
+        // 推导期初显示方向与方向代码（明细行只展示 借/贷/平/无，绝不展示“双向”）
+        int initialDirCode;
+        String initialDirDesc;
+        if (beginBal.compareTo(ZERO) == 0) {
+            initialDirCode = 0;
+            initialDirDesc = "平";
+        } else if (subjectDir.isOffBalance()) {
+            initialDirCode = 0;
+            initialDirDesc = "无";
+        } else if (subjectDir.isBidirectional()) {
+            BalanceDirectionEnum eff = (beginDir != null && beginDir != BalanceDirectionEnum.FLAT)
+                    ? beginDir
+                    : BalanceDirectionEnum.DEBIT;
+            initialDirCode = eff.getCode();
+            initialDirDesc = eff.getDesc();
+        } else if (subjectDir.isCredit()) {
+            initialDirCode = 2;
+            initialDirDesc = "贷";
+        } else {
+            initialDirCode = 1;
+            initialDirDesc = "借";
         }
 
         List<SubsidiaryLedgerItemResponse> items = new ArrayList<>();
@@ -608,9 +670,9 @@ public class FinancialReportDomainService {
                 .summary("期初余额")
                 .debitAmount(ZERO)
                 .creditAmount(ZERO)
-                .balanceDirection(defaultDir)
-                .balanceDirectionDesc(currentBalance.compareTo(ZERO) == 0 ? "平" : dirDesc)
-                .balance(currentBalance)
+                .balanceDirection(initialDirCode)
+                .balanceDirectionDesc(initialDirDesc)
+                .balance(beginBal)
                 .build());
 
         // 2. 取期间内所有已过账分录流水
@@ -619,6 +681,21 @@ public class FinancialReportDomainService {
 
         BigDecimal periodDebit = ZERO;
         BigDecimal periodCredit = ZERO;
+
+        // 跟踪动态净余额（借方为正，贷方为负；表外借增贷减）
+        BigDecimal currentNetBalance;
+        if (subjectDir.isCredit()) {
+            currentNetBalance = beginBal; // 贷方科目：贷方为正
+        } else if (subjectDir.isBidirectional()) {
+            currentNetBalance = (beginDir == BalanceDirectionEnum.CREDIT) ? beginBal.negate() : beginBal; // 双向科目：借为正，贷为负
+        } else {
+            // 借方科目 或 表外科目：借为正
+            currentNetBalance = beginBal;
+        }
+
+        int currentDirCode = initialDirCode;
+        String currentDirText = initialDirDesc;
+        BigDecimal displayBal = beginBal;
 
         for (AccountingVoucherEntryPO e : entries) {
             BigDecimal debit = e.getDebitCredit() == com.kltb.accounting.core.domain.enums.DebitCreditEnum.DEBIT ? e.getAmount() : ZERO;
@@ -641,26 +718,41 @@ public class FinancialReportDomainService {
             periodDebit = periodDebit.add(debit);
             periodCredit = periodCredit.add(credit);
 
-            // 动态轧差计算余额
-            if (defaultDir == 1) {
-                // 借方科目：借增贷减
-                currentBalance = currentBalance.add(debit).subtract(credit);
-            } else {
-                // 贷方科目：贷增借减
-                currentBalance = currentBalance.add(credit).subtract(debit);
-            }
-
-            String currentDirText = dirDesc;
-            int currentDirCode = defaultDir;
-            BigDecimal displayBal = currentBalance;
-            if (currentBalance.compareTo(ZERO) < 0) {
-                // 反向余额
-                displayBal = currentBalance.abs();
-                currentDirText = defaultDir == 1 ? "贷" : "借";
-                currentDirCode = defaultDir == 1 ? 2 : 1;
-            } else if (currentBalance.compareTo(ZERO) == 0) {
-                currentDirText = "平";
+            // 动态轧差计算余额与明细行方向
+            if (subjectDir.isOffBalance()) {
+                // 表外：借增贷减，余额方向恒为平/无 (0)
+                currentNetBalance = currentNetBalance.add(debit).subtract(credit);
+                displayBal = currentNetBalance.abs();
                 currentDirCode = 0;
+                currentDirText = currentNetBalance.compareTo(ZERO) == 0 ? "平" : "无";
+            } else if (subjectDir.isCredit()) {
+                // 贷方科目：贷增借减
+                currentNetBalance = currentNetBalance.add(credit).subtract(debit);
+                displayBal = currentNetBalance.abs();
+                if (currentNetBalance.compareTo(ZERO) > 0) {
+                    currentDirCode = 2;
+                    currentDirText = "贷";
+                } else if (currentNetBalance.compareTo(ZERO) < 0) {
+                    currentDirCode = 1;
+                    currentDirText = "借";
+                } else {
+                    currentDirCode = 0;
+                    currentDirText = "平";
+                }
+            } else {
+                // 借方科目 或 双向科目：借增贷减
+                currentNetBalance = currentNetBalance.add(debit).subtract(credit);
+                displayBal = currentNetBalance.abs();
+                if (currentNetBalance.compareTo(ZERO) > 0) {
+                    currentDirCode = 1;
+                    currentDirText = "借";
+                } else if (currentNetBalance.compareTo(ZERO) < 0) {
+                    currentDirCode = 2;
+                    currentDirText = "贷";
+                } else {
+                    currentDirCode = 0;
+                    currentDirText = "平";
+                }
             }
 
             items.add(SubsidiaryLedgerItemResponse.builder()
@@ -686,9 +778,9 @@ public class FinancialReportDomainService {
                 .summary("本期合计")
                 .debitAmount(periodDebit)
                 .creditAmount(periodCredit)
-                .balanceDirection(defaultDir)
-                .balanceDirectionDesc(currentBalance.compareTo(ZERO) == 0 ? "平" : dirDesc)
-                .balance(currentBalance.abs())
+                .balanceDirection(currentDirCode)
+                .balanceDirectionDesc(currentDirText)
+                .balance(displayBal)
                 .build());
 
         return SubsidiaryLedgerResponse.builder()
@@ -698,8 +790,8 @@ public class FinancialReportDomainService {
                 .balanceDirectionDesc(dirDesc)
                 .startDate(startDate)
                 .endDate(endDate)
-                .beginBalance(items.get(0).getBalance())
-                .endBalance(currentBalance.abs())
+                .beginBalance(beginBal)
+                .endBalance(displayBal)
                 .totalDebitAmount(periodDebit)
                 .totalCreditAmount(periodCredit)
                 .items(items)

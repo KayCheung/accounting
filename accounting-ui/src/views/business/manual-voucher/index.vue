@@ -1137,9 +1137,9 @@ function handleSubjectChange(row: ApplyEntryItem, subjectCode: string) {
   const target = leafSubjects.value.find(s => s.subjectCode === subjectCode)
   if (target) {
     row.subjectName = target.subjectName
-    // 若原先未设置借贷，可依据科目余额方向给默认值
+    // 若原先未设置借贷，可依据科目余额方向给默认值（双向3和表外0默认借方1，贷方科目给2）
     if (!row.debitCredit) {
-      row.debitCredit = target.balanceDirection || 1
+      row.debitCredit = target.balanceDirection === 2 ? 2 : 1
     }
   }
 }

@@ -59,6 +59,9 @@ class BufferPostingEngineDomainServiceTest {
     @Mock
     private RunningBalanceValidator runningBalanceValidator;
 
+    @Mock
+    private SubjectRepository subjectRepository;
+
     private BufferPostingEngineDomainService bufferPostingEngineDomainService;
 
     @BeforeEach
@@ -72,7 +75,8 @@ class BufferPostingEngineDomainServiceTest {
                 accountingVoucherRepository,
                 distributedLockTemplate,
                 transactionTemplate,
-                runningBalanceValidator
+                runningBalanceValidator,
+                subjectRepository
         );
 
         // 模拟分布式锁直接执行 supplier
