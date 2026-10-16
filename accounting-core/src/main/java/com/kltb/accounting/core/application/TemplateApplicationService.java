@@ -18,6 +18,7 @@ import com.kltb.accounting.core.domain.enums.TemplateStatusEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountSubjectPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountTemplatePO;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountMapper;
+import com.kltb.accounting.core.infrastructure.persistence.repository.AccountTemplateRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.SubjectRepository;
 import com.kltb.accounting.core.shared.exception.ServiceException;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 import cn.hutool.core.util.StrUtil;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 开户模板应用服务
@@ -42,6 +45,7 @@ import java.util.Objects;
 @RequiredArgsConstructor
 public class TemplateApplicationService {
 
+    private final AccountTemplateRepository templateRepository;
     private final SubjectRepository subjectRepository;
     private final AccountMapper accountMapper;
     private final TransactionTemplate transactionTemplate;
@@ -58,7 +62,7 @@ public class TemplateApplicationService {
                 validateSubject(request.getSubjectCode());
 
                 // 2. 唯一键校验
-                AccountTemplatePO existing = subjectRepository.selectTemplateByBusinessKey(
+                AccountTemplatePO existing = templateRepository.selectByBusinessKey(
                         request.getBusinessCode(), request.getCustomerType(), request.getSubjectCode());
                 if (existing != null) {
                     throw new ServiceException(ResultCode.PARAM_ERROR,
@@ -67,7 +71,7 @@ public class TemplateApplicationService {
 
                 // 3. 构建 PO 并插入
                 AccountTemplatePO po = TemplateConverter.toPO(request);
-                subjectRepository.insertTemplate(po);
+                templateRepository.insert(po);
                 return null;
             } catch (ServiceException e) {
                 throw e;
@@ -80,7 +84,7 @@ public class TemplateApplicationService {
     }
 
     /**
-     * 批量保存开户模板（支持配置多个会计科目账户）
+     * 批量保存开户模板（支持配置多个会计科目账户，包含差集明细删除）
      *
      * 是否记账：否
      */
@@ -98,19 +102,76 @@ public class TemplateApplicationService {
 
         transactionTemplate.execute(txStatus -> {
             try {
-                // 1. 校验科目
+                // 1. 校验科目：存在 + 末级 + 允许开户
                 for (TemplateItemRequest item : request.getItems()) {
                     validateSubject(item.getSubjectCode());
                 }
 
-                // 2. 逐条处理模板项
+                // 2. 识别原模板名称（兼容模板重命名场景）
+                String oldTemplateName = null;
+                for (TemplateItemRequest item : request.getItems()) {
+                    if (item.getId() != null) {
+                        AccountTemplatePO po = templateRepository.selectById(item.getId());
+                        if (po != null && StrUtil.isNotBlank(po.getTemplateName())) {
+                            oldTemplateName = po.getTemplateName();
+                            break;
+                        }
+                    }
+                }
+                if (oldTemplateName == null) {
+                    oldTemplateName = request.getTemplateName();
+                }
+
+                // 3. 查出当前组在数据库中的存量明细项
+                List<AccountTemplatePO> dbGroupItems = templateRepository.selectByGroup(
+                        request.getBusinessCode(), request.getCustomerType(), oldTemplateName);
+                if (!oldTemplateName.equals(request.getTemplateName())) {
+                    List<AccountTemplatePO> newNameItems = templateRepository.selectByGroup(
+                            request.getBusinessCode(), request.getCustomerType(), request.getTemplateName());
+                    if (newNameItems != null && !newNameItems.isEmpty()) {
+                        for (AccountTemplatePO item : newNameItems) {
+                            if (dbGroupItems.stream().noneMatch(existing -> existing.getId().equals(item.getId()))) {
+                                dbGroupItems.add(item);
+                            }
+                        }
+                    }
+                }
+
+                // 4. 计算并处理被用户移除的明细项（在数据库存量中存在，但本次提交的 items 中已被删除）
+                Set<Long> keepIds = request.getItems().stream()
+                        .map(TemplateItemRequest::getId)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
+                Set<String> keepSubjectCodes = request.getItems().stream()
+                        .map(TemplateItemRequest::getSubjectCode)
+                        .filter(StrUtil::isNotBlank)
+                        .collect(Collectors.toSet());
+
+                for (AccountTemplatePO dbItem : dbGroupItems) {
+                    boolean keep = (dbItem.getId() != null && keepIds.contains(dbItem.getId()))
+                            || (StrUtil.isNotBlank(dbItem.getSubjectCode()) && keepSubjectCodes.contains(dbItem.getSubjectCode()));
+                    if (!keep) {
+                        // 联动校验：已有关联账户的明细不允许直接删除
+                        long activeAccountCount = accountMapper.countBySubjectCodeAndOwnerType(
+                                dbItem.getSubjectCode(),
+                                dbItem.getCustomerType() != null ? dbItem.getCustomerType().getCode() : null);
+                        if (activeAccountCount > 0) {
+                            throw new ServiceException(ResultCode.OPERATION_NOT_ALLOWED,
+                                    "科目【" + dbItem.getSubjectCode() + "】开户配置已有关联账户（" + activeAccountCount + "个），不可删除");
+                        }
+                        // 逻辑删除孤儿明细（is_delete = id 避免唯一索引冲突）
+                        templateRepository.logicDeleteById(dbItem.getId());
+                    }
+                }
+
+                // 5. 逐条处理保留和新增的模板项
                 for (TemplateItemRequest item : request.getItems()) {
                     AccountTemplatePO existing = null;
                     if (item.getId() != null) {
-                        existing = subjectRepository.selectTemplateById(item.getId());
+                        existing = templateRepository.selectById(item.getId());
                     }
                     if (existing == null) {
-                        existing = subjectRepository.selectTemplateByBusinessKey(
+                        existing = templateRepository.selectByBusinessKey(
                                 request.getBusinessCode(), request.getCustomerType(), item.getSubjectCode());
                     }
 
@@ -127,7 +188,7 @@ public class TemplateApplicationService {
                         existing.setAcctNameRule(item.getAcctNameRule());
                         existing.setUpdateId(Constants.SYSTEM_OPERATOR);
                         existing.setUpdateName(Constants.SYSTEM_OPERATOR);
-                        subjectRepository.updateTemplateById(existing);
+                        templateRepository.updateById(existing);
                     } else {
                         AccountTemplatePO po = new AccountTemplatePO();
                         po.setTemplateName(request.getTemplateName());
@@ -146,7 +207,7 @@ public class TemplateApplicationService {
                         po.setCreateName(Constants.SYSTEM_OPERATOR);
                         po.setUpdateId(Constants.SYSTEM_OPERATOR);
                         po.setUpdateName(Constants.SYSTEM_OPERATOR);
-                        subjectRepository.insertTemplate(po);
+                        templateRepository.insert(po);
                     }
                 }
                 return null;
@@ -155,7 +216,7 @@ public class TemplateApplicationService {
             } catch (Exception e) {
                 log.error("[TEMPLATE-SAVE-GROUP] 批量保存模板失败 templateName={} error={}",
                         request.getTemplateName(), e.getMessage(), e);
-                throw new ServiceException(ResultCode.SYSTEM_ERROR, "批量保存模板失败");
+                throw new ServiceException(ResultCode.SYSTEM_ERROR, "批量保存模板失败: " + e.getMessage());
             }
         });
     }
@@ -168,12 +229,12 @@ public class TemplateApplicationService {
     public void update(Long templateId, TemplateUpdateRequest request) {
         transactionTemplate.execute(status -> {
             try {
-                AccountTemplatePO po = subjectRepository.selectTemplateById(templateId);
+                AccountTemplatePO po = templateRepository.selectById(templateId);
                 if (po == null) {
                     throw new ServiceException(ResultCode.ACCOUNT_TEMPLATE_NOT_FOUND, "模板不存在");
                 }
                 TemplateConverter.updatePO(request, po);
-                subjectRepository.updateTemplateById(po);
+                templateRepository.updateById(po);
                 return null;
             } catch (ServiceException e) {
                 throw e;
@@ -193,7 +254,7 @@ public class TemplateApplicationService {
     public void disable(Long templateId) {
         transactionTemplate.execute(status -> {
             try {
-                AccountTemplatePO template = subjectRepository.selectTemplateById(templateId);
+                AccountTemplatePO template = templateRepository.selectById(templateId);
                 if (template == null) {
                     throw new ServiceException(ResultCode.ACCOUNT_TEMPLATE_NOT_FOUND, "模板不存在");
                 }
@@ -210,7 +271,7 @@ public class TemplateApplicationService {
                 template.setStatus(TemplateStatusEnum.DISABLED);
                 template.setUpdateId(Constants.SYSTEM_OPERATOR);
                 template.setUpdateName(Constants.SYSTEM_OPERATOR);
-                subjectRepository.updateTemplateById(template);
+                templateRepository.updateById(template);
                 return null;
             } catch (ServiceException e) {
                 throw e;
@@ -228,7 +289,7 @@ public class TemplateApplicationService {
      * 是否记账：否
      */
     public TemplateResponse getById(Long templateId) {
-        AccountTemplatePO po = subjectRepository.selectTemplateById(templateId);
+        AccountTemplatePO po = templateRepository.selectById(templateId);
         if (po == null) {
             throw new ServiceException(ResultCode.ACCOUNT_TEMPLATE_NOT_FOUND, "模板不存在");
         }
@@ -251,7 +312,7 @@ public class TemplateApplicationService {
                 .orderByDesc(AccountTemplatePO::getId);
 
         Page<AccountTemplatePO> page = new Page<>(request.getPageNo(), request.getPageSize());
-        Page<AccountTemplatePO> result = subjectRepository.pageTemplate(page, wrapper);
+        Page<AccountTemplatePO> result = templateRepository.page(page, wrapper);
 
         return PageResponse.<TemplateResponse>builder()
                 .total(result.getTotal())

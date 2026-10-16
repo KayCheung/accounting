@@ -79,4 +79,13 @@ public interface AccountTemplateMapper extends BaseMapper<AccountTemplatePO> {
                 .eq(AccountTemplatePO::getStatus, status)
                 .orderByAsc(AccountTemplatePO::getId));
     }
+
+    /**
+     * 按ID逻辑删除开户模板（将 is_delete 置为自身主键 id，彻底避免固定值 1 造成的 uk_business_code 唯一索引冲突）
+     *
+     * @param id 模板ID
+     * @return 影响行数
+     */
+    @org.apache.ibatis.annotations.Update("UPDATE t_account_template SET is_delete = id WHERE id = #{id} AND is_delete = 0")
+    int logicDeleteById(@org.apache.ibatis.annotations.Param("id") Long id);
 }

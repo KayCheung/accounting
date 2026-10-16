@@ -17,7 +17,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 科目与模板持久化仓储
+ * 会计科目持久化仓储
  */
 @Repository
 @RequiredArgsConstructor
@@ -25,7 +25,7 @@ public class SubjectRepository {
 
     private final AccountSubjectMapper subjectMapper;
     private final AccountSubjectAuxiliaryMapper subjectAuxiliaryMapper;
-    private final AccountTemplateMapper templateMapper;
+    private final AccountTemplateRepository templateRepository;
     private final AccountingRuleDetailMapper ruleDetailMapper;
 
     /**
@@ -162,35 +162,35 @@ public class SubjectRepository {
     public AccountTemplatePO selectTemplateByBusinessKey(String businessCode,
                                                           Integer customerType,
                                                           String subjectCode) {
-        return templateMapper.selectByBusinessKey(businessCode, customerType, subjectCode);
+        return templateRepository.selectByBusinessKey(businessCode, customerType, subjectCode);
     }
 
     /**
      * 按业务线编码+客户类型查询首个启用的开户模板（subjectCode 为空时的兜底匹配）
      */
     public AccountTemplatePO selectFirstEnabledTemplate(String businessCode, Integer customerType) {
-        return templateMapper.selectFirstEnabledByBusinessAndCustomer(businessCode, customerType, 2);
+        return templateRepository.selectFirstEnabled(businessCode, customerType);
     }
 
     /**
      * 按业务线编码+客户类型查询所有启用的开户模板列表（支持单模板多科目账户）
      */
     public List<AccountTemplatePO> selectEnabledTemplates(String businessCode, Integer customerType) {
-        return templateMapper.selectEnabledByBusinessAndCustomer(businessCode, customerType, 2);
+        return templateRepository.selectEnabledTemplates(businessCode, customerType);
     }
 
     /**
      * 插入开户模板
      */
     public void insertTemplate(AccountTemplatePO template) {
-        templateMapper.insert(template);
+        templateRepository.insert(template);
     }
 
     /**
      * 更新开户模板
      */
     public boolean updateTemplateById(AccountTemplatePO template) {
-        return templateMapper.updateById(template) > 0;
+        return templateRepository.updateById(template);
     }
 
     /**
@@ -215,7 +215,7 @@ public class SubjectRepository {
      * 统计关联该科目的开户模板数（停用科目校验用）
      */
     public long countTemplateBySubjectCode(String subjectCode) {
-        return templateMapper.countBySubjectCode(subjectCode);
+        return templateRepository.countBySubjectCode(subjectCode);
     }
 
     /**
@@ -229,8 +229,7 @@ public class SubjectRepository {
      * 按ID查询开户模板
      */
     public AccountTemplatePO selectTemplateById(Long id) {
-        return templateMapper.selectOne(new LambdaQueryWrapper<AccountTemplatePO>()
-                .eq(AccountTemplatePO::getId, id));
+        return templateRepository.selectById(id);
     }
 
     /**
@@ -238,7 +237,7 @@ public class SubjectRepository {
      */
     public Page<AccountTemplatePO> pageTemplate(Page<AccountTemplatePO> pageParam,
                                                  LambdaQueryWrapper<AccountTemplatePO> wrapper) {
-        return templateMapper.selectPage(pageParam, wrapper);
+        return templateRepository.page(pageParam, wrapper);
     }
 
     /**

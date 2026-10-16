@@ -7,6 +7,9 @@ import com.kltb.accounting.core.infrastructure.persistence.entity.AccountSubject
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountTemplatePO;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountMapper;
 import com.kltb.accounting.core.infrastructure.persistence.repository.SubjectRepository;
+import com.kltb.accounting.api.request.TemplateGroupSaveRequest;
+import com.kltb.accounting.api.request.TemplateItemRequest;
+import com.kltb.accounting.core.infrastructure.persistence.repository.AccountTemplateRepository;
 import com.kltb.accounting.core.shared.exception.ServiceException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -16,6 +19,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -23,10 +29,13 @@ import static org.mockito.Mockito.*;
 /**
  * TemplateApplicationService 单元测试
  *
- * 测试覆盖：科目联动校验、唯一键校验、停用联动校验
+ * 测试覆盖：科目联动校验、唯一键校验、停用联动校验、组保存及明细差集删除
  */
 @ExtendWith(MockitoExtension.class)
 class TemplateApplicationServiceTest {
+
+    @Mock
+    private AccountTemplateRepository templateRepository;
 
     @Mock
     private SubjectRepository subjectRepository;
@@ -135,7 +144,7 @@ class TemplateApplicationServiceTest {
         AccountTemplatePO template = new AccountTemplatePO()
                 .setSubjectCode("101001")
                 .setCustomerType(CustomerTypeEnum.PERSONAL);
-        when(subjectRepository.selectTemplateById(1L)).thenReturn(template);
+        when(templateRepository.selectById(1L)).thenReturn(template);
         when(accountMapper.countBySubjectCodeAndOwnerType("101001", 1)).thenReturn(5L);
         doAnswer(invocation -> {
             ((org.springframework.transaction.support.TransactionCallback<?>) invocation.getArgument(0)).doInTransaction(null);
@@ -145,5 +154,114 @@ class TemplateApplicationServiceTest {
         assertThatThrownBy(() -> templateApplicationService.disable(1L))
                 .isInstanceOf(ServiceException.class)
                 .hasMessageContaining("已关联账户");
+    }
+
+    @Test
+    @DisplayName("批量保存模板: 被移除的明细项无关联账户时应执行逻辑删除")
+    void saveGroup_deletedItems_noActiveAccounts_shouldDeleteOrphans() {
+        AccountSubjectPO subject1 = new AccountSubjectPO()
+                .setSubjectCode("101001")
+                .setLeaf(true)
+                .setAllowOpenAccount(true);
+        when(subjectRepository.selectByCode("101001")).thenReturn(subject1);
+
+        AccountTemplatePO item1 = new AccountTemplatePO()
+                .setTemplateName("通用模板")
+                .setBusinessCode("PAYMENT")
+                .setCustomerType(CustomerTypeEnum.PERSONAL)
+                .setSubjectCode("101001");
+        item1.setId(10L);
+        AccountTemplatePO item2 = new AccountTemplatePO()
+                .setTemplateName("通用模板")
+                .setBusinessCode("PAYMENT")
+                .setCustomerType(CustomerTypeEnum.PERSONAL)
+                .setSubjectCode("101002");
+        item2.setId(20L);
+
+        when(templateRepository.selectById(10L)).thenReturn(item1);
+        when(templateRepository.selectByGroup("PAYMENT", 1, "通用模板"))
+                .thenReturn(new ArrayList<>(List.of(item1, item2)));
+        when(accountMapper.countBySubjectCodeAndOwnerType("101002", 1)).thenReturn(0L);
+
+        doAnswer(invocation -> {
+            ((org.springframework.transaction.support.TransactionCallback<?>) invocation.getArgument(0)).doInTransaction(null);
+            return null;
+        }).when(transactionTemplate).execute(any());
+
+        TemplateGroupSaveRequest request = new TemplateGroupSaveRequest()
+                .setTemplateName("通用模板")
+                .setBusinessCode("PAYMENT")
+                .setCustomerType(1)
+                .setAutoOpen(true)
+                .setStatus(1)
+                .setItems(List.of(
+                        new TemplateItemRequest()
+                                .setId(10L)
+                                .setSubjectCode("101001")
+                                .setAccountType("CASH")
+                                .setCurrency("CNY")
+                                .setBalanceDirection(1)
+                ));
+
+        templateApplicationService.saveGroup(request);
+
+        // 验证 item2 (20L) 被逻辑删除
+        verify(templateRepository).logicDeleteById(20L);
+        // 验证 item1 被更新
+        verify(templateRepository).updateById(item1);
+    }
+
+    @Test
+    @DisplayName("批量保存模板: 被移除的明细项存在关联账户时报 OPERATION_NOT_ALLOWED")
+    void saveGroup_deletedItems_hasActiveAccounts_shouldThrow() {
+        AccountSubjectPO subject1 = new AccountSubjectPO()
+                .setSubjectCode("101001")
+                .setLeaf(true)
+                .setAllowOpenAccount(true);
+        when(subjectRepository.selectByCode("101001")).thenReturn(subject1);
+
+        AccountTemplatePO item1 = new AccountTemplatePO()
+                .setTemplateName("通用模板")
+                .setBusinessCode("PAYMENT")
+                .setCustomerType(CustomerTypeEnum.PERSONAL)
+                .setSubjectCode("101001");
+        item1.setId(10L);
+        AccountTemplatePO item2 = new AccountTemplatePO()
+                .setTemplateName("通用模板")
+                .setBusinessCode("PAYMENT")
+                .setCustomerType(CustomerTypeEnum.PERSONAL)
+                .setSubjectCode("101002");
+        item2.setId(20L);
+
+        when(templateRepository.selectById(10L)).thenReturn(item1);
+        when(templateRepository.selectByGroup("PAYMENT", 1, "通用模板"))
+                .thenReturn(new ArrayList<>(List.of(item1, item2)));
+        when(accountMapper.countBySubjectCodeAndOwnerType("101002", 1)).thenReturn(3L);
+
+        doAnswer(invocation -> {
+            ((org.springframework.transaction.support.TransactionCallback<?>) invocation.getArgument(0)).doInTransaction(null);
+            return null;
+        }).when(transactionTemplate).execute(any());
+
+        TemplateGroupSaveRequest request = new TemplateGroupSaveRequest()
+                .setTemplateName("通用模板")
+                .setBusinessCode("PAYMENT")
+                .setCustomerType(1)
+                .setAutoOpen(true)
+                .setStatus(1)
+                .setItems(List.of(
+                        new TemplateItemRequest()
+                                .setId(10L)
+                                .setSubjectCode("101001")
+                                .setAccountType("CASH")
+                                .setCurrency("CNY")
+                                .setBalanceDirection(1)
+                ));
+
+        assertThatThrownBy(() -> templateApplicationService.saveGroup(request))
+                .isInstanceOf(ServiceException.class)
+                .hasMessageContaining("已有关联账户");
+
+        verify(templateRepository, never()).logicDeleteById(any());
     }
 }
