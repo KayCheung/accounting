@@ -140,6 +140,45 @@ class AuxiliaryDomainServiceTest {
         assertThat(result.get(0).getAuxName()).isEqualTo("研发中心");
     }
 
+    @Test
+    @DisplayName("calculateAuxiliaryAllocation: 不分摊方式应将分录全额计入该辅助核算项")
+    void calculateAuxiliaryAllocation_noneMethod_shouldAllocateFullEntryAmount() {
+        VoucherEntryData entry = buildEntryData("ENT001", "1001", new BigDecimal("1000.00"));
+        AccountingRuleAuxiliaryPO aux = buildAuxConfig("DEPARTMENT", "DEPT001", AllocationMethodEnum.NONE, BigDecimal.ZERO);
+
+        List<AuxiliaryItemData> result = auxiliaryDomainService.calculateAuxiliaryAllocation(entry, List.of(aux));
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getAuxCode()).isEqualTo("DEPT001");
+        assertThat(result.get(0).getAmount()).isEqualByComparingTo("1000.00");
+    }
+
+    @Test
+    @DisplayName("calculateAuxiliaryAllocation: 多维度独立不分摊应各自生成全额辅助核算项")
+    void calculateAuxiliaryAllocation_multiDimensionsNoneMethod_shouldAllocateFullForEachDimension() {
+        VoucherEntryData entry = buildEntryData("ENT001", "1001", new BigDecimal("500.00"));
+        AccountingRuleAuxiliaryPO deptAux = buildAuxConfig("DEPARTMENT", "DEPT001", AllocationMethodEnum.NONE, null);
+        AccountingRuleAuxiliaryPO prjAux = buildAuxConfig("PROJECT", "PRJ001", AllocationMethodEnum.NONE, null);
+
+        List<AuxiliaryItemData> result = auxiliaryDomainService.calculateAuxiliaryAllocation(entry, List.of(deptAux, prjAux));
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).getAuxType()).isEqualTo("DEPARTMENT");
+        assertThat(result.get(0).getAmount()).isEqualByComparingTo("500.00");
+        assertThat(result.get(1).getAuxType()).isEqualTo("PROJECT");
+        assertThat(result.get(1).getAmount()).isEqualByComparingTo("500.00");
+    }
+
+    @Test
+    @DisplayName("calculateAuxiliaryAllocation: 同一维度内分摊金额与分录金额不匹配时应抛出异常")
+    void calculateAuxiliaryAllocation_sameDimensionConflict_shouldThrowException() {
+        VoucherEntryData entry = buildEntryData("ENT001", "1001", new BigDecimal("500.00"));
+        AccountingRuleAuxiliaryPO aux1 = buildAuxConfig("DEPARTMENT", "DEPT001", AllocationMethodEnum.NONE, null);
+        AccountingRuleAuxiliaryPO aux2 = buildAuxConfig("DEPARTMENT", "DEPT002", AllocationMethodEnum.FIXED_AMOUNT, new BigDecimal("100.00"));
+
+        assertThatThrownBy(() -> auxiliaryDomainService.calculateAuxiliaryAllocation(entry, List.of(aux1, aux2)))
+                .isInstanceOf(AccountException.class)
+                .hasMessageContaining("辅助核算分摊金额合计不等于分录金额");
+    }
+
     private VoucherEntryData buildEntryData(String entryId, String subjectCode, BigDecimal amount) {
         return new VoucherEntryData(
                 entryId, "VOU001", 1, subjectCode, "ACC001", 1, amount, "CNY", "测试分录", LocalDate.now(), false, false);

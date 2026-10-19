@@ -24,6 +24,7 @@ import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -72,103 +73,132 @@ public class AuxiliaryDomainService {
             return Collections.emptyList();
         }
 
+        BigDecimal entryAmount = (entryData != null && entryData.getAmount() != null)
+                ? entryData.getAmount()
+                : BigDecimal.ZERO;
+
         // 构建 SpEL 统一上下文
         JournalSpelContext spelContext = JournalSpelContext.of(
-                entryData != null ? entryData.getAmount() : BigDecimal.ZERO,
+                entryAmount,
                 businessDetail,
                 journal
         );
 
         List<AuxiliaryItemData> result = new ArrayList<>();
 
-        // 按分摊方式分组
-        List<AccountingRuleAuxiliaryPO> fixed = auxiliaryConfigs.stream()
-                .filter(c -> c.getAllocationMethod() != null && c.getAllocationMethod() == AllocationMethodEnum.FIXED_AMOUNT)
-                .collect(Collectors.toList());
+        // 按辅助核算维度（auxType）分组独立计算与校验
+        Map<String, List<AccountingRuleAuxiliaryPO>> auxTypeGroups = auxiliaryConfigs.stream()
+                .collect(Collectors.groupingBy(
+                        c -> StrUtil.isNotBlank(c.getAuxType()) ? c.getAuxType() : "",
+                        java.util.LinkedHashMap::new,
+                        Collectors.toList()
+                ));
 
-        List<AccountingRuleAuxiliaryPO> spelConfigs = auxiliaryConfigs.stream()
-                .filter(c -> c.getAllocationMethod() != null && c.getAllocationMethod() == AllocationMethodEnum.SPEL_SCRIPT)
-                .collect(Collectors.toList());
+        for (Map.Entry<String, List<AccountingRuleAuxiliaryPO>> groupEntry : auxTypeGroups.entrySet()) {
+            String auxType = groupEntry.getKey();
+            List<AccountingRuleAuxiliaryPO> configs = groupEntry.getValue();
+            List<AuxiliaryItemData> groupResult = new ArrayList<>();
 
-        List<AccountingRuleAuxiliaryPO> proportional = auxiliaryConfigs.stream()
-                .filter(c -> c.getAllocationMethod() != null && c.getAllocationMethod() == AllocationMethodEnum.PERCENTAGE)
-                .collect(Collectors.toList());
+            // 1. 不分摊项（NONE 或未配置分摊方式）：分录金额全额记录到该辅助核算项
+            List<AccountingRuleAuxiliaryPO> noneConfigs = configs.stream()
+                    .filter(c -> c.getAllocationMethod() == null || c.getAllocationMethod() == AllocationMethodEnum.NONE)
+                    .collect(Collectors.toList());
 
-        // 1. 固定金额分摊
-        BigDecimal fixedTotal = BigDecimal.ZERO;
-        for (AccountingRuleAuxiliaryPO config : fixed) {
-            BigDecimal auxAmount = config.getAllocationValue();
-            if (auxAmount == null || auxAmount.compareTo(BigDecimal.ZERO) <= 0) {
-                continue;
+            for (AccountingRuleAuxiliaryPO config : noneConfigs) {
+                groupResult.add(buildAuxiliaryItem(entryData, config, entryAmount, spelContext));
             }
-            if (auxAmount.compareTo(entryData.getAmount()) > 0) {
-                throw new AccountException(ResultCode.AUXILIARY_AMOUNT_MISMATCH,
-                        "辅助核算固定金额超过分录金额: auxCode=" + config.getAuxCode()
-                                + ", auxAmount=" + auxAmount + ", entryAmount=" + entryData.getAmount());
-            }
-            fixedTotal = fixedTotal.add(auxAmount);
-            result.add(buildAuxiliaryItem(entryData, config, auxAmount, spelContext));
-        }
 
-        // 2. SpEL 脚本动态金额分摊
-        BigDecimal spelTotal = BigDecimal.ZERO;
-        for (AccountingRuleAuxiliaryPO config : spelConfigs) {
-            BigDecimal auxAmount = BigDecimal.ZERO;
-            if (StrUtil.isNotBlank(config.getExtendScript()) && ruleScriptExecutor != null) {
-                auxAmount = ruleScriptExecutor.execute(config.getExtendScript(), spelContext);
-            }
-            if (auxAmount == null || auxAmount.compareTo(BigDecimal.ZERO) <= 0) {
-                continue;
-            }
-            if (auxAmount.compareTo(entryData.getAmount()) > 0) {
-                throw new AccountException(ResultCode.AUXILIARY_AMOUNT_MISMATCH,
-                        "辅助核算SpEL计算金额超过分录金额: auxCode=" + config.getAuxCode()
-                                + ", auxAmount=" + auxAmount + ", entryAmount=" + entryData.getAmount());
-            }
-            spelTotal = spelTotal.add(auxAmount);
-            result.add(buildAuxiliaryItem(entryData, config, auxAmount, spelContext));
-        }
+            // 2. 固定金额分摊
+            List<AccountingRuleAuxiliaryPO> fixed = configs.stream()
+                    .filter(c -> c.getAllocationMethod() != null && c.getAllocationMethod() == AllocationMethodEnum.FIXED_AMOUNT)
+                    .collect(Collectors.toList());
 
-        // 3. 按比例分摊（在扣除固定金额和 SpEL 金额后的剩余金额上按比例分摊，前 N-1 按比例，最后一条补差）
-        if (!proportional.isEmpty()) {
-            BigDecimal remaining = entryData.getAmount().subtract(fixedTotal).subtract(spelTotal);
-            if (remaining.compareTo(BigDecimal.ZERO) < 0) {
-                throw new AccountException(ResultCode.AUXILIARY_AMOUNT_MISMATCH,
-                        "辅助核算固定与SpEL分摊合计超过分录金额: entryAmount=" + entryData.getAmount()
-                                + ", fixedTotal=" + fixedTotal + ", spelTotal=" + spelTotal);
-            }
-            BigDecimal allocated = BigDecimal.ZERO;
-
-            for (int i = 0; i < proportional.size(); i++) {
-                AccountingRuleAuxiliaryPO config = proportional.get(i);
-                BigDecimal auxAmount;
-
-                if (i < proportional.size() - 1) {
-                    // allocation_value 为百分比，如 30 表示 30%
-                    BigDecimal ratio = config.getAllocationValue().divide(
-                            new BigDecimal("100"), 6, RoundingMode.HALF_UP);
-                    auxAmount = remaining.multiply(ratio).setScale(6, RoundingMode.HALF_UP);
-                    allocated = allocated.add(auxAmount);
-                } else {
-                    // 最后一条补差
-                    auxAmount = remaining.subtract(allocated);
+            BigDecimal fixedTotal = BigDecimal.ZERO;
+            for (AccountingRuleAuxiliaryPO config : fixed) {
+                BigDecimal auxAmount = config.getAllocationValue();
+                if (auxAmount == null || auxAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                    continue;
                 }
-
-                result.add(buildAuxiliaryItem(entryData, config, auxAmount, spelContext));
+                if (auxAmount.compareTo(entryAmount) > 0) {
+                    throw new AccountException(ResultCode.AUXILIARY_AMOUNT_MISMATCH,
+                            "辅助核算固定金额超过分录金额: auxCode=" + config.getAuxCode()
+                                    + ", auxAmount=" + auxAmount + ", entryAmount=" + entryAmount);
+                }
+                fixedTotal = fixedTotal.add(auxAmount);
+                groupResult.add(buildAuxiliaryItem(entryData, config, auxAmount, spelContext));
             }
-        }
 
-        // 最终校验：有分摊项时，合计必须等于分录金额
-        if (!result.isEmpty()) {
-            BigDecimal auxTotal = result.stream()
-                    .map(AuxiliaryItemData::getAmount)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            // 3. SpEL 脚本动态金额分摊
+            List<AccountingRuleAuxiliaryPO> spelConfigs = configs.stream()
+                    .filter(c -> c.getAllocationMethod() != null && c.getAllocationMethod() == AllocationMethodEnum.SPEL_SCRIPT)
+                    .collect(Collectors.toList());
 
-            if (auxTotal.compareTo(entryData.getAmount()) != 0) {
-                throw new AccountException(ResultCode.AUXILIARY_AMOUNT_MISMATCH,
-                        "辅助核算分摊金额合计不等于分录金额: auxTotal=" + auxTotal
-                                + ", entryAmount=" + entryData.getAmount());
+            BigDecimal spelTotal = BigDecimal.ZERO;
+            for (AccountingRuleAuxiliaryPO config : spelConfigs) {
+                BigDecimal auxAmount = BigDecimal.ZERO;
+                if (StrUtil.isNotBlank(config.getExtendScript()) && ruleScriptExecutor != null) {
+                    auxAmount = ruleScriptExecutor.execute(config.getExtendScript(), spelContext);
+                }
+                if (auxAmount == null || auxAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                    continue;
+                }
+                if (auxAmount.compareTo(entryAmount) > 0) {
+                    throw new AccountException(ResultCode.AUXILIARY_AMOUNT_MISMATCH,
+                            "辅助核算SpEL计算金额超过分录金额: auxCode=" + config.getAuxCode()
+                                    + ", auxAmount=" + auxAmount + ", entryAmount=" + entryAmount);
+                }
+                spelTotal = spelTotal.add(auxAmount);
+                groupResult.add(buildAuxiliaryItem(entryData, config, auxAmount, spelContext));
             }
+
+            // 4. 按比例分摊（在扣除固定金额和 SpEL 金额后的剩余金额上按比例分摊，前 N-1 按比例，最后一条补差）
+            List<AccountingRuleAuxiliaryPO> proportional = configs.stream()
+                    .filter(c -> c.getAllocationMethod() != null && c.getAllocationMethod() == AllocationMethodEnum.PERCENTAGE)
+                    .collect(Collectors.toList());
+
+            if (!proportional.isEmpty()) {
+                BigDecimal remaining = entryAmount.subtract(fixedTotal).subtract(spelTotal);
+                if (remaining.compareTo(BigDecimal.ZERO) < 0) {
+                    throw new AccountException(ResultCode.AUXILIARY_AMOUNT_MISMATCH,
+                            "辅助核算固定与SpEL分摊合计超过分录金额: entryAmount=" + entryAmount
+                                    + ", fixedTotal=" + fixedTotal + ", spelTotal=" + spelTotal);
+                }
+                BigDecimal allocated = BigDecimal.ZERO;
+
+                for (int i = 0; i < proportional.size(); i++) {
+                    AccountingRuleAuxiliaryPO config = proportional.get(i);
+                    BigDecimal auxAmount;
+
+                    if (i < proportional.size() - 1) {
+                        // allocation_value 为百分比，如 30 表示 30%
+                        BigDecimal ratio = config.getAllocationValue().divide(
+                                new BigDecimal("100"), 6, RoundingMode.HALF_UP);
+                        auxAmount = remaining.multiply(ratio).setScale(6, RoundingMode.HALF_UP);
+                        allocated = allocated.add(auxAmount);
+                    } else {
+                        // 最后一条补差
+                        auxAmount = remaining.subtract(allocated);
+                    }
+
+                    groupResult.add(buildAuxiliaryItem(entryData, config, auxAmount, spelContext));
+                }
+            }
+
+            // 该维度核算项合计校验：有辅助核算项时，该维度合计必须等于分录金额
+            if (!groupResult.isEmpty()) {
+                BigDecimal groupTotal = groupResult.stream()
+                        .map(AuxiliaryItemData::getAmount)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                if (groupTotal.compareTo(entryAmount) != 0) {
+                    throw new AccountException(ResultCode.AUXILIARY_AMOUNT_MISMATCH,
+                            "辅助核算分摊金额合计不等于分录金额: auxType=" + auxType
+                                    + ", auxTotal=" + groupTotal
+                                    + ", entryAmount=" + entryAmount);
+                }
+            }
+
+            result.addAll(groupResult);
         }
 
         return result;
