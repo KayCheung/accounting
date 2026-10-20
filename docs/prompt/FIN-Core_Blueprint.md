@@ -1179,6 +1179,25 @@
          4. **全链路验证**：
             - 前端 `vue-tsc && vite build` 0 错误编译打包通过；
             - 后端所有账户、开户模板、编号生成器单元测试（30 个）100% 通过。
+       - **系统概览（Dashboard）多角色待办工作台重构与顶栏会计日期权威动态驱动（REQ261020-001）**：
+         1. **顶栏会计日期权威缓存下发修复**：
+            - 拔除 `stores/app.ts` 中写死的 `'2026-06-25'`，请求 `/eod/status` 时不携带静态日期参数，权威依赖后端 `AccountingDateCache` 动态下发当前会计日；
+            - `Header.vue` 实时展示真实系统会计日与日切营业状态（正常营业/日切中），并在切日或手动刷新后响应式同步；
+         2. **轻量级 RBAC 权限与角色运行态切换机制（stores/user.ts & Header.vue）**：
+            - 定义账务核心 6 大业务角色：`ADMIN`（账务主管）、`MAKER`（会计经办）、`AUDITOR`（审核员）、`REVIEWER`（复核员）、`BOOKKEEPER`（记账员）、`OPERATOR`（对账运维）；
+            - 顶栏右上角支持一键切换当前操作岗位，实时更新操作员上下文并自动在请求头注入 `X-Operator-Role` 与 `X-Operator-Name`；
+         3. **系统概览（views/dashboard/index.vue）基于权限全面重构**：
+            - 彻底剔除电商化假数据（`今日记账总额 +12.5%`）与前端 `setTimeout` 假切日/假试算按钮；
+            - **核算生命周期与健康度**（`ADMIN / OPERATOR` 可见）：当前会计日（T日）、营业状态 Tag、借贷试算平衡指示灯（🟢 严格平衡 0.00 / 🔴 不平衡差额预警）及缓冲入账队列堆积；
+            - **我的待办与工单中心**（按当前角色精准推送）：经办岗草稿/被驳回、初审岗待初审、复核岗待复核、记账岗待正式入账，点击一键直达处理；
+            - **异常与风控治理中心**（`ADMIN / OPERATOR` 可见）：过账失败凭证、掉单挂起流水、缓冲入账存量、资金冻结工单；
+            - **业务规模大盘**：今日凭证总数、已过账凭证数、今日流水数及有效分户总数；
+            - **常用业务向导**：根据当前用户菜单权限动态渲染高频业务卡片；
+         4. **后端系统概览聚合接口（DashboardController & DashboardApplicationService）**：
+            - 契约层：新增 `DashboardOverviewResponse` 强类型 DTO；
+            - 业务层：新增 `DashboardApplicationService.getDashboardOverview` 与 `DashboardController`（`GET /accounting/dashboard/overview`），多级聚合会计日、试算平衡、待办笔数及异常治理指标；
+            - 单测保障：新增 `DashboardApplicationServiceTest`，测试用例 100% 通过；
+         5. **构建验证**：前端 `vue-tsc && vite build` 生产打包 0 错误通过，后端全模块编译单测通过。
 
 
 

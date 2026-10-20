@@ -16,6 +16,7 @@ import com.kltb.accounting.core.infrastructure.persistence.repository.AccountRep
 import com.kltb.accounting.core.infrastructure.persistence.repository.SubjectRepository;
 import com.kltb.accounting.core.shared.context.TenantContext;
 import com.kltb.accounting.core.shared.exception.AccountException;
+import com.kltb.accounting.core.shared.util.FinancialAmountUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -98,8 +99,8 @@ public class EodDomainService {
             String subjectCode = account.getSubjectCode();
 
             Map<String, Object> entryRow = entryMap.get(accountNo);
-            BigDecimal debitAmount = entryRow != null ? toBigDecimal(entryRow.get("total_debit")) : BigDecimal.ZERO;
-            BigDecimal creditAmount = entryRow != null ? toBigDecimal(entryRow.get("total_credit")) : BigDecimal.ZERO;
+            BigDecimal debitAmount = entryRow != null ? FinancialAmountUtil.toBigDecimal(entryRow.get("total_debit")) : BigDecimal.ZERO;
+            BigDecimal creditAmount = entryRow != null ? FinancialAmountUtil.toBigDecimal(entryRow.get("total_credit")) : BigDecimal.ZERO;
 
             AccountBalancePO balance = new AccountBalancePO();
             balance.setAccountingDate(accountingDate);
@@ -225,8 +226,8 @@ public class EodDomainService {
             }
 
             String subjectCode = (String) row.get("subject_code");
-            BigDecimal debitAmount = toBigDecimal(row.get("total_debit"));
-            BigDecimal creditAmount = toBigDecimal(row.get("total_credit"));
+            BigDecimal debitAmount = FinancialAmountUtil.toBigDecimal(row.get("total_debit"));
+            BigDecimal creditAmount = FinancialAmountUtil.toBigDecimal(row.get("total_credit"));
 
             AccountBalancePO balance = new AccountBalancePO();
             balance.setAccountingDate(accountingDate);
@@ -413,21 +414,5 @@ public class EodDomainService {
      */
     private boolean isMonthEnd(LocalDate date) {
         return date.getDayOfMonth() == date.lengthOfMonth();
-    }
-
-    /**
-     * 安全地将对象转换为 BigDecimal
-     */
-    private BigDecimal toBigDecimal(Object value) {
-        if (value == null) {
-            return BigDecimal.ZERO;
-        }
-        if (value instanceof BigDecimal) {
-            return (BigDecimal) value;
-        }
-        if (value instanceof Number) {
-            return new BigDecimal(value.toString());
-        }
-        return BigDecimal.ZERO;
     }
 }

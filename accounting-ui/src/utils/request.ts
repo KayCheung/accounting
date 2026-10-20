@@ -19,6 +19,8 @@ service.interceptors.request.use(
     // 注入租户与跟踪标识
     config.headers['X-Tenant-Id'] = localStorage.getItem('tenantId') || '10001'
     config.headers['X-Trace-No'] = 'UI_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)
+    config.headers['X-Operator-Role'] = localStorage.getItem('fin_user_role') || 'ADMIN'
+    config.headers['X-Operator-Name'] = encodeURIComponent(localStorage.getItem('operatorName') || '张主管')
 
     const token = localStorage.getItem('token')
     if (token) {

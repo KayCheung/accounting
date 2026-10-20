@@ -20,7 +20,7 @@ public final class FinancialAmountUtil {
      * @return 中文大写字符串
      */
     public static String toChineseWords(BigDecimal amount) {
-        if (amount == null) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) == 0) {
             return "零元整";
         }
         try {
@@ -28,5 +28,56 @@ public final class FinancialAmountUtil {
         } catch (Exception e) {
             return amount.toPlainString() + " 元整";
         }
+    }
+
+    /**
+     * 安全地将对象转换为 BigDecimal，若为 null 或解析失败则返回 BigDecimal.ZERO
+     *
+     * @param value 待转换对象（支持 BigDecimal、Number、数字字符串等）
+     * @return BigDecimal 结果
+     */
+    public static BigDecimal toBigDecimal(Object value) {
+        return toBigDecimal(value, BigDecimal.ZERO);
+    }
+
+    /**
+     * 安全地将对象转换为 BigDecimal，若为 null 或解析失败则返回指定的默认值
+     *
+     * @param value        待转换对象（支持 BigDecimal、Number、数字字符串等）
+     * @param defaultValue 默认值
+     * @return BigDecimal 结果
+     */
+    public static BigDecimal toBigDecimal(Object value, BigDecimal defaultValue) {
+        if (value == null) {
+            return defaultValue;
+        }
+        if (value instanceof BigDecimal) {
+            return (BigDecimal) value;
+        }
+        if (value instanceof Number) {
+            return new BigDecimal(value.toString());
+        }
+        if (value instanceof CharSequence) {
+            String str = value.toString().trim();
+            if (str.isEmpty()) {
+                return defaultValue;
+            }
+            try {
+                return new BigDecimal(str);
+            } catch (Exception e) {
+                return defaultValue;
+            }
+        }
+        return defaultValue;
+    }
+
+    /**
+     * 安全地将对象转换为 BigDecimal，若为 null 或解析失败则返回 null
+     *
+     * @param value 待转换对象
+     * @return BigDecimal 结果，无法解析时返回 null
+     */
+    public static BigDecimal toBigDecimalOrNull(Object value) {
+        return toBigDecimal(value, null);
     }
 }

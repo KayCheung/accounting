@@ -5,9 +5,9 @@ import request from '@/utils/request'
 export const useAppStore = defineStore('app', () => {
   // 侧边栏折叠状态
   const isCollapse = ref(false)
-  // 当前会计日期（从日切状态或后端接口获取）
-  const accountingDate = ref('2026-06-25')
-  // 日切状态
+  // 当前会计日期（由后端 AccountingDateCache 权威提供）
+  const accountingDate = ref('')
+  // 日切营业状态
   const eodStatus = ref('NORMAL')
 
   function toggleSidebar() {
@@ -16,11 +16,11 @@ export const useAppStore = defineStore('app', () => {
 
   /**
    * 刷新系统与会计日期状态
+   * 默认不传 accountingDate，由后端 AccountingDateCache 权威兜底返回全局当前会计日
    */
-  async function fetchSystemStatus() {
+  async function fetchSystemStatus(targetDate?: string) {
     try {
-      // 允许选传 accountingDate，后端未传时自动兜底当前会计日
-      const params = accountingDate.value ? { accountingDate: accountingDate.value } : undefined
+      const params = targetDate ? { accountingDate: targetDate } : undefined
       const res = await request.get('/eod/status', params)
       if (res && res.accountingDate) {
         accountingDate.value = res.accountingDate
@@ -30,7 +30,10 @@ export const useAppStore = defineStore('app', () => {
         eodStatus.value = res.status === 1 || res.status === 8 ? 'NORMAL' : (res.statusDesc || '日切中')
       }
     } catch {
-      // 本地未联通时静默降级
+      // 本地未联通时静默降级，避免阻断页面
+      if (!accountingDate.value) {
+        accountingDate.value = new Date().toISOString().slice(0, 10)
+      }
     }
   }
 

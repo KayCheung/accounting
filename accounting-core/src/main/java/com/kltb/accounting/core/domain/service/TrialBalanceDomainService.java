@@ -10,6 +10,7 @@ import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountingVouc
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountBalanceRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.SubjectRepository;
 import com.kltb.accounting.core.shared.exception.AccountException;
+import com.kltb.accounting.core.shared.util.FinancialAmountUtil;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,8 +47,8 @@ public class TrialBalanceDomainService {
 
         for (Map<String, Object> row : subjectSummaries) {
             String subjectCode = (String) row.get("subject_code");
-            BigDecimal totalDebit = toBigDecimal(row.get("total_debit"));
-            BigDecimal totalCredit = toBigDecimal(row.get("total_credit"));
+            BigDecimal totalDebit = FinancialAmountUtil.toBigDecimal(row.get("total_debit"));
+            BigDecimal totalCredit = FinancialAmountUtil.toBigDecimal(row.get("total_credit"));
 
             totalDebitAll = totalDebitAll.add(totalDebit);
             totalCreditAll = totalCreditAll.add(totalCredit);
@@ -112,7 +113,7 @@ public class TrialBalanceDomainService {
         Map<String, BigDecimal> glBalanceBySubject = new HashMap<>();
         for (Map<String, Object> row : glSums) {
             String subjectCode = (String) row.get("subject_code");
-            glBalanceBySubject.put(subjectCode, toBigDecimal(row.get("total_balance")));
+            glBalanceBySubject.put(subjectCode, FinancialAmountUtil.toBigDecimal(row.get("total_balance")));
         }
 
         // 分户侧：账户余额按科目汇总（t_account）
@@ -120,7 +121,7 @@ public class TrialBalanceDomainService {
         Map<String, BigDecimal> accountBalanceBySubject = new HashMap<>();
         for (Map<String, Object> row : accountSums) {
             String subjectCode = (String) row.get("subject_code");
-            accountBalanceBySubject.put(subjectCode, toBigDecimal(row.get("total_balance")));
+            accountBalanceBySubject.put(subjectCode, FinancialAmountUtil.toBigDecimal(row.get("total_balance")));
         }
 
         // 逐科目对比
@@ -197,7 +198,7 @@ public class TrialBalanceDomainService {
             List<Map<String, Object>> accountRows = accountMapper.selectBalancesByAccountNos(accountNos);
             for (Map<String, Object> row : accountRows) {
                 String acctNo = (String) row.get("account_no");
-                accountBalanceMap.put(acctNo, toBigDecimal(row.get("balance")));
+                accountBalanceMap.put(acctNo, FinancialAmountUtil.toBigDecimal(row.get("balance")));
             }
         }
 
@@ -250,13 +251,6 @@ public class TrialBalanceDomainService {
         }
 
         return new BalanceReconciliationResult(accountingDate, passed, totalDiff, diffDetails);
-    }
-
-    private BigDecimal toBigDecimal(Object value) {
-        if (value == null) return BigDecimal.ZERO;
-        if (value instanceof BigDecimal) return (BigDecimal) value;
-        if (value instanceof Number) return new BigDecimal(value.toString());
-        return BigDecimal.ZERO;
     }
 
     private String getSubjectName(String subjectCode) {
