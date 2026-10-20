@@ -14,60 +14,78 @@
         router
         class="fin-menu"
       >
-        <!-- 仪表盘 -->
+        <!-- 1. 工作台 -->
         <el-menu-item index="/dashboard">
           <el-icon><Odometer /></el-icon>
           <template #title>系统概览</template>
         </el-menu-item>
 
-        <!-- 公共组件规范展台 -->
-        <el-menu-item index="/component-demo">
-          <el-icon><Grid /></el-icon>
-          <template #title>公共组件规范</template>
-        </el-menu-item>
-
-        <!-- 配置管理 (Step 22) -->
-        <el-sub-menu index="/config">
+        <!-- 2. 账户管理 -->
+        <el-sub-menu index="/menu-account">
           <template #title>
-            <el-icon><Setting /></el-icon>
-            <span>配置管理</span>
+            <el-icon><Wallet /></el-icon>
+            <span>账户管理</span>
           </template>
-          <el-menu-item index="/config/dict">数据字典</el-menu-item>
-          <el-menu-item index="/config/subject">科目树管理</el-menu-item>
-          <el-menu-item index="/config/template">开户模板</el-menu-item>
-          <el-menu-item index="/config/rule">记账规则</el-menu-item>
-          <el-menu-item index="/config/buffer-rule">缓冲入账规则</el-menu-item>
-          <el-menu-item index="/config/transfer-rule">期末结转规则</el-menu-item>
-        </el-sub-menu>
-
-        <!-- 业务管理 (Step 23) -->
-        <el-sub-menu index="/business">
-          <template #title>
-            <el-icon><Tickets /></el-icon>
-            <span>账务业务</span>
-          </template>
-          <el-menu-item index="/business/account">账户开户与状态</el-menu-item>
-          <el-menu-item index="/business/balance">余额与明细查询</el-menu-item>
+          <el-menu-item index="/business/account">账户档案管理</el-menu-item>
+          <el-menu-item index="/business/balance">账户余额明细</el-menu-item>
           <el-menu-item index="/business/freeze">资金冻结与扣款</el-menu-item>
-          <el-menu-item index="/business/journal">流水与事务监控</el-menu-item>
-          <el-menu-item index="/business/voucher">记账凭证管理</el-menu-item>
-          <el-menu-item index="/business/manual-voucher">手工凭证录入与审核</el-menu-item>
-          <el-menu-item index="/business/eod">日切与试算平衡</el-menu-item>
-          <el-menu-item index="/business/transfer">期末结转管理</el-menu-item>
-          <el-menu-item index="/business/buffer-monitor">缓冲记账监控</el-menu-item>
         </el-sub-menu>
 
-        <!-- 报表中心 (财务核心四大报表) -->
-        <el-sub-menu index="/report">
+        <!-- 3. 凭证作业 -->
+        <el-sub-menu index="/menu-voucher">
+          <template #title>
+            <el-icon><DocumentChecked /></el-icon>
+            <span>凭证作业</span>
+          </template>
+          <el-menu-item index="/business/voucher">记账凭证管理</el-menu-item>
+          <el-menu-item index="/business/manual-voucher">手工凭证作业</el-menu-item>
+        </el-sub-menu>
+
+        <!-- 4. 期末与日终 -->
+        <el-sub-menu index="/menu-closing">
+          <template #title>
+            <el-icon><Timer /></el-icon>
+            <span>期末与日终</span>
+          </template>
+          <el-menu-item index="/business/eod">日切与试算平衡</el-menu-item>
+          <el-menu-item index="/business/transfer">期末损益结转</el-menu-item>
+        </el-sub-menu>
+
+        <!-- 5. 账簿与报表 -->
+        <el-sub-menu index="/menu-report">
           <template #title>
             <el-icon><DataAnalysis /></el-icon>
-            <span>报表中心</span>
+            <span>账簿与报表</span>
           </template>
-          <el-menu-item index="/report/balance-sheet">资产负债表</el-menu-item>
-          <el-menu-item index="/report/income-statement">利润表</el-menu-item>
-          <el-menu-item index="/report/general-ledger">科目总账</el-menu-item>
+          <el-menu-item index="/report/general-ledger">科目总分类账</el-menu-item>
           <el-menu-item index="/report/subsidiary-ledger">科目明细账</el-menu-item>
           <el-menu-item index="/report/auxiliary-ledger">辅助核算账簿</el-menu-item>
+          <el-menu-item index="/report/balance-sheet">资产负债表</el-menu-item>
+          <el-menu-item index="/report/income-statement">利润表</el-menu-item>
+        </el-sub-menu>
+
+        <!-- 6. 核心配置 -->
+        <el-sub-menu index="/menu-config">
+          <template #title>
+            <el-icon><Setting /></el-icon>
+            <span>核心配置</span>
+          </template>
+          <el-menu-item index="/config/subject">会计科目体系</el-menu-item>
+          <el-menu-item index="/config/template">账户配置模板</el-menu-item>
+          <el-menu-item index="/config/rule">业务记账规则</el-menu-item>
+          <el-menu-item index="/config/buffer-rule">缓冲入账规则</el-menu-item>
+          <el-menu-item index="/config/transfer-rule">期末结转规则</el-menu-item>
+          <el-menu-item index="/config/dict">基础数据字典</el-menu-item>
+        </el-sub-menu>
+
+        <!-- 7. 事务与监控 -->
+        <el-sub-menu index="/menu-monitor">
+          <template #title>
+            <el-icon><Monitor /></el-icon>
+            <span>事务与监控</span>
+          </template>
+          <el-menu-item index="/business/journal">记账流水与事务</el-menu-item>
+          <el-menu-item index="/business/buffer-monitor">缓冲记账监控</el-menu-item>
         </el-sub-menu>
       </el-menu>
     </el-scrollbar>
@@ -80,10 +98,12 @@ import { useRoute } from 'vue-router'
 import {
   Coin,
   Odometer,
-  Grid,
+  Wallet,
+  DocumentChecked,
+  Timer,
+  DataAnalysis,
   Setting,
-  Tickets,
-  DataAnalysis
+  Monitor
 } from '@element-plus/icons-vue'
 import { useAppStore } from '@/stores/app'
 
