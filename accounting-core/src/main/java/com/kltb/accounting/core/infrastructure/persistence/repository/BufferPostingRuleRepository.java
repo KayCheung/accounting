@@ -52,21 +52,27 @@ public class BufferPostingRuleRepository {
     }
 
     /**
-     * 查询同一业务组合下时间区间重叠的启用中规则
+     * 查询同一业务组合下时间区间与匹配维度重叠的启用中规则
      *
      * @param businessCode 业务线编码
      * @param tradingCode 交易编码
      * @param payChannel 支付渠道
+     * @param debitCredit 借贷方向（1-借，2-贷）
+     * @param subjectCode 会计科目编码
+     * @param accountNo 账户编号
      * @param effectiveTime 生效时间
      * @param expirationTime 失效时间
      * @param excludeId 排除自身ID（更新时使用）
      * @return 重叠的规则列表，无数据时返回空列表
      */
     public List<BufferPostingRulePO> selectOverlappingRules(String businessCode, String tradingCode,
-                                                              String payChannel, LocalDateTime effectiveTime,
+                                                              String payChannel, Integer debitCredit,
+                                                              String subjectCode, String accountNo,
+                                                              LocalDateTime effectiveTime,
                                                               LocalDateTime expirationTime, Long excludeId) {
         List<BufferPostingRulePO> result = bufferPostingRuleMapper.selectOverlappingRules(
-                businessCode, tradingCode, payChannel, effectiveTime, expirationTime, excludeId);
+                businessCode, tradingCode, payChannel, debitCredit, subjectCode, accountNo,
+                effectiveTime, expirationTime, excludeId);
         return result != null ? result : Collections.emptyList();
     }
 }

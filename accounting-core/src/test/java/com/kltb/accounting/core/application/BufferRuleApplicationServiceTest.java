@@ -29,7 +29,7 @@ import static org.mockito.Mockito.*;
 /**
  * BufferRuleApplicationService 单元测试
  *
- * 测试覆盖：科目/账户非空校验、时间合法性校验、时间区间重叠校验
+ * 测试覆盖：科目/账户非空校验、时间合法性校验、时间区间与分录匹配维度重叠校验
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -103,7 +103,7 @@ class BufferRuleApplicationServiceTest {
             return null;
         }).when(transactionTemplate).execute(any());
         when(bufferPostingRuleRepository.selectOverlappingRules(anyString(), anyString(), anyString(),
-                any(), any(), isNull())).thenReturn(List.of(existing));
+                any(), any(), any(), any(), any(), isNull())).thenReturn(List.of(existing));
 
         BufferRuleCreateRequest request = new BufferRuleCreateRequest()
                 .setRuleName("新规则")
@@ -129,12 +129,10 @@ class BufferRuleApplicationServiceTest {
             ((org.springframework.transaction.support.TransactionCallback<?>) invocation.getArgument(0)).doInTransaction(null);
             return null;
         }).when(transactionTemplate).execute(any());
-        // 已有规则: 2026-01-01 ~ 2026-06-30
-        // 新规则: 2026-06-30 ~ 2027-01-01 (刚好相接，不重叠)
-        // 重叠判断: existing.effectiveTime < new.expirationTime AND existing.expirationTime > new.effectiveTime
-        // 2026-01-01 < 2027-01-01 = true, 2026-06-30 > 2026-06-30 = false → 不重叠
+
         when(bufferPostingRuleRepository.selectOverlappingRules(
                 eq("PAYMENT"), eq("CASH_PAY"), eq("CASH"),
+                eq(1), eq("101001"), eq(""),
                 eq(LocalDateTime.of(2026, 6, 30, 0, 0)),
                 eq(LocalDateTime.of(2027, 1, 1, 0, 0)),
                 isNull())).thenReturn(List.of());
@@ -178,12 +176,15 @@ class BufferRuleApplicationServiceTest {
         po.setBusinessCode("PAYMENT");
         po.setTradingCode("CASH_PAY");
         po.setPayChannel("CASH");
+        po.setDebitCredit(DebitCreditEnum.DEBIT);
+        po.setSubjectCode("101001");
+        po.setAccountNo("");
         po.setStatus(RuleStatusEnum.DISABLED);
         po.setEffectiveTime(LocalDateTime.of(2026, 1, 1, 0, 0));
         po.setExpirationTime(LocalDateTime.of(2026, 12, 31, 23, 59));
 
         when(bufferPostingRuleRepository.selectById(101L)).thenReturn(po);
-        when(bufferPostingRuleRepository.selectOverlappingRules(any(), any(), any(), any(), any(), eq(101L)))
+        when(bufferPostingRuleRepository.selectOverlappingRules(any(), any(), any(), any(), any(), any(), any(), any(), eq(101L)))
                 .thenReturn(List.of());
         doAnswer(invocation -> {
             ((org.springframework.transaction.support.TransactionCallback<?>) invocation.getArgument(0)).doInTransaction(null);
@@ -196,7 +197,7 @@ class BufferRuleApplicationServiceTest {
     }
 
     @Test
-    @DisplayName("启用缓冲规则: 时间冲突报 OPERATION_NOT_ALLOWED")
+    @DisplayName("启用缓冲规则: 时间与匹配维度冲突报 OPERATION_NOT_ALLOWED")
     void enable_conflict_shouldThrow() {
         BufferPostingRulePO po = new BufferPostingRulePO();
         po.setId(102L);
@@ -204,6 +205,9 @@ class BufferRuleApplicationServiceTest {
         po.setBusinessCode("PAYMENT");
         po.setTradingCode("CASH_PAY");
         po.setPayChannel("CASH");
+        po.setDebitCredit(DebitCreditEnum.DEBIT);
+        po.setSubjectCode("101001");
+        po.setAccountNo("");
         po.setStatus(RuleStatusEnum.PENDING);
         po.setEffectiveTime(LocalDateTime.of(2026, 1, 1, 0, 0));
         po.setExpirationTime(LocalDateTime.of(2026, 12, 31, 23, 59));
@@ -213,7 +217,7 @@ class BufferRuleApplicationServiceTest {
         existing.setRuleName("已存在的生效规则");
 
         when(bufferPostingRuleRepository.selectById(102L)).thenReturn(po);
-        when(bufferPostingRuleRepository.selectOverlappingRules(any(), any(), any(), any(), any(), eq(102L)))
+        when(bufferPostingRuleRepository.selectOverlappingRules(any(), any(), any(), any(), any(), any(), any(), any(), eq(102L)))
                 .thenReturn(List.of(existing));
         doAnswer(invocation -> {
             ((org.springframework.transaction.support.TransactionCallback<?>) invocation.getArgument(0)).doInTransaction(null);
@@ -223,5 +227,38 @@ class BufferRuleApplicationServiceTest {
         assertThatThrownBy(() -> bufferRuleApplicationService.enable(102L))
                 .isInstanceOf(ServiceException.class)
                 .hasMessageContaining("存在时间区间重叠的缓冲规则");
+    }
+
+    @Test
+    @DisplayName("启用缓冲规则: 同业务场景下不同科目或借贷方向正常启用")
+    void enable_differentSubjectOrDebitCredit_shouldSucceed() {
+        BufferPostingRulePO po = new BufferPostingRulePO();
+        po.setId(201L);
+        po.setRuleName("贷款放款-借方贷款规则");
+        po.setBusinessCode("QD_LOAN");
+        po.setTradingCode("DISBURSE");
+        po.setPayChannel("BANK");
+        po.setDebitCredit(DebitCreditEnum.DEBIT);
+        po.setSubjectCode("110101");
+        po.setAccountNo("");
+        po.setStatus(RuleStatusEnum.PENDING);
+        po.setEffectiveTime(LocalDateTime.of(2026, 1, 1, 0, 0));
+        po.setExpirationTime(LocalDateTime.of(2026, 12, 31, 23, 59));
+
+        when(bufferPostingRuleRepository.selectById(201L)).thenReturn(po);
+        // 重叠校验传入了对应的 debitCredit(1), subjectCode("110101")，不与现有贷方规则冲突，返回空列表
+        when(bufferPostingRuleRepository.selectOverlappingRules(
+                eq("QD_LOAN"), eq("DISBURSE"), eq("BANK"),
+                eq(1), eq("110101"), eq(""),
+                any(), any(), eq(201L)))
+                .thenReturn(List.of());
+        doAnswer(invocation -> {
+            ((org.springframework.transaction.support.TransactionCallback<?>) invocation.getArgument(0)).doInTransaction(null);
+            return null;
+        }).when(transactionTemplate).execute(any());
+
+        bufferRuleApplicationService.enable(201L);
+
+        verify(bufferPostingRuleRepository).updateById(argThat(p -> RuleStatusEnum.ENABLED.equals(p.getStatus())));
     }
 }

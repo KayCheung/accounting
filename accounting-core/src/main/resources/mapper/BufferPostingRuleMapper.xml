@@ -11,11 +11,24 @@
         WHERE business_code = #{businessCode}
           AND trading_code = #{tradingCode}
           AND pay_channel = #{payChannel}
+          AND debit_credit = #{debitCredit}
           AND is_delete = 0
           AND status = 2
           AND effective_time &lt; #{expirationTime}
           AND expiration_time &gt; #{effectiveTime}
-          AND id != #{excludeId}
+          <if test="excludeId != null">
+              AND id != #{excludeId}
+          </if>
+          AND (
+              subject_code IS NULL OR subject_code = ''
+              OR #{subjectCode} IS NULL OR #{subjectCode} = ''
+              OR subject_code = #{subjectCode}
+          )
+          AND (
+              account_no IS NULL OR account_no = ''
+              OR #{accountNo} IS NULL OR #{accountNo} = ''
+              OR account_no = #{accountNo}
+          )
     </select>
 
     <!-- P1-6 修复：subject_code/account_no 含 NULL/空串双重判断 -->

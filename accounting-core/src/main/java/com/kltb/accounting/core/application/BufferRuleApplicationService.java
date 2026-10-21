@@ -58,9 +58,13 @@ public class BufferRuleApplicationService {
         transactionTemplate.execute(status -> {
             try {
                 // 3. 时间区间重叠校验
+                Integer debitCredit = request.getDebitCredit() != null
+                        ? request.getDebitCredit()
+                        : DebitCreditEnum.DEBIT.getCode();
                 validateTimeOverlap(request.getBusinessCode(), request.getTradingCode(),
-                        request.getPayChannel(), request.getEffectiveTime(),
-                        request.getExpirationTime(), null);
+                        request.getPayChannel(), debitCredit,
+                        request.getSubjectCode(), request.getAccountNo(),
+                        request.getEffectiveTime(), request.getExpirationTime(), null);
 
                 // 4. 插入
                 BufferPostingRulePO po = BufferRuleConverter.toPO(request);
@@ -88,7 +92,6 @@ public class BufferRuleApplicationService {
         }
 
         // 1. 科目/账户非空校验（使用更新后的值）
-
         String subjectCode = Optional.ofNullable(request.getSubjectCode()).orElse(po.getSubjectCode());
         String accountNo = Optional.ofNullable(request.getAccountNo()).orElse(po.getAccountNo());
         validateSubjectOrAccount(subjectCode, accountNo);
@@ -105,8 +108,13 @@ public class BufferRuleApplicationService {
                 // 3. 时间区间重叠校验（排除自身）
                 // 注：缓冲规则的业务键（businessCode/tradingCode/payChannel）创建后不可变，
                 // 故使用旧的业务键做重叠校验。若未来需求允许修改业务键，需先校验新组合下的时间重叠。
+                Integer debitCredit = request.getDebitCredit() != null
+                        ? request.getDebitCredit()
+                        : (po.getDebitCredit() != null ? po.getDebitCredit().getCode() : DebitCreditEnum.DEBIT.getCode());
                 validateTimeOverlap(po.getBusinessCode(), po.getTradingCode(),
-                        po.getPayChannel(), effectiveTime, expirationTime, ruleId);
+                        po.getPayChannel(), debitCredit,
+                        subjectCode, accountNo,
+                        effectiveTime, expirationTime, ruleId);
 
                 // 4. 更新字段
                 BufferRuleConverter.updatePO(request, po);
@@ -172,9 +180,11 @@ public class BufferRuleApplicationService {
                 validateTimeRange(po.getEffectiveTime(), po.getExpirationTime());
 
                 // 2. 时间区间重叠校验（排除自身）
+                Integer debitCredit = po.getDebitCredit() != null ? po.getDebitCredit().getCode() : DebitCreditEnum.DEBIT.getCode();
                 validateTimeOverlap(po.getBusinessCode(), po.getTradingCode(),
-                        po.getPayChannel(), po.getEffectiveTime(),
-                        po.getExpirationTime(), ruleId);
+                        po.getPayChannel(), debitCredit,
+                        po.getSubjectCode(), po.getAccountNo(),
+                        po.getEffectiveTime(), po.getExpirationTime(), ruleId);
 
                 // 3. 状态置为启用
                 po.setStatus(RuleStatusEnum.ENABLED);
@@ -254,13 +264,15 @@ public class BufferRuleApplicationService {
     }
 
     /**
-     * 时间区间重叠校验
+     * 时间区间与匹配维度重叠校验
      */
     private void validateTimeOverlap(String businessCode, String tradingCode, String payChannel,
+                                      Integer debitCredit, String subjectCode, String accountNo,
                                       LocalDateTime effectiveTime, LocalDateTime expirationTime,
                                       Long excludeId) {
         List<BufferPostingRulePO> overlapping = bufferPostingRuleRepository.selectOverlappingRules(
-                businessCode, tradingCode, payChannel, effectiveTime, expirationTime, excludeId);
+                businessCode, tradingCode, payChannel, debitCredit, subjectCode, accountNo,
+                effectiveTime, expirationTime, excludeId);
         if (!overlapping.isEmpty()) {
             String conflictNames = overlapping.stream()
                     .map(BufferPostingRulePO::getRuleName)

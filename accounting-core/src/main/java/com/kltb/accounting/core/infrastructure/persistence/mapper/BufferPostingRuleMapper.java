@@ -17,11 +17,14 @@ import java.util.List;
 public interface BufferPostingRuleMapper extends BaseMapper<BufferPostingRulePO> {
 
     /**
-     * 查询同一业务组合下时间区间重叠的启用中规则
+     * 查询同一业务组合下时间区间与匹配维度重叠的启用中规则
      *
      * @param businessCode 业务线编码
      * @param tradingCode 交易编码
      * @param payChannel 支付渠道
+     * @param debitCredit 借贷方向（1-借，2-贷）
+     * @param subjectCode 会计科目编码
+     * @param accountNo 账户编号
      * @param effectiveTime 生效时间
      * @param expirationTime 失效时间
      * @param excludeId 排除自身ID（更新时使用）
@@ -30,6 +33,9 @@ public interface BufferPostingRuleMapper extends BaseMapper<BufferPostingRulePO>
     List<BufferPostingRulePO> selectOverlappingRules(@Param("businessCode") String businessCode,
                                                       @Param("tradingCode") String tradingCode,
                                                       @Param("payChannel") String payChannel,
+                                                      @Param("debitCredit") Integer debitCredit,
+                                                      @Param("subjectCode") String subjectCode,
+                                                      @Param("accountNo") String accountNo,
                                                       @Param("effectiveTime") LocalDateTime effectiveTime,
                                                       @Param("expirationTime") LocalDateTime expirationTime,
                                                       @Param("excludeId") Long excludeId);

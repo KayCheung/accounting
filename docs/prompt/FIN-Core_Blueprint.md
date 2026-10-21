@@ -1198,6 +1198,10 @@
             - 业务层：新增 `DashboardApplicationService.getDashboardOverview` 与 `DashboardController`（`GET /accounting/dashboard/overview`），多级聚合会计日、试算平衡、待办笔数及异常治理指标；
             - 单测保障：新增 `DashboardApplicationServiceTest`，测试用例 100% 通过；
          5. **构建验证**：前端 `vue-tsc && vite build` 生产打包 0 错误通过，后端全模块编译单测通过。
+       - **同业务场景下缓冲入账规则多维度重叠互斥判定优化与修复（REQ261021-001）**：
+         1. **根因修复**：修正 `selectOverlappingRules` 仅按业务三要素粗粒度判断重叠导致同业务下不同借贷方向或科目/账户被误拦截的问题，并修复 `excludeId != null` 动态判断；
+         2. **细化维度**：重叠校验补充 `debit_credit`、`subject_code`、`account_no`，实现最小匹配冲突判定，支持同业务场景下借贷不同方、不同科目或账号独立配置并启用缓冲规则；
+         3. **测试保障**：`BufferRuleApplicationServiceTest` 全面覆盖同场景不同科目/借贷方向多规则并行启用与冲突互斥判定，全工程 452 个测试 100% 通过。
 
 
 
