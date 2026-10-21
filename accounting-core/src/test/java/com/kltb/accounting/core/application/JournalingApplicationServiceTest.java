@@ -862,4 +862,177 @@ class JournalingApplicationServiceTest {
         assertThat(info.getCustomerName()).isEqualTo("张三");
         assertThat(info.getCustomerType()).isEqualTo(CustomerTypeEnum.PERSONAL);
     }
+
+    @Test
+    @DisplayName("submitJournal: 一部分实时入账一部分缓冲入账，业务流水应成功更新为 SUCCESS")
+    void submitJournal_partialRealtimeAndPartialBuffered_shouldUpdateJournalSuccess() {
+        String traceNo = "L202610210000001002";
+        JournalSubmitRequest request = new JournalSubmitRequest();
+        request.setTraceNo(traceNo);
+        request.setTraceSeq(0);
+        request.setBusinessCode("PAY");
+        request.setTradingCode("CONSUME");
+        request.setPayChannel("ALIPAY");
+        request.setTradeType(TradeTypeEnum.NORMAL.getCode());
+        request.setAmount(new BigDecimal("100.00"));
+        request.setTradeTime(LocalDateTime.now());
+        request.setSummary("消费入账消峰");
+
+        JournalDetailRequest detail = new JournalDetailRequest();
+        detail.setCustomerId("CUST001");
+        detail.setCustomerType(CustomerTypeEnum.PERSONAL.getCode());
+        detail.setFundsType("PAYMENT");
+        detail.setAmount(new BigDecimal("100.00"));
+        request.setDetails(List.of(detail));
+
+        when(journalingDomainService.checkIdempotent(traceNo, 0)).thenReturn(null);
+        when(journalingDomainService.determineAccountingDate(any())).thenReturn(LocalDate.of(2026, 10, 21));
+        when(journalingDomainService.persistJournal(any(JournalCreateCommand.class)))
+                .thenReturn(new JournalSubmitResult(traceNo, LocalDate.of(2026, 10, 21), "TXN20261021001"));
+
+        // 模拟凭证生成：凭证号 VOU001
+        VoucherGenerateResponse voucherResp = new VoucherGenerateResponse();
+        voucherResp.setVoucherNo("VOU001");
+        voucherResp.setTraceNo(traceNo);
+        when(voucheringApplicationService.generateVoucher(any(VoucherGenerateRequest.class))).thenReturn(voucherResp);
+
+        // 模拟分录：分录1实时过账成功(POSTED)，分录2缓冲入账(buffered=1)
+        AccountingVoucherEntryPO entry1 = new AccountingVoucherEntryPO();
+        entry1.setEntryId("E001");
+        entry1.setVoucherNo("VOU001");
+        entry1.setBuffered(0);
+        entry1.setUnilateral(1);
+        entry1.setStatus(VoucherEntryStatusEnum.POSTED);
+
+        AccountingVoucherEntryPO entry2 = new AccountingVoucherEntryPO();
+        entry2.setEntryId("E002");
+        entry2.setVoucherNo("VOU001");
+        entry2.setBuffered(1);
+        entry2.setUnilateral(0);
+        entry2.setStatus(VoucherEntryStatusEnum.PENDING);
+
+        when(accountingVoucherRepository.selectEntriesByVoucherNo("VOU001")).thenReturn(List.of(entry1, entry2));
+
+        // 模拟缓冲明细已在队列中
+        BufferPostingDetailPO bufferDetail = new BufferPostingDetailPO();
+        bufferDetail.setVoucherNo("VOU001");
+        bufferDetail.setEntryId("E002");
+        bufferDetail.setStatus(BufferStatusEnum.PENDING);
+        when(bufferPostingDetailRepository.selectByVoucherNo("VOU001")).thenReturn(List.of(bufferDetail));
+
+        // 模拟过账执行：因为缓冲分录未过账，凭证整体状态返回 POSTING (2)
+        PostingExecuteResponse postResp = new PostingExecuteResponse();
+        postResp.setVoucherNo("VOU001");
+        postResp.setVoucherStatus(VoucherStatusEnum.POSTING.getCode());
+        postResp.setVoucherStatusDesc("过账中");
+        when(postingApplicationService.executePosting(any(PostingExecuteRequest.class))).thenReturn(postResp);
+
+        JournalSubmitResponse response = service.submitJournal(request);
+
+        assertThat(response).isNotNull();
+        // 关键断言：虽然凭证状态是 POSTING，但由于非缓冲分录已过账且缓冲分录已入队，流水状态必须更新为 SUCCESS！
+        verify(businessRecordRepository).updateStatusByTraceNo(traceNo, BusinessRecordStatusEnum.SUCCESS);
+    }
+
+    @Test
+    @DisplayName("getJournal: 查询处于 PROCESSING 的流水，若满足逻辑成功条件应自愈并返回成功")
+    void getJournal_withProcessingRecordAndLogicallySuccess_shouldSelfHealAndReturnSuccess() {
+        String traceNo = "L202610210000001002";
+
+        BusinessRecordPO record = new BusinessRecordPO();
+        record.setTraceNo(traceNo);
+        record.setTraceSeq(0);
+        record.setBusinessCode("PAY");
+        record.setTradingCode("CONSUME");
+        record.setPayChannel("ALIPAY");
+        record.setStatus(BusinessRecordStatusEnum.PROCESSING);
+        record.setAmount(new BigDecimal("100.00"));
+        record.setTradeTime(LocalDateTime.now());
+        record.setAccountingDate(LocalDate.of(2026, 10, 21));
+
+        TransactionPO txn = new TransactionPO();
+        txn.setTxnNo("TXN20261021001");
+        txn.setTraceNo(traceNo);
+        txn.setStatus(TransactionStatusEnum.PROCESSING);
+
+        when(businessRecordRepository.selectByTraceNo(traceNo)).thenReturn(record);
+        when(transactionRepository.selectByTraceNo(traceNo)).thenReturn(txn);
+
+        // 模拟凭证和分录
+        AccountingVoucherPO voucher = new AccountingVoucherPO();
+        voucher.setVoucherNo("VOU001");
+        voucher.setTraceNo(traceNo);
+        voucher.setTxnNo("TXN20261021001");
+        voucher.setStatus(VoucherStatusEnum.POSTING);
+        when(accountingVoucherRepository.selectByTraceNo(traceNo)).thenReturn(List.of(voucher));
+
+        AccountingVoucherEntryPO entry1 = new AccountingVoucherEntryPO();
+        entry1.setEntryId("E001");
+        entry1.setVoucherNo("VOU001");
+        entry1.setBuffered(0);
+        entry1.setStatus(VoucherEntryStatusEnum.POSTED);
+
+        AccountingVoucherEntryPO entry2 = new AccountingVoucherEntryPO();
+        entry2.setEntryId("E002");
+        entry2.setVoucherNo("VOU001");
+        entry2.setBuffered(1);
+        entry2.setStatus(VoucherEntryStatusEnum.PENDING);
+
+        when(accountingVoucherRepository.selectEntriesByVoucherNo("VOU001")).thenReturn(List.of(entry1, entry2));
+
+        BufferPostingDetailPO bufferDetail = new BufferPostingDetailPO();
+        bufferDetail.setVoucherNo("VOU001");
+        bufferDetail.setEntryId("E002");
+        bufferDetail.setStatus(BufferStatusEnum.PENDING);
+        when(bufferPostingDetailRepository.selectByVoucherNo("VOU001")).thenReturn(List.of(bufferDetail));
+
+        JournalQueryResponse response = service.getJournal(traceNo);
+
+        assertThat(response).isNotNull();
+        // 关键断言：自愈后对外接口返回 SUCCESS (2)
+        assertThat(response.getStatus()).isEqualTo(BusinessRecordStatusEnum.SUCCESS.getCode());
+        verify(businessRecordRepository).updateStatusByTraceNo(traceNo, BusinessRecordStatusEnum.SUCCESS);
+        verify(transactionRepository).updateStatusByTxnNo(eq("TXN20261021001"), eq(TransactionStatusEnum.SUCCESS), any(), any());
+    }
+
+    @Test
+    @DisplayName("getJournalOverview: 查询全流程总览时自愈 PROCESSING 状态流水为 SUCCESS")
+    void getJournalOverview_withProcessingRecordAndLogicallySuccess_shouldSelfHeal() {
+        String traceNo = "L202610210000001002";
+
+        BusinessRecordPO record = new BusinessRecordPO();
+        record.setTraceNo(traceNo);
+        record.setTraceSeq(0);
+        record.setBusinessCode("PAY");
+        record.setStatus(BusinessRecordStatusEnum.PROCESSING);
+        record.setAmount(new BigDecimal("100.00"));
+
+        TransactionPO txn = new TransactionPO();
+        txn.setTxnNo("TXN001");
+        txn.setTraceNo(traceNo);
+        txn.setStatus(TransactionStatusEnum.PROCESSING);
+
+        AccountingVoucherPO voucher = new AccountingVoucherPO();
+        voucher.setVoucherNo("VOU001");
+        voucher.setTraceNo(traceNo);
+        voucher.setStatus(VoucherStatusEnum.POSTING);
+
+        when(businessRecordRepository.selectByTraceNo(traceNo)).thenReturn(record);
+        when(transactionRepository.selectByTraceNo(traceNo)).thenReturn(txn);
+        when(accountingVoucherRepository.selectByTraceNo(traceNo)).thenReturn(List.of(voucher));
+
+        AccountingVoucherEntryPO entry1 = new AccountingVoucherEntryPO();
+        entry1.setEntryId("E001");
+        entry1.setVoucherNo("VOU001");
+        entry1.setBuffered(0);
+        entry1.setStatus(VoucherEntryStatusEnum.POSTED);
+        when(accountingVoucherRepository.selectEntriesByVoucherNo("VOU001")).thenReturn(List.of(entry1));
+
+        JournalOverviewResponse overview = service.getJournalOverview(traceNo);
+
+        assertThat(overview).isNotNull();
+        assertThat(overview.getRecord()).isNotNull();
+        assertThat(overview.getRecord().getStatus()).isEqualTo(BusinessRecordStatusEnum.SUCCESS.getCode());
+        verify(businessRecordRepository).updateStatusByTraceNo(traceNo, BusinessRecordStatusEnum.SUCCESS);
+    }
 }

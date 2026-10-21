@@ -1202,6 +1202,13 @@
          1. **根因修复**：修正 `selectOverlappingRules` 仅按业务三要素粗粒度判断重叠导致同业务下不同借贷方向或科目/账户被误拦截的问题，并修复 `excludeId != null` 动态判断；
          2. **细化维度**：重叠校验补充 `debit_credit`、`subject_code`、`account_no`，实现最小匹配冲突判定，支持同业务场景下借贷不同方、不同科目或账号独立配置并启用缓冲规则；
          3. **测试保障**：`BufferRuleApplicationServiceTest` 全面覆盖同场景不同科目/借贷方向多规则并行启用与冲突互斥判定，全工程 452 个测试 100% 通过。
+       - **缓冲记账异步消峰与业务流水状态解耦及逻辑成功自愈治理（REQ261021-002）**：
+         1. **业务语义对齐**：明确缓冲记账（Buffer Posting）作为账务系统内部异步消峰的技术手段，一旦通过业务和科目校验并安全持久化至缓冲队列（`t_buffer_posting_detail`），对外部业务方即构成记账承诺；
+         2. **状态判定解耦**：彻底解耦外部业务流水状态（`t_business_record`）与内部会计凭证过账进度（`t_accounting_voucher`），消除提交流水强依赖 `VoucherStatusEnum.isPosted` 的硬编码判定；
+         3. **逻辑成功与状态联动**：新增 `isJournalLogicallySuccess` 与 `markJournalAndTransactionSuccess`，只要所有非缓冲分录完成过账且缓冲分录成功入队，立即将流水及关联事务状态标记为 `SUCCESS`；
+         4. **查询接口自愈机制**：在 `getJournal`、`getJournalOverview` 与 `getTransactionStatus` 中引入自动自愈机制，当业务方查询仍处于 `PROCESSING` 的流水时，若满足逻辑成功条件，自动持久化修复流水和事务状态为 `SUCCESS`，历史挂起流水（如 `L202610210000001002`）免人工干预自愈；
+         5. **掉单补偿对齐**：在 `reconcileHangingJournal` 中同步对齐逻辑成功校验，防止异步消峰流水被误判定为超时掉单回滚；
+         6. **仓储与单测覆盖**：`BufferPostingDetailRepository` 扩充 `selectByVoucherNo`；`JournalingApplicationServiceTest` 新增 3 个全链路消峰提交流水与查询自愈用例，全模块 455 个单测 100% 绿灯通过。
 
 
 

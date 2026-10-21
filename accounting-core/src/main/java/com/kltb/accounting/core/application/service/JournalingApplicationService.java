@@ -187,9 +187,12 @@ public class JournalingApplicationService {
             postReq.setOperatorName(Constants.SYSTEM_OPERATOR);
             PostingExecuteResponse postResp = postingApplicationService.executePosting(postReq);
 
-            // 若凭证状态已过账，联动更新流水为 SUCCESS
-            if (postResp != null && VoucherStatusEnum.isPosted(postResp.getVoucherStatus())) {
-                businessRecordRepository.updateStatusByTraceNo(request.getTraceNo(), BusinessRecordStatusEnum.SUCCESS);
+            // 业务记账成功判定：
+            // 1. 凭证整体已过账（无异步、无缓冲分录）
+            // 2. 或逻辑成功：所有非缓冲分录均已过账，且缓冲分录已成功进入缓冲队列接管
+            boolean posted = postResp != null && VoucherStatusEnum.isPosted(postResp.getVoucherStatus());
+            if (posted || isJournalLogicallySuccess(voucherResp.getVoucherNo())) {
+                markJournalAndTransactionSuccess(request.getTraceNo(), result.getTxnNo());
             }
         }
 
@@ -475,6 +478,9 @@ public class JournalingApplicationService {
         // 如果没有常规流水记录（如通过手工凭证审批入账的事务），合成 BusinessRecordPO
         if (record == null) {
             record = buildSyntheticRecord(traceNo, txn, vouchers, manualApply);
+        } else {
+            // 对处于 PROCESSING 的流水执行逻辑成功校验与自愈
+            healJournalIfLogicallySuccess(record, txn);
         }
 
         Map<String, List<AccountingVoucherEntryPO>> entryMap = new HashMap<>();
@@ -751,8 +757,12 @@ public class JournalingApplicationService {
                         postReq.setOperatorName(Constants.SYSTEM_OPERATOR);
                         PostingExecuteResponse postResp = postingApplicationService.executePosting(postReq);
 
-                        if (postResp != null && VoucherStatusEnum.isPosted(postResp.getVoucherStatus())) {
-                            businessRecordRepository.updateStatusByTraceNo(traceNo, BusinessRecordStatusEnum.SUCCESS);
+                        boolean posted = postResp != null && VoucherStatusEnum.isPosted(postResp.getVoucherStatus());
+                        if (posted || isJournalLogicallySuccess(voucher.getVoucherNo())) {
+                            markJournalAndTransactionSuccess(traceNo, voucher.getTxnNo());
+                            if (curRecord != null) {
+                                curRecord.setStatus(BusinessRecordStatusEnum.SUCCESS);
+                            }
                         }
                     } catch (Exception ex) {
                         log.error("[RECONCILE] 补执行过账失败，执行流水回滚: traceNo={}", traceNo, ex);
@@ -760,11 +770,14 @@ public class JournalingApplicationService {
                         return getJournalOverview(traceNo);
                     }
                 } else if (voucher.getStatus() == VoucherStatusEnum.POSTING) {
-                    // 检查是否所有非缓冲分录实际已全部过账
-                    boolean allPosted = asyncPostingDomainService.areAllNonBufferEntriesPosted(voucher.getVoucherNo());
-                    if (allPosted) {
-                        log.info("[RECONCILE] 异步分录均已过账，补齐状态联动: voucherNo={}", voucher.getVoucherNo());
-                        asyncPostingDomainService.updateStatusIfAllNonBufferPosted(voucher.getVoucherNo());
+                    // 检查是否所有非缓冲分录实际已全部过账，或满足缓冲记账消峰完成条件
+                    boolean logicallySuccess = isJournalLogicallySuccess(voucher.getVoucherNo());
+                    if (logicallySuccess) {
+                        log.info("[RECONCILE] 缓冲记账流水满足成功条件(非缓冲已过账+缓冲已入队)，补齐状态联动: voucherNo={}", voucher.getVoucherNo());
+                        markJournalAndTransactionSuccess(traceNo, voucher.getTxnNo());
+                        if (curRecord != null) {
+                            curRecord.setStatus(BusinessRecordStatusEnum.SUCCESS);
+                        }
                     } else {
                         // 异步过账未完成，检查是否超过超时阈值（如30分钟）
                         if (curRecord.getCreateTime() != null && curRecord.getCreateTime().isBefore(LocalDateTime.now().minusMinutes(30))) {
@@ -774,7 +787,10 @@ public class JournalingApplicationService {
                     }
                 } else if (voucher.getStatus() == VoucherStatusEnum.POSTED) {
                     // 凭证已是 POSTED，流水补更 SUCCESS
-                    businessRecordRepository.updateStatusByTraceNo(traceNo, BusinessRecordStatusEnum.SUCCESS);
+                    markJournalAndTransactionSuccess(traceNo, voucher.getTxnNo());
+                    if (curRecord != null) {
+                        curRecord.setStatus(BusinessRecordStatusEnum.SUCCESS);
+                    }
                 }
             }
 
@@ -807,6 +823,8 @@ public class JournalingApplicationService {
             return null;
         }
         TransactionPO txn = transactionRepository.selectByTraceNo(traceNo);
+        // 对处于 PROCESSING 的流水执行逻辑成功校验与自愈
+        healJournalIfLogicallySuccess(record, txn);
         return assembler.toQueryResponse(record, txn);
     }
 
@@ -826,7 +844,100 @@ public class JournalingApplicationService {
             vouchers = accountingVoucherRepository.selectByTxnNo(txn.getTxnNo());
         }
         AccountingVoucherPO voucher = (vouchers != null && !vouchers.isEmpty()) ? vouchers.get(0) : null;
+        if (txn.getStatus() == TransactionStatusEnum.PROCESSING && voucher != null) {
+            if (voucher.getStatus() == VoucherStatusEnum.POSTED || isJournalLogicallySuccess(voucher.getVoucherNo())) {
+                transactionRepository.updateStatusByTxnNo(txn.getTxnNo(), TransactionStatusEnum.SUCCESS, null, LocalDateTime.now());
+                txn.setStatus(TransactionStatusEnum.SUCCESS);
+            }
+        }
         return assembler.toTransactionStatusResponse(txn, voucher);
+    }
+
+    /**
+     * 判断凭证对应的记账流水在业务视角是否已逻辑成功
+     * <p>
+     * 业务判定准则（缓冲记账异步消峰语义）：
+     * 1. 凭证存在且包含有效分录；
+     * 2. 凭证的所有非缓冲分录（buffered != 1）均已完成过账（status == VoucherEntryStatusEnum.POSTED）；
+     * 3. 凭证的所有缓冲分录（buffered == 1）均已成功进入缓冲记账队列（在 t_buffer_posting_detail 中已持久化）；
+     * 满足上述条件即表明账务核心已对外部业务完成记账履约，业务流水应视为成功。
+     */
+    public boolean isJournalLogicallySuccess(String voucherNo) {
+        if (StrUtil.isBlank(voucherNo)) {
+            return false;
+        }
+        List<AccountingVoucherEntryPO> entries = accountingVoucherRepository.selectEntriesByVoucherNo(voucherNo);
+        if (entries == null || entries.isEmpty()) {
+            return false;
+        }
+
+        // 1. 检查所有非缓冲分录是否都已过账
+        boolean allNonBufferPosted = entries.stream()
+                .filter(e -> e.getBuffered() == null || e.getBuffered() != 1)
+                .allMatch(e -> e.getStatus() == VoucherEntryStatusEnum.POSTED);
+        if (!allNonBufferPosted) {
+            return false;
+        }
+
+        // 2. 检查缓冲分录是否都已成功写入缓冲明细队列
+        List<AccountingVoucherEntryPO> bufferEntries = entries.stream()
+                .filter(e -> e.getBuffered() != null && e.getBuffered() == 1)
+                .toList();
+        if (!bufferEntries.isEmpty()) {
+            List<BufferPostingDetailPO> bufferDetails = bufferPostingDetailRepository.selectByVoucherNo(voucherNo);
+            if (bufferDetails == null || bufferDetails.isEmpty()) {
+                return false;
+            }
+            Set<String> bufferedEntryIds = bufferDetails.stream()
+                    .map(BufferPostingDetailPO::getEntryId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+            boolean allBufferQueued = bufferEntries.stream()
+                    .allMatch(e -> bufferedEntryIds.contains(e.getEntryId()));
+            if (!allBufferQueued) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * 联动更新流水及关联事务为成功状态
+     */
+    private void markJournalAndTransactionSuccess(String traceNo, String txnNo) {
+        businessRecordRepository.updateStatusByTraceNo(traceNo, BusinessRecordStatusEnum.SUCCESS);
+        if (StrUtil.isNotBlank(txnNo)) {
+            transactionRepository.updateStatusByTxnNo(txnNo, TransactionStatusEnum.SUCCESS, null, LocalDateTime.now());
+        }
+    }
+
+    /**
+     * 对处于 PROCESSING 的流水执行逻辑成功校验与自愈
+     */
+    private void healJournalIfLogicallySuccess(BusinessRecordPO record, TransactionPO txn) {
+        if (record == null || record.getStatus() != BusinessRecordStatusEnum.PROCESSING) {
+            return;
+        }
+        String traceNo = record.getTraceNo();
+        List<AccountingVoucherPO> vouchers = accountingVoucherRepository.selectByTraceNo(traceNo);
+        if ((vouchers == null || vouchers.isEmpty()) && txn != null && StrUtil.isNotBlank(txn.getTxnNo())) {
+            vouchers = accountingVoucherRepository.selectByTxnNo(txn.getTxnNo());
+        }
+        if (vouchers != null && !vouchers.isEmpty()) {
+            for (AccountingVoucherPO voucher : vouchers) {
+                if (voucher.getStatus() == VoucherStatusEnum.POSTED || isJournalLogicallySuccess(voucher.getVoucherNo())) {
+                    String txnNo = (txn != null && StrUtil.isNotBlank(txn.getTxnNo())) ? txn.getTxnNo() : voucher.getTxnNo();
+                    markJournalAndTransactionSuccess(traceNo, txnNo);
+                    record.setStatus(BusinessRecordStatusEnum.SUCCESS);
+                    if (txn != null) {
+                        txn.setStatus(TransactionStatusEnum.SUCCESS);
+                    }
+                    log.info("[JournalHeal] 流水满足记账成功条件(非缓冲已过账+缓冲已入队)，自愈为 SUCCESS: traceNo={}", traceNo);
+                    break;
+                }
+            }
+        }
     }
 
     /**

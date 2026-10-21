@@ -169,6 +169,19 @@ public class BufferPostingDetailRepository {
     }
 
     /**
+     * 按凭证号查询缓冲记账明细列表
+     */
+    public List<BufferPostingDetailPO> selectByVoucherNo(String voucherNo) {
+        if (StrUtil.isBlank(voucherNo)) {
+            return Collections.emptyList();
+        }
+        return bufferPostingDetailMapper.selectList(
+                new LambdaQueryWrapper<BufferPostingDetailPO>()
+                        .eq(BufferPostingDetailPO::getVoucherNo, voucherNo)
+                        .eq(BufferPostingDetailPO::getIsDelete, 0));
+    }
+
+    /**
      * 批量作废缓冲记账明细（流水异常回滚使用，防止 Job 继续批处理入账）
      */
     public void markFailedByTraceNo(String traceNo, String reason) {
