@@ -40,7 +40,11 @@ class AccountingDateSwitchDomainServiceTest {
         LocalDate currentDate = LocalDate.of(2026, 10, 15);
         LocalDate targetDate = LocalDate.of(2026, 10, 16);
 
+        EodStatusPO currentPo = new EodStatusPO();
+        currentPo.setAccountingDate(currentDate);
+
         when(accountingDateCache.getCurrentDate()).thenReturn(currentDate);
+        when(eodStatusRepository.findByDate(currentDate)).thenReturn(currentPo);
         when(eodStatusRepository.findByDate(targetDate)).thenReturn(null);
 
         AccountingDateSwitchDomainService.DateSwitchResult result =
@@ -50,6 +54,26 @@ class AccountingDateSwitchDomainServiceTest {
         assertThat(result.getPreviousDate()).isEqualTo(currentDate);
         assertThat(result.getNewDate()).isEqualTo(targetDate);
 
+        verify(eodStatusDomainService).updateSwitchDateTime(eq(currentDate), any(LocalDateTime.class));
+        verify(eodStatusDomainService).createStatus(targetDate);
+        verify(accountingDateCache).setCurrentDate(targetDate);
+    }
+
+    @Test
+    @DisplayName("切日冷启动自愈：原会计日无状态记录时自动初始化原会计日状态")
+    void testSwitchDate_Success_WhenCurrentDateStatusNotExists_InitializesCurrentDate() {
+        LocalDate currentDate = LocalDate.of(2026, 10, 15);
+        LocalDate targetDate = LocalDate.of(2026, 10, 16);
+
+        when(accountingDateCache.getCurrentDate()).thenReturn(currentDate);
+        when(eodStatusRepository.findByDate(currentDate)).thenReturn(null);
+        when(eodStatusRepository.findByDate(targetDate)).thenReturn(null);
+
+        AccountingDateSwitchDomainService.DateSwitchResult result =
+                dateSwitchDomainService.switchDate(targetDate);
+
+        assertThat(result.isAlreadySwitched()).isFalse();
+        verify(eodStatusDomainService).createStatus(currentDate);
         verify(eodStatusDomainService).updateSwitchDateTime(eq(currentDate), any(LocalDateTime.class));
         verify(eodStatusDomainService).createStatus(targetDate);
         verify(accountingDateCache).setCurrentDate(targetDate);
@@ -84,6 +108,7 @@ class AccountingDateSwitchDomainServiceTest {
         existing.setEodStatus(EodStatusEnum.COMPLETED);
 
         when(accountingDateCache.getCurrentDate()).thenReturn(currentDate);
+        when(eodStatusRepository.findByDate(currentDate)).thenReturn(new EodStatusPO());
         when(eodStatusRepository.findByDate(targetDate)).thenReturn(existing);
 
         AccountingDateSwitchDomainService.DateSwitchResult result =

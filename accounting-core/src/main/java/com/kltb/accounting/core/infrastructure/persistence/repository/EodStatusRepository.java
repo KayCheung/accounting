@@ -176,7 +176,7 @@ public class EodStatusRepository {
     }
 
     /**
-     * 更新切日完成时间
+     * 更新切日完成时间（若记录不存在则自动创建并设置切日时间，保障冷启动幂等）
      *
      * @param accountingDate 会计日期
      * @param switchDateTime 切日完成时间
@@ -187,7 +187,21 @@ public class EodStatusRepository {
                         .eq(EodStatusPO::getAccountingDate, accountingDate)
                         .set(EodStatusPO::getSwitchDateTime, switchDateTime));
         if (affected == 0) {
-            throw new IllegalStateException("日切状态记录不存在: accountingDate=" + accountingDate);
+            log.info("[EOD-STATUS] 会计日 [{}] 尚无状态记录，自动初始化切日状态", accountingDate);
+            EodStatusPO po = new EodStatusPO();
+            po.setAccountingDate(accountingDate);
+            po.setEodStatus(EodStatusEnum.NOT_STARTED);
+            po.setSwitchDateTime(switchDateTime);
+            po.setTotalDurationMs(0L);
+            try {
+                eodStatusMapper.insert(po);
+            } catch (DuplicateKeyException e) {
+                // 并发保护：重试更新
+                eodStatusMapper.update(null,
+                        new LambdaUpdateWrapper<EodStatusPO>()
+                                .eq(EodStatusPO::getAccountingDate, accountingDate)
+                                .set(EodStatusPO::getSwitchDateTime, switchDateTime));
+            }
         }
     }
 }

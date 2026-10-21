@@ -52,8 +52,13 @@ public class AccountingDateSwitchDomainService {
             log.info("[DATE-SWITCH] 开始切日: oldDate={}, newDate={}", currentDate, newDate);
             LocalDateTime switchTime = LocalDateTime.now();
 
-            // 1. 更新原会计日（T日）的切日完成时间
+            // 1. 更新原会计日（T日）的切日完成时间（若冷启动/未初始化则先补齐基础记录）
             if (currentDate != null) {
+                EodStatusPO currentStatus = eodStatusRepository.findByDate(currentDate);
+                if (currentStatus == null) {
+                    log.info("[DATE-SWITCH] 原会计日 [{}] 暂无日切状态记录，自动初始化", currentDate);
+                    eodStatusDomainService.createStatus(currentDate);
+                }
                 eodStatusDomainService.updateSwitchDateTime(currentDate, switchTime);
             }
 

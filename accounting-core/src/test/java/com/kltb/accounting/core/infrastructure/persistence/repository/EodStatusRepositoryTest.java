@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -138,5 +139,39 @@ class EodStatusRepositoryTest {
         assertThat(result.getEodStatus()).isEqualTo(EodStatusEnum.NOT_STARTED);
         assertThat(result.getFailReason()).isEqualTo("");
         verify(eodStatusMapper).update(isNull(), any());
+    }
+
+    @Test
+    @DisplayName("更新切日时间：记录存在时正常更新")
+    void updateSwitchDateTime_recordExists_updatesSuccessfully() {
+        LocalDate date = LocalDate.of(2026, 10, 20);
+        LocalDateTime now = LocalDateTime.now();
+
+        when(eodStatusMapper.update(isNull(), any())).thenReturn(1);
+
+        eodStatusRepository.updateSwitchDateTime(date, now);
+
+        verify(eodStatusMapper).update(isNull(), any());
+        verify(eodStatusMapper, never()).insert(any(EodStatusPO.class));
+    }
+
+    @Test
+    @DisplayName("更新切日时间：冷启动记录不存在时自动插入新状态记录保障自愈")
+    void updateSwitchDateTime_recordNotExists_insertsNewRecord() {
+        LocalDate date = LocalDate.of(2026, 10, 20);
+        LocalDateTime now = LocalDateTime.now();
+
+        when(eodStatusMapper.update(isNull(), any())).thenReturn(0);
+        when(eodStatusMapper.insert(any(EodStatusPO.class))).thenReturn(1);
+
+        eodStatusRepository.updateSwitchDateTime(date, now);
+
+        verify(eodStatusMapper).update(isNull(), any());
+        ArgumentCaptor<EodStatusPO> captor = ArgumentCaptor.forClass(EodStatusPO.class);
+        verify(eodStatusMapper).insert(captor.capture());
+        EodStatusPO inserted = captor.getValue();
+        assertThat(inserted.getAccountingDate()).isEqualTo(date);
+        assertThat(inserted.getEodStatus()).isEqualTo(EodStatusEnum.NOT_STARTED);
+        assertThat(inserted.getSwitchDateTime()).isEqualTo(now);
     }
 }

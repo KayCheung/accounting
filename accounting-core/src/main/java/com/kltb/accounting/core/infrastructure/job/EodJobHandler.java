@@ -46,7 +46,8 @@ public class EodJobHandler extends AbstractXxlJobHandler {
 
             // Step 0: 瞬间切日（将全局会计日期 T → T+1）
             // 注意：切日更新的是全局会计日期缓存，executeEod 处理的仍是 request 中的 T 日账务
-            accountingDateSwitchDomainService.switchDate(null);
+            LocalDate nextDate = ctx().accountingDate.plusDays(1);
+            accountingDateSwitchDomainService.switchDate(nextDate);
 
             EodExecuteResponse response = eodApplicationService.executeEod(request);
 
