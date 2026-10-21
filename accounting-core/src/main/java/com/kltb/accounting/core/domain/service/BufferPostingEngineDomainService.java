@@ -10,6 +10,7 @@ import com.kltb.accounting.core.infrastructure.persistence.repository.*;
 import com.kltb.accounting.core.infrastructure.redis.DistributedLockTemplate;
 import com.kltb.accounting.core.infrastructure.redis.RedisKeyConstants;
 import com.kltb.accounting.core.shared.exception.AccountException;
+import com.kltb.accounting.core.shared.util.DateTimeUtil;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -149,6 +150,7 @@ public class BufferPostingEngineDomainService {
                 for (BufferPostingDetailPO detail : accountDetails) {
                     failedList.add(new FailedItemInfo(detail.getId(), accountNo,
                             detail.getAmount(), e.getMessage()));
+                    handlePostingFailure(detail, e);
                 }
                 log.error("[BUFFER-POSTING] 账户批量过账失败: accountNo={}, reason={}",
                         accountNo, e.getMessage(), e);
@@ -181,6 +183,7 @@ public class BufferPostingEngineDomainService {
                         detail.getAmount(), e.getMessage()));
                 log.warn("[BUFFER-POSTING] 单笔过账失败: detailId={}, accountNo={}, reason={}",
                         detail.getId(), detail.getAccountNo(), e.getMessage());
+                handlePostingFailure(detail, e);
             }
         }
 
@@ -227,19 +230,57 @@ public class BufferPostingEngineDomainService {
     }
 
     /**
+     * 缓冲过账失败兜底处理：更新 retry_count、fail_reason 与首次执行 startTime，重试达到上限标记为 FAILED
+     */
+    private void handlePostingFailure(BufferPostingDetailPO detail, Throwable e) {
+        if (detail == null || detail.getId() == null) {
+            return;
+        }
+
+        // 若已在锁升级流程中标记为 FAILED，无需重复落库
+        if (e instanceof AccountException ae) {
+            if (ae.getResultCode() == ResultCode.BUFFER_POSTING_LOCK_UPGRADE_FAILED
+                    || ae.getResultCode() == ResultCode.BUFFER_POSTING_RETRY_EXHAUSTED) {
+                return;
+            }
+        }
+
+        int currentRetry = detail.getRetryCount() != null ? detail.getRetryCount() : 0;
+        int nextRetry = currentRetry + 1;
+        String rawReason = StrUtil.isNotBlank(e.getMessage()) ? e.getMessage() : e.getClass().getSimpleName();
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime startTimeToSet = DateTimeUtil.isDefaultTime(detail.getStartTime()) ? now : null;
+
+        try {
+            if (nextRetry >= MAX_OPTIMISTIC_RETRIES) {
+                String fullFailReason = "已达最大重试次数(" + MAX_OPTIMISTIC_RETRIES + ")，最后失败原因: " + rawReason;
+                log.error("[BUFFER-POSTING-FAILED] 重试耗尽标记为失败: detailId={}, accountNo={}, reason={}",
+                        detail.getId(), detail.getAccountNo(), fullFailReason);
+                bufferPostingDetailRepository.updateToFailed(detail.getId(), fullFailReason, nextRetry, startTimeToSet);
+            } else {
+                bufferPostingDetailRepository.incrementRetryCount(detail.getId(), rawReason, startTimeToSet);
+            }
+        } catch (Exception ex) {
+            log.error("[BUFFER-POSTING] 记录重试或失败状态异常: detailId={}, error={}",
+                    detail.getId(), ex.getMessage(), ex);
+        }
+    }
+
+    /**
      * 带锁升级的过账执行
      * <p>
      * P2-5 修复：retryCount 已达上限时直接标记 FAILED，不进入重试循环。
      */
     private void executePostingWithLockUpgrade(BufferPostingDetailPO detail) {
         int retryCount = detail.getRetryCount() != null ? detail.getRetryCount() : 0;
+        LocalDateTime startTimeToSet = DateTimeUtil.isDefaultTime(detail.getStartTime()) ? LocalDateTime.now() : null;
 
         // P2-5: 重试次数已耗尽，直接标记 FAILED
         if (retryCount >= MAX_OPTIMISTIC_RETRIES) {
             String failReason = "重试次数已达上限(" + MAX_OPTIMISTIC_RETRIES + ")";
             log.error("[BUFFER-POSTING-RETRY-EXHAUSTED] detailId={}, accountNo={}, reason={}",
                     detail.getId(), detail.getAccountNo(), failReason);
-            bufferPostingDetailRepository.updateToFailed(detail.getId(), failReason);
+            bufferPostingDetailRepository.updateToFailed(detail.getId(), failReason, retryCount, startTimeToSet);
             throw new AccountException(ResultCode.BUFFER_POSTING_RETRY_EXHAUSTED, failReason);
         }
 
@@ -267,7 +308,7 @@ public class BufferPostingEngineDomainService {
             String failReason = "锁升级后仍失败: " + e.getMessage();
             log.error("[BUFFER-POSTING-LOCK-UPGRADE-FAILED] detailId={}, accountNo={}, reason={}",
                     detail.getId(), detail.getAccountNo(), failReason);
-            bufferPostingDetailRepository.updateToFailed(detail.getId(), failReason);
+            bufferPostingDetailRepository.updateToFailed(detail.getId(), failReason, MAX_OPTIMISTIC_RETRIES, startTimeToSet);
             throw new AccountException(ResultCode.BUFFER_POSTING_LOCK_UPGRADE_FAILED, failReason);
         }
     }
@@ -391,7 +432,8 @@ public class BufferPostingEngineDomainService {
 
                 // 9. 更新缓冲明细状态为成功
                 LocalDateTime completeTime = LocalDateTime.now();
-                bufferPostingDetailRepository.updateToSuccess(detail.getId(), completeTime);
+                LocalDateTime startTimeToSet = DateTimeUtil.isDefaultTime(detail.getStartTime()) ? completeTime : null;
+                bufferPostingDetailRepository.updateToSuccess(detail.getId(), completeTime, startTimeToSet);
 
                 log.info("[BUFFER-POSTING] 逐条过账成功: detailId={}, accountNo={}, amount={}, " +
                                 "account: {}->{}, subAccount: {}->{}",
@@ -545,7 +587,9 @@ public class BufferPostingEngineDomainService {
                     }
 
                     updateVoucherStatus(detail.getVoucherNo());
-                    bufferPostingDetailRepository.updateToSuccess(detail.getId(), LocalDateTime.now());
+                    LocalDateTime now = LocalDateTime.now();
+                    LocalDateTime startTimeToSet = DateTimeUtil.isDefaultTime(detail.getStartTime()) ? now : null;
+                    bufferPostingDetailRepository.updateToSuccess(detail.getId(), now, startTimeToSet);
                 }
 
                 log.info("[BUFFER-POSTING] 批量过账成功: accountNo={}, details={}, " +

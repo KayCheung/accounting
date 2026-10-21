@@ -1,5 +1,6 @@
 package com.kltb.accounting.core.domain.service;
 
+import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.core.domain.enums.*;
 import com.kltb.accounting.core.infrastructure.persistence.entity.*;
 import com.kltb.accounting.core.infrastructure.persistence.repository.*;
@@ -158,7 +159,7 @@ class BufferPostingEngineDomainServiceTest {
         verify(subAccountDetailRepository).insert(any(SubAccountDetailPO.class));
 
         // 校验 5：更新缓冲明细为 SUCCESS
-        verify(bufferPostingDetailRepository).updateToSuccess(eq(100L), any(LocalDateTime.class));
+        verify(bufferPostingDetailRepository).updateToSuccess(eq(100L), any(LocalDateTime.class), any(LocalDateTime.class));
     }
 
     @Test
@@ -222,5 +223,142 @@ class BufferPostingEngineDomainServiceTest {
         // 第 2 笔：pre=1100, amount=30, post=1070
         assertThat(capturedDetails.get(1).getPreBalance()).isEqualByComparingTo(new BigDecimal("1100.00"));
         assertThat(capturedDetails.get(1).getPostBalance()).isEqualByComparingTo(new BigDecimal("1070.00"));
+    }
+
+    @Test
+    @DisplayName("单笔过账失败（首次执行）：记录 fail_reason，递增 retry_count，并设置 startTime")
+    void executeSinglePosting_failure_firstTime_incrementsRetryAndSetsStartTime() {
+        String accountNo = "INNER10030102001";
+        LocalDate accountingDate = LocalDate.of(2026, 10, 21);
+
+        BufferPostingDetailPO detail = new BufferPostingDetailPO()
+                .setVoucherNo("V202610210001")
+                .setEntryId("E001")
+                .setAccountNo(accountNo)
+                .setDebitCredit(DebitCreditEnum.DEBIT)
+                .setAmount(new BigDecimal("4236.00"))
+                .setAccountingDate(accountingDate)
+                .setStatus(BufferStatusEnum.PENDING)
+                .setRetryCount(0);
+        detail.setId(6L);
+
+        when(bufferPostingDetailRepository.selectPendingByCondition(accountingDate, BufferModeEnum.ASYNC_SINGLE.getCode(), BufferStatusEnum.PENDING.getCode(), 50))
+                .thenReturn(List.of(detail));
+
+        AccountPO account = new AccountPO()
+                .setAccountNo(accountNo)
+                .setSubjectCode("1003")
+                .setBalanceDirection(BalanceDirectionEnum.CREDIT)
+                .setBalance(BigDecimal.ZERO);
+        when(accountRepository.selectByAccountNo(accountNo)).thenReturn(account);
+
+        SubAccountPO subAccount = new SubAccountPO()
+                .setAccountNo(accountNo)
+                .setBalanceType(BalanceTypeEnum.AVAILABLE)
+                .setBalanceDirection(BalanceDirectionEnum.CREDIT)
+                .setBalance(BigDecimal.ZERO);
+        when(subAccountRepository.selectByAccountNoAndType(accountNo, BalanceTypeEnum.AVAILABLE.getCode())).thenReturn(subAccount);
+        when(subjectRepository.selectByCode("1003")).thenReturn(new AccountSubjectPO().setDebitCredit(SubjectBalanceDirectionEnum.CREDIT));
+
+        BufferPostingEngineDomainService.BatchPostingResult result =
+                bufferPostingEngineDomainService.executeSinglePosting(accountingDate, 50);
+
+        assertThat(result.getFailedCount()).isEqualTo(1);
+        assertThat(result.getSuccessCount()).isEqualTo(0);
+
+        // 校验：首次执行失败，调用 incrementRetryCount，且传入非空的 startTime
+        verify(bufferPostingDetailRepository).incrementRetryCount(eq(6L), contains("余额不足"), notNull());
+    }
+
+    @Test
+    @DisplayName("单笔过账失败（重试执行）：递增 retry_count，但保留已有的 startTime 不被覆盖")
+    void executeSinglePosting_failure_retry_preservesExistingStartTime() {
+        String accountNo = "INNER10030102001";
+        LocalDate accountingDate = LocalDate.of(2026, 10, 21);
+        LocalDateTime firstStartTime = LocalDateTime.of(2026, 10, 21, 10, 0, 0);
+
+        BufferPostingDetailPO detail = new BufferPostingDetailPO()
+                .setVoucherNo("V202610210001")
+                .setEntryId("E001")
+                .setAccountNo(accountNo)
+                .setDebitCredit(DebitCreditEnum.DEBIT)
+                .setAmount(new BigDecimal("4236.00"))
+                .setAccountingDate(accountingDate)
+                .setStatus(BufferStatusEnum.PENDING)
+                .setRetryCount(1)
+                .setStartTime(firstStartTime);
+        detail.setId(6L);
+
+        when(bufferPostingDetailRepository.selectPendingByCondition(accountingDate, BufferModeEnum.ASYNC_SINGLE.getCode(), BufferStatusEnum.PENDING.getCode(), 50))
+                .thenReturn(List.of(detail));
+
+        AccountPO account = new AccountPO()
+                .setAccountNo(accountNo)
+                .setSubjectCode("1003")
+                .setBalanceDirection(BalanceDirectionEnum.CREDIT)
+                .setBalance(BigDecimal.ZERO);
+        when(accountRepository.selectByAccountNo(accountNo)).thenReturn(account);
+
+        SubAccountPO subAccount = new SubAccountPO()
+                .setAccountNo(accountNo)
+                .setBalanceType(BalanceTypeEnum.AVAILABLE)
+                .setBalanceDirection(BalanceDirectionEnum.CREDIT)
+                .setBalance(BigDecimal.ZERO);
+        when(subAccountRepository.selectByAccountNoAndType(accountNo, BalanceTypeEnum.AVAILABLE.getCode())).thenReturn(subAccount);
+        when(subjectRepository.selectByCode("1003")).thenReturn(new AccountSubjectPO().setDebitCredit(SubjectBalanceDirectionEnum.CREDIT));
+
+        BufferPostingEngineDomainService.BatchPostingResult result =
+                bufferPostingEngineDomainService.executeSinglePosting(accountingDate, 50);
+
+        assertThat(result.getFailedCount()).isEqualTo(1);
+
+        // 校验：重试执行失败，调用 incrementRetryCount，但传入的 startTimeToSet 为 null（即不覆盖库中原有时间）
+        verify(bufferPostingDetailRepository).incrementRetryCount(eq(6L), contains("余额不足"), isNull());
+    }
+
+    @Test
+    @DisplayName("单笔过账失败（达到最大重试次数 3 次）：流转为 FAILED，不再继续重试")
+    void executeSinglePosting_failure_exceedsMaxRetry_marksFailed() {
+        String accountNo = "INNER10030102001";
+        LocalDate accountingDate = LocalDate.of(2026, 10, 21);
+        LocalDateTime firstStartTime = LocalDateTime.of(2026, 10, 21, 10, 0, 0);
+
+        BufferPostingDetailPO detail = new BufferPostingDetailPO()
+                .setVoucherNo("V202610210001")
+                .setEntryId("E001")
+                .setAccountNo(accountNo)
+                .setDebitCredit(DebitCreditEnum.DEBIT)
+                .setAmount(new BigDecimal("4236.00"))
+                .setAccountingDate(accountingDate)
+                .setStatus(BufferStatusEnum.PENDING)
+                .setRetryCount(2) // 当前是第 2 次，本次失败即达第 3 次
+                .setStartTime(firstStartTime);
+        detail.setId(6L);
+
+        when(bufferPostingDetailRepository.selectPendingByCondition(accountingDate, BufferModeEnum.ASYNC_SINGLE.getCode(), BufferStatusEnum.PENDING.getCode(), 50))
+                .thenReturn(List.of(detail));
+
+        AccountPO account = new AccountPO()
+                .setAccountNo(accountNo)
+                .setSubjectCode("1003")
+                .setBalanceDirection(BalanceDirectionEnum.CREDIT)
+                .setBalance(BigDecimal.ZERO);
+        when(accountRepository.selectByAccountNo(accountNo)).thenReturn(account);
+
+        SubAccountPO subAccount = new SubAccountPO()
+                .setAccountNo(accountNo)
+                .setBalanceType(BalanceTypeEnum.AVAILABLE)
+                .setBalanceDirection(BalanceDirectionEnum.CREDIT)
+                .setBalance(BigDecimal.ZERO);
+        when(subAccountRepository.selectByAccountNoAndType(accountNo, BalanceTypeEnum.AVAILABLE.getCode())).thenReturn(subAccount);
+        when(subjectRepository.selectByCode("1003")).thenReturn(new AccountSubjectPO().setDebitCredit(SubjectBalanceDirectionEnum.CREDIT));
+
+        BufferPostingEngineDomainService.BatchPostingResult result =
+                bufferPostingEngineDomainService.executeSinglePosting(accountingDate, 50);
+
+        assertThat(result.getFailedCount()).isEqualTo(1);
+
+        // 校验：达到 3 次，调用 updateToFailed 将状态置为 FAILED，retryCount 置为 3
+        verify(bufferPostingDetailRepository).updateToFailed(eq(6L), contains("已达最大重试次数(3)"), eq(3), isNull());
     }
 }

@@ -8,6 +8,7 @@ import com.kltb.accounting.core.domain.enums.BufferStatusEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.BufferPostingDetailPO;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.BufferPostingDetailMapper;
 import com.kltb.accounting.core.shared.exception.AccountException;
+import com.kltb.accounting.core.shared.util.DateTimeUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
@@ -98,13 +99,16 @@ public class BufferPostingDetailRepository {
     }
 
     /**
-     * 更新为成功
+     * 更新为成功（支持首次执行记录 startTime）
      */
-    public void updateToSuccess(Long id, LocalDateTime completeTime) {
+    public void updateToSuccess(Long id, LocalDateTime completeTime, LocalDateTime startTime) {
         BufferPostingDetailPO po = new BufferPostingDetailPO();
         po.setId(id);
         po.setStatus(BufferStatusEnum.SUCCESS);
         po.setCompleteTime(completeTime);
+        if (startTime != null) {
+            po.setStartTime(startTime);
+        }
         int affected = bufferPostingDetailMapper.updateById(po);
         if (affected == 0) {
             throw new AccountException(ResultCode.OPTIMISTIC_LOCK_FAILED,
@@ -113,14 +117,20 @@ public class BufferPostingDetailRepository {
     }
 
     /**
-     * 更新为失败
+     * 更新为失败（支持指定重试次数与首次执行 startTime）
      */
-    public void updateToFailed(Long id, String failReason) {
+    public void updateToFailed(Long id, String failReason, Integer retryCount, LocalDateTime startTime) {
         BufferPostingDetailPO po = new BufferPostingDetailPO();
         po.setId(id);
         po.setStatus(BufferStatusEnum.FAILED);
         po.setFailReason(failReason);
         po.setCompleteTime(LocalDateTime.now());
+        if (retryCount != null) {
+            po.setRetryCount(retryCount);
+        }
+        if (startTime != null) {
+            po.setStartTime(startTime);
+        }
         int affected = bufferPostingDetailMapper.updateById(po);
         if (affected == 0) {
             throw new AccountException(ResultCode.OPTIMISTIC_LOCK_FAILED,
@@ -129,14 +139,19 @@ public class BufferPostingDetailRepository {
     }
 
     /**
-     * 增加重试次数
+     * 增加重试次数（支持首次执行记录 startTime）
      */
-    public void incrementRetryCount(Long id, String failReason) {
+    public void incrementRetryCount(Long id, String failReason, LocalDateTime startTime) {
         BufferPostingDetailPO po = bufferPostingDetailMapper.selectById(id);
         if (po != null) {
             po.setRetryCount((po.getRetryCount() != null ? po.getRetryCount() : 0) + 1);
             po.setFailReason(failReason);
             po.setCompleteTime(LocalDateTime.now());
+            if (startTime != null) {
+                po.setStartTime(startTime);
+            } else if (DateTimeUtil.isDefaultTime(po.getStartTime())) {
+                po.setStartTime(LocalDateTime.now());
+            }
             bufferPostingDetailMapper.updateById(po);
         }
     }
@@ -191,7 +206,7 @@ public class BufferPostingDetailRepository {
         List<BufferPostingDetailPO> list = selectByTraceNo(traceNo);
         for (BufferPostingDetailPO detail : list) {
             if (detail.getStatus() == BufferStatusEnum.PENDING || detail.getStatus() == BufferStatusEnum.PROCESSING) {
-                updateToFailed(detail.getId(), reason);
+                updateToFailed(detail.getId(), reason, null, null);
             }
         }
     }
