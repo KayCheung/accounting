@@ -1225,6 +1225,32 @@
 
 ---
 
+       - **财务报表数据库配置驱动演进与核心配置管理控制台（REQ261022-002）**：
+         1. **架构演进背景**：根据金融核心开发原则“严禁硬编码科目号，过账与报表必须动态解析配置驱动”，消除报表服务中离散静态科目常量的局限性，实现中国会计准则 (CAS)、小企业准则及国际财务报告准则 (IFRS) 的多套报表自由配置与热发布；
+         2. **数据库持久层（Flyway V29 & V30）**：
+            - 新建 `t_financial_report_item_mapping` 表，支持报表类型（资产负债表/利润表）、项目编码、项目名称、大类、行次、层级（标题/明细/合计）、绑定科目、计算规则（累加/抵扣/小计/未分配利润/公式）、取数方向与状态；预置全部标准 CAS 资产负债表与利润表种子数据；
+            - 在系统字典表 `t_dictionary` 注册 `financial_report_category`（报表分类）与 `financial_report_calc_operator`（计算运算符）两套系统字典，并将公式项升级为标准化变量表达式（如 `REV_OPERATING - COST_OPERATING ...`）；
+         3. **强类型枚举化与魔法值全面消除**：
+            - PO 中 `reportType`、`displayLevel`、`calcOperator`、`balanceDirection`、`category`、`status` 全部推行强类型枚举（`ReportTypeEnum`, `ReportDisplayLevelEnum`, `ReportCalcOperatorEnum`, `ReportBalanceDirectionEnum`, `ReportCategoryEnum`, `AvailableStatusEnum`），彻底消除散落魔法值并与 MyBatis-Plus `@EnumValue` 映射保持强一致；
+            - 建立集中常量类 `ReportItemConstants` 收拢利润表与资产负债表的所有核心指标项编码；
+         4. **SpEL 动态公式引擎与报表动态计算**：
+            - `FinancialReportDomainService` 重构 `generateBalanceSheet` 与 `generateIncomeStatement`，优先按 `t_financial_report_item_mapping` 配置项动态驱动汇总，若表中配置为空则平滑安全回退至内置兜底逻辑；
+            - 引入 Spring SpEL 表达式求值引擎（`evaluateFormula`），实现多步式利润表公式指标（营业利润、利润总额、净利润）的动态计算与变量热替换，公式中未出现的变量自动兜底为 `BigDecimal.ZERO`，彻底解耦 Java 代码与具体报表公式分支；
+         5. **后端分层架构与事务规范**：
+            - `accounting-api`：落地 `ReportItemMappingQueryRequest`、`ReportItemMappingCreateRequest`、`ReportItemMappingUpdateRequest` 与 `ReportItemMappingResponse`；
+            - `accounting-core`：落地 PO、Mapper、Repository、DomainService 与 ApplicationService，严格遵守金融开发规范，使用 `TransactionTemplate` 保证原子性，严禁 `@Transactional`；
+            - `FinancialReportItemMappingController`：提供 RESTful 管理端全量 CRUD 及启停状态切换接口；
+         6. **前端管理端（accounting-ui）**：
+            - 在侧边栏【核心配置】与路由注册【财务报表配置】（`/config/report-mapping`）；
+            - 实现资产负债表/利润表 Tab 快速切换、关键字多维检索、展示层级筛选、分类筛选、科目 Tag 组展示、行内启用/停用 Switch、新增/编辑全功能弹窗；
+            - 提供一键跳转报表预览联动通道；
+         7. **质量与测试保障**：
+            - `FinancialReportItemMappingDomainServiceTest` 覆盖 CRUD 与编码唯一性校验；
+            - `FinancialReportDomainServiceTest` 覆盖基于 SpEL 动态公式求值的利润表与资产负债表动态平衡验证；
+            - 全模块 469 个单测 100% 通过；前端 `vue-tsc` 与 `vite build` 生产构建 0 错误。
+
+---
+
 ## Phase 10：联调、性能验收与上线
 
 - [ ] **Step 24** · Integration Testing｜全链路联调

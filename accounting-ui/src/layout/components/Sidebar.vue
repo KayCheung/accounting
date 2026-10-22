@@ -76,6 +76,7 @@
           <el-menu-item index="/config/buffer-rule">缓冲入账规则</el-menu-item>
           <el-menu-item index="/config/transfer-rule">期末结转规则</el-menu-item>
           <el-menu-item index="/config/dict">基础数据字典</el-menu-item>
+          <el-menu-item index="/config/report-mapping">财务报表配置</el-menu-item>
         </el-sub-menu>
 
         <!-- 7. 事务与监控 -->

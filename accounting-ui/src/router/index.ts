@@ -132,6 +132,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/config/dict/index.vue'),
         meta: { title: '基础数据字典' }
       },
+      {
+        path: 'config/report-mapping',
+        name: 'ReportMappingConfig',
+        component: () => import('@/views/config/report-mapping/index.vue'),
+        meta: { title: '财务报表配置' }
+      },
 
       // 7. 事务与运行监控
       {

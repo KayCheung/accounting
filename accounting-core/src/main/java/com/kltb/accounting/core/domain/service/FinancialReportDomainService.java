@@ -8,6 +8,7 @@ import com.kltb.accounting.api.request.IncomeStatementQueryRequest;
 import com.kltb.accounting.api.request.SubsidiaryLedgerQueryRequest;
 import com.kltb.accounting.api.response.*;
 import com.kltb.accounting.core.domain.enums.BalanceDirectionEnum;
+import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
 import com.kltb.accounting.core.domain.enums.SubjectBalanceDirectionEnum;
 import com.kltb.accounting.core.domain.enums.SubjectCategoryEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountBalancePO;
@@ -16,16 +17,27 @@ import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVouc
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountBalanceRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountingVoucherRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.SubjectRepository;
+import com.kltb.accounting.core.domain.constant.ReportItemConstants;
+import com.kltb.accounting.core.domain.enums.*;
+import com.kltb.accounting.core.infrastructure.persistence.entity.FinancialReportItemMappingPO;
+import com.kltb.accounting.core.infrastructure.persistence.repository.FinancialReportItemMappingRepository;
 import com.kltb.accounting.core.shared.util.FinancialAmountUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.expression.Expression;
+import org.springframework.expression.ExpressionParser;
+import org.springframework.expression.spel.standard.SpelExpressionParser;
+import org.springframework.expression.spel.support.StandardEvaluationContext;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.temporal.TemporalAdjusters;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static java.math.BigDecimal.ZERO;
@@ -47,6 +59,8 @@ public class FinancialReportDomainService {
     private final AccountBalanceRepository accountBalanceRepository;
     private final AccountingVoucherRepository voucherRepository;
     private final SubjectRepository subjectRepository;
+    private final FinancialReportItemMappingRepository mappingRepository;
+    private static final ExpressionParser SPEL_PARSER = new SpelExpressionParser();
 
     /**
      * 中国《企业会计准则》（CAS）财务报表标准推荐科目代码映射规范定义
@@ -132,6 +146,16 @@ public class FinancialReportDomainService {
         // 动态汇算未结转损益净额（6类科目贷方收益 - 借方支出）
         BigDecimal unclosedProfitEnd = calculateUnclosedProfit(endBalances, subjectMap);
         BigDecimal unclosedProfitBegin = calculateUnclosedProfit(beginBalances, subjectMap);
+
+        // 优先检查数据库行项目配置驱动 (t_financial_report_item_mapping)
+        List<FinancialReportItemMappingPO> mappings = mappingRepository != null
+                ? mappingRepository.selectEnabledByReportType(ReportTypeEnum.BALANCE_SHEET)
+                : Collections.emptyList();
+        if (mappings != null && !mappings.isEmpty()) {
+            return generateBalanceSheetByMappings(request, accountingDate, compareDate, closingMethod,
+                    isReportClosing, subjectMap, endAmountMap, beginAmountMap,
+                    unclosedProfitEnd, unclosedProfitBegin, mappings);
+        }
 
         // 3. 构建资产端行项目
         List<BalanceSheetItemResponse> assetItems = new ArrayList<>();
@@ -447,6 +471,14 @@ public class FinancialReportDomainService {
         // 计算各科目的净发生额（收入类贷方-借方，成本费用类借方-贷方）
         Map<String, BigDecimal> monthNetMap = aggregateNetAmounts(monthBalances);
         Map<String, BigDecimal> yearNetMap = aggregateNetAmounts(yearBalances);
+
+        // 优先检查数据库行项目配置驱动 (t_financial_report_item_mapping)
+        List<FinancialReportItemMappingPO> incomeMappings = mappingRepository != null
+                ? mappingRepository.selectEnabledByReportType(ReportTypeEnum.INCOME_STATEMENT)
+                : Collections.emptyList();
+        if (incomeMappings != null && !incomeMappings.isEmpty()) {
+            return generateIncomeStatementByMappings(periodDesc, monthEnd, monthNetMap, yearNetMap, compareNetMap, incomeMappings);
+        }
 
         List<IncomeStatementItemResponse> items = new ArrayList<>();
 
@@ -814,8 +846,8 @@ public class FinancialReportDomainService {
         BigDecimal displayBal = beginBal;
 
         for (AccountingVoucherEntryPO e : entries) {
-            BigDecimal debit = e.getDebitCredit() == com.kltb.accounting.core.domain.enums.DebitCreditEnum.DEBIT ? e.getAmount() : ZERO;
-            BigDecimal credit = e.getDebitCredit() == com.kltb.accounting.core.domain.enums.DebitCreditEnum.CREDIT ? e.getAmount() : ZERO;
+            BigDecimal debit = e.getDebitCredit() == DebitCreditEnum.DEBIT ? e.getAmount() : ZERO;
+            BigDecimal credit = e.getDebitCredit() == DebitCreditEnum.CREDIT ? e.getAmount() : ZERO;
 
             // 过滤金额
             if (request.getMinAmount() != null && e.getAmount().compareTo(request.getMinAmount()) < 0) {
@@ -1118,5 +1150,378 @@ public class FinancialReportDomainService {
             }
         }
         return details;
+    }
+
+    /**
+     * 数据库行项目配置驱动：动态生成资产负债表 (t_financial_report_item_mapping)
+     */
+    private BalanceSheetResponse generateBalanceSheetByMappings(
+            BalanceSheetQueryRequest request,
+            LocalDate accountingDate,
+            LocalDate compareDate,
+            ClosingMethodEnum closingMethod,
+            boolean isReportClosing,
+            Map<String, AccountSubjectPO> subjectMap,
+            Map<String, BigDecimal> endAmountMap,
+            Map<String, BigDecimal> beginAmountMap,
+            BigDecimal unclosedProfitEnd,
+            BigDecimal unclosedProfitBegin,
+            List<FinancialReportItemMappingPO> mappings) {
+
+        List<BalanceSheetItemResponse> assetItems = new ArrayList<>();
+        List<BalanceSheetItemResponse> liabEquityItems = new ArrayList<>();
+
+        BigDecimal currentAssetEnd = ZERO;
+        BigDecimal currentAssetBegin = ZERO;
+        BigDecimal nonCurrentAssetEnd = ZERO;
+        BigDecimal nonCurrentAssetBegin = ZERO;
+
+        BigDecimal currentLiabEnd = ZERO;
+        BigDecimal currentLiabBegin = ZERO;
+        BigDecimal nonCurrentLiabEnd = ZERO;
+        BigDecimal nonCurrentLiabBegin = ZERO;
+        BigDecimal equityEnd = ZERO;
+        BigDecimal equityBegin = ZERO;
+
+        Set<String> knownCurrentAssetPrefixes = Set.of(
+                "1001", "1002", "1012", "1121", "1122", "1123", "1221", "1403", "1405", "1406", "1601", "1602", "1701"
+        );
+        Set<String> knownCurrentLiabPrefixes = Set.of(
+                "2001", "2202", "2203", "2211", "2221", "2241", "2501"
+        );
+
+        for (FinancialReportItemMappingPO m : mappings) {
+            int lineNo = m.getLineNo() != null ? m.getLineNo() : 0;
+            String itemName = m.getItemName();
+            ReportDisplayLevelEnum level = m.getDisplayLevel() != null ? m.getDisplayLevel() : ReportDisplayLevelEnum.DETAIL;
+            ReportCategoryEnum category = m.getItemCategory();
+            ReportCalcOperatorEnum op = m.getCalcOperator() != null ? m.getCalcOperator() : ReportCalcOperatorEnum.ADD;
+            String itemCode = m.getItemCode();
+            boolean isAssetSide = category == ReportCategoryEnum.CURRENT_ASSET
+                    || category == ReportCategoryEnum.NON_CURRENT_ASSET
+                    || category == ReportCategoryEnum.ASSET_TOTAL;
+
+            if (level == ReportDisplayLevelEnum.HEADER) {
+                BalanceSheetItemResponse item = buildItem(lineNo, itemName, level.getCode(), "", null, null);
+                if (isAssetSide) {
+                    assetItems.add(item);
+                } else {
+                    liabEquityItems.add(item);
+                }
+            } else if (level == ReportDisplayLevelEnum.DETAIL) {
+                BigDecimal endVal;
+                BigDecimal beginVal;
+                List<BalanceSheetSubjectDetailResponse> detailList = null;
+
+                if (ReportItemConstants.EQUITY_UNDISTRIBUTED_PROFIT.equalsIgnoreCase(itemCode)
+                        || op == ReportCalcOperatorEnum.UNDISTRIBUTED_PROFIT) {
+                    BigDecimal p4103End = sumSubjects(endAmountMap, CAS_SUBJECTS.CURRENT_YEAR_PROFIT);
+                    BigDecimal p4103Begin = sumSubjects(beginAmountMap, CAS_SUBJECTS.CURRENT_YEAR_PROFIT);
+                    BigDecimal p4104End = sumSubjects(endAmountMap, CAS_SUBJECTS.PROFIT_DISTRIBUTION);
+                    BigDecimal p4104Begin = sumSubjects(beginAmountMap, CAS_SUBJECTS.PROFIT_DISTRIBUTION);
+
+                    endVal = p4103End.add(p4104End);
+                    beginVal = p4103Begin.add(p4104Begin);
+
+                    if (isReportClosing) {
+                        endVal = endVal.add(unclosedProfitEnd);
+                        beginVal = beginVal.add(unclosedProfitBegin);
+                    }
+
+                    detailList = new ArrayList<>();
+                    if (p4103End.compareTo(ZERO) != 0 || p4103Begin.compareTo(ZERO) != 0) {
+                        detailList.add(BalanceSheetSubjectDetailResponse.builder()
+                                .subjectCode(CAS_SUBJECTS.CURRENT_YEAR_PROFIT).subjectName("本年利润 (账面已结转)")
+                                .endAmount(p4103End).beginAmount(p4103Begin).build());
+                    }
+                    if (p4104End.compareTo(ZERO) != 0 || p4104Begin.compareTo(ZERO) != 0) {
+                        detailList.add(BalanceSheetSubjectDetailResponse.builder()
+                                .subjectCode(CAS_SUBJECTS.PROFIT_DISTRIBUTION).subjectName("利润分配")
+                                .endAmount(p4104End).beginAmount(p4104Begin).build());
+                    }
+                    if (isReportClosing && (unclosedProfitEnd.compareTo(ZERO) != 0 || unclosedProfitBegin.compareTo(ZERO) != 0)) {
+                        detailList.add(BalanceSheetSubjectDetailResponse.builder()
+                                .subjectCode("999999").subjectName("当期未结转净损益 (表结法动态汇算)")
+                                .endAmount(unclosedProfitEnd).beginAmount(unclosedProfitBegin).build());
+                    }
+                } else if (ReportItemConstants.ASSET_OTHER_CURRENT.equalsIgnoreCase(itemCode)) {
+                    endVal = sumPrefixExcept(endAmountMap, "1", knownCurrentAssetPrefixes);
+                    beginVal = sumPrefixExcept(beginAmountMap, "1", knownCurrentAssetPrefixes);
+                } else if (ReportItemConstants.LIAB_OTHER_CURRENT.equalsIgnoreCase(itemCode)) {
+                    endVal = sumPrefixExcept(endAmountMap, "2", knownCurrentLiabPrefixes);
+                    beginVal = sumPrefixExcept(beginAmountMap, "2", knownCurrentLiabPrefixes);
+                } else {
+                    String[] codes = StringUtils.hasText(m.getSubjectCodes())
+                            ? m.getSubjectCodes().split(",")
+                            : new String[0];
+                    for (int i = 0; i < codes.length; i++) {
+                        codes[i] = codes[i].trim();
+                    }
+                    endVal = sumSubjects(endAmountMap, codes);
+                    beginVal = sumSubjects(beginAmountMap, codes);
+                    detailList = collectSubjectDetails(endAmountMap, beginAmountMap, subjectMap, codes);
+                }
+
+                BalanceSheetItemResponse item = buildItem(lineNo, itemName, 2, m.getSubjectCodes(), endVal, beginVal);
+                if (detailList != null && !detailList.isEmpty()) {
+                    item.setDetailSubjects(detailList);
+                }
+
+                if (category == ReportCategoryEnum.CURRENT_ASSET) {
+                    assetItems.add(item);
+                    currentAssetEnd = currentAssetEnd.add(endVal);
+                    currentAssetBegin = currentAssetBegin.add(beginVal);
+                } else if (category == ReportCategoryEnum.NON_CURRENT_ASSET) {
+                    assetItems.add(item);
+                    nonCurrentAssetEnd = nonCurrentAssetEnd.add(endVal);
+                    nonCurrentAssetBegin = nonCurrentAssetBegin.add(beginVal);
+                } else if (category == ReportCategoryEnum.CURRENT_LIABILITY) {
+                    liabEquityItems.add(item);
+                    currentLiabEnd = currentLiabEnd.add(endVal);
+                    currentLiabBegin = currentLiabBegin.add(beginVal);
+                } else if (category == ReportCategoryEnum.NON_CURRENT_LIABILITY) {
+                    liabEquityItems.add(item);
+                    nonCurrentLiabEnd = nonCurrentLiabEnd.add(endVal);
+                    nonCurrentLiabBegin = nonCurrentLiabBegin.add(beginVal);
+                } else if (category == ReportCategoryEnum.EQUITY) {
+                    liabEquityItems.add(item);
+                    equityEnd = equityEnd.add(endVal);
+                    equityBegin = equityBegin.add(beginVal);
+                }
+            } else if (level == ReportDisplayLevelEnum.TOTAL) {
+                BigDecimal endVal = ZERO;
+                BigDecimal beginVal = ZERO;
+                if (ReportItemConstants.ASSET_CURRENT_TOTAL.equalsIgnoreCase(itemCode)) {
+                    endVal = currentAssetEnd;
+                    beginVal = currentAssetBegin;
+                    assetItems.add(buildItem(lineNo, itemName, 3, "", endVal, beginVal));
+                } else if (ReportItemConstants.ASSET_NON_CURRENT_TOTAL.equalsIgnoreCase(itemCode)) {
+                    endVal = nonCurrentAssetEnd;
+                    beginVal = nonCurrentAssetBegin;
+                    assetItems.add(buildItem(lineNo, itemName, 3, "", endVal, beginVal));
+                } else if (ReportItemConstants.ASSET_TOTAL.equalsIgnoreCase(itemCode)) {
+                    endVal = currentAssetEnd.add(nonCurrentAssetEnd);
+                    beginVal = currentAssetBegin.add(nonCurrentAssetBegin);
+                    assetItems.add(buildItem(lineNo, itemName, 3, "", endVal, beginVal));
+                } else if (ReportItemConstants.LIAB_CURRENT_TOTAL.equalsIgnoreCase(itemCode)) {
+                    endVal = currentLiabEnd;
+                    beginVal = currentLiabBegin;
+                    liabEquityItems.add(buildItem(lineNo, itemName, 3, "", endVal, beginVal));
+                } else if (ReportItemConstants.LIAB_NON_CURRENT_TOTAL.equalsIgnoreCase(itemCode)) {
+                    endVal = nonCurrentLiabEnd;
+                    beginVal = nonCurrentLiabBegin;
+                    liabEquityItems.add(buildItem(lineNo, itemName, 3, "", endVal, beginVal));
+                } else if (ReportItemConstants.LIAB_TOTAL.equalsIgnoreCase(itemCode)) {
+                    endVal = currentLiabEnd.add(nonCurrentLiabEnd);
+                    beginVal = currentLiabBegin.add(nonCurrentLiabBegin);
+                    liabEquityItems.add(buildItem(lineNo, itemName, 3, "", endVal, beginVal));
+                } else if (ReportItemConstants.EQUITY_TOTAL.equalsIgnoreCase(itemCode)) {
+                    endVal = equityEnd;
+                    beginVal = equityBegin;
+                    liabEquityItems.add(buildItem(lineNo, itemName, 3, "", endVal, beginVal));
+                } else if (ReportItemConstants.LIAB_EQUITY_TOTAL.equalsIgnoreCase(itemCode)) {
+                    BigDecimal totalLiabEnd = currentLiabEnd.add(nonCurrentLiabEnd);
+                    BigDecimal totalLiabBegin = currentLiabBegin.add(nonCurrentLiabBegin);
+                    endVal = totalLiabEnd.add(equityEnd);
+                    beginVal = totalLiabBegin.add(equityBegin);
+                    liabEquityItems.add(buildItem(lineNo, itemName, 3, "", endVal, beginVal));
+                }
+            }
+        }
+
+        BigDecimal totalAssetEnd = currentAssetEnd.add(nonCurrentAssetEnd);
+        BigDecimal totalAssetBegin = currentAssetBegin.add(nonCurrentAssetBegin);
+        BigDecimal totalLiabEnd = currentLiabEnd.add(nonCurrentLiabEnd);
+        BigDecimal totalLiabBegin = currentLiabBegin.add(nonCurrentLiabBegin);
+        BigDecimal totalLiabEquityEnd = totalLiabEnd.add(equityEnd);
+        BigDecimal totalLiabEquityBegin = totalLiabBegin.add(equityBegin);
+
+        boolean balanced = totalAssetEnd.compareTo(totalLiabEquityEnd) == 0;
+        BigDecimal diffAmount = totalAssetEnd.subtract(totalLiabEquityEnd).abs();
+
+        return BalanceSheetResponse.builder()
+                .accountingDate(accountingDate)
+                .compareDate(compareDate)
+                .unitName(Constants.DEFAULT_UNIT_NAME)
+                .currency(Constants.DEFAULT_CURRENCY)
+                .closingMethod(closingMethod.getCode())
+                .unclosedProfitEnd(unclosedProfitEnd)
+                .unclosedProfitBegin(unclosedProfitBegin)
+                .balanced(balanced)
+                .diffAmount(diffAmount)
+                .totalAssetEnd(totalAssetEnd)
+                .totalAssetBegin(totalAssetBegin)
+                .totalLiabilityAndEquityEnd(totalLiabEquityEnd)
+                .totalLiabilityAndEquityBegin(totalLiabEquityBegin)
+                .assetItems(assetItems)
+                .liabilityAndEquityItems(liabEquityItems)
+                .build();
+    }
+
+    /**
+     * 数据库行项目配置驱动：动态生成利润表 (t_financial_report_item_mapping)
+     */
+    private IncomeStatementResponse generateIncomeStatementByMappings(
+            String periodDesc,
+            LocalDate accountingDate,
+            Map<String, BigDecimal> monthNetMap,
+            Map<String, BigDecimal> yearNetMap,
+            Map<String, BigDecimal> compareNetMap,
+            List<FinancialReportItemMappingPO> mappings) {
+
+        List<IncomeStatementItemResponse> items = new ArrayList<>();
+        Map<String, BigDecimal> curValues = new HashMap<>();
+        Map<String, BigDecimal> yearValues = new HashMap<>();
+        Map<String, BigDecimal> cmpValues = new HashMap<>();
+
+        for (FinancialReportItemMappingPO m : mappings) {
+            int lineNo = m.getLineNo() != null ? m.getLineNo() : 0;
+            String itemCode = m.getItemCode();
+            String itemName = m.getItemName();
+            ReportDisplayLevelEnum level = m.getDisplayLevel() != null ? m.getDisplayLevel() : ReportDisplayLevelEnum.DETAIL;
+
+            if (m.getCalcOperator() == ReportCalcOperatorEnum.FORMULA) {
+                BigDecimal cur = evaluateFormula(m.getFormulaExpr(), curValues);
+                BigDecimal yr = evaluateFormula(m.getFormulaExpr(), yearValues);
+                BigDecimal cmp = evaluateFormula(m.getFormulaExpr(), cmpValues);
+
+                // 若未配置公式表达式，回退基于标准多步式规则兜底
+                if (!StringUtils.hasText(m.getFormulaExpr())) {
+                    if (ReportItemConstants.PROFIT_OPERATING.equalsIgnoreCase(itemCode)) {
+                        cur = curValues.getOrDefault(ReportItemConstants.REV_OPERATING, ZERO)
+                                .subtract(curValues.getOrDefault(ReportItemConstants.COST_OPERATING, ZERO))
+                                .subtract(curValues.getOrDefault(ReportItemConstants.TAX_SURCHARGE, ZERO))
+                                .subtract(curValues.getOrDefault(ReportItemConstants.EXP_SELLING, ZERO))
+                                .subtract(curValues.getOrDefault(ReportItemConstants.EXP_ADMIN, ZERO))
+                                .subtract(curValues.getOrDefault(ReportItemConstants.EXP_RD, ZERO))
+                                .subtract(curValues.getOrDefault(ReportItemConstants.EXP_FINANCIAL, ZERO))
+                                .add(curValues.getOrDefault(ReportItemConstants.INC_INVESTMENT, ZERO));
+                        yr = yearValues.getOrDefault(ReportItemConstants.REV_OPERATING, ZERO)
+                                .subtract(yearValues.getOrDefault(ReportItemConstants.COST_OPERATING, ZERO))
+                                .subtract(yearValues.getOrDefault(ReportItemConstants.TAX_SURCHARGE, ZERO))
+                                .subtract(yearValues.getOrDefault(ReportItemConstants.EXP_SELLING, ZERO))
+                                .subtract(yearValues.getOrDefault(ReportItemConstants.EXP_ADMIN, ZERO))
+                                .subtract(yearValues.getOrDefault(ReportItemConstants.EXP_RD, ZERO))
+                                .subtract(yearValues.getOrDefault(ReportItemConstants.EXP_FINANCIAL, ZERO))
+                                .add(yearValues.getOrDefault(ReportItemConstants.INC_INVESTMENT, ZERO));
+                        cmp = cmpValues.getOrDefault(ReportItemConstants.REV_OPERATING, ZERO)
+                                .subtract(cmpValues.getOrDefault(ReportItemConstants.COST_OPERATING, ZERO))
+                                .subtract(cmpValues.getOrDefault(ReportItemConstants.TAX_SURCHARGE, ZERO))
+                                .subtract(cmpValues.getOrDefault(ReportItemConstants.EXP_SELLING, ZERO))
+                                .subtract(cmpValues.getOrDefault(ReportItemConstants.EXP_ADMIN, ZERO))
+                                .subtract(cmpValues.getOrDefault(ReportItemConstants.EXP_RD, ZERO))
+                                .subtract(cmpValues.getOrDefault(ReportItemConstants.EXP_FINANCIAL, ZERO))
+                                .add(cmpValues.getOrDefault(ReportItemConstants.INC_INVESTMENT, ZERO));
+                    } else if (ReportItemConstants.PROFIT_TOTAL.equalsIgnoreCase(itemCode)) {
+                        cur = curValues.getOrDefault(ReportItemConstants.PROFIT_OPERATING, ZERO)
+                                .add(curValues.getOrDefault(ReportItemConstants.INC_NON_OPERATING, ZERO))
+                                .subtract(curValues.getOrDefault(ReportItemConstants.EXP_NON_OPERATING, ZERO));
+                        yr = yearValues.getOrDefault(ReportItemConstants.PROFIT_OPERATING, ZERO)
+                                .add(yearValues.getOrDefault(ReportItemConstants.INC_NON_OPERATING, ZERO))
+                                .subtract(yearValues.getOrDefault(ReportItemConstants.EXP_NON_OPERATING, ZERO));
+                        cmp = cmpValues.getOrDefault(ReportItemConstants.PROFIT_OPERATING, ZERO)
+                                .add(cmpValues.getOrDefault(ReportItemConstants.INC_NON_OPERATING, ZERO))
+                                .subtract(cmpValues.getOrDefault(ReportItemConstants.EXP_NON_OPERATING, ZERO));
+                    } else if (ReportItemConstants.PROFIT_NET.equalsIgnoreCase(itemCode)) {
+                        cur = curValues.getOrDefault(ReportItemConstants.PROFIT_TOTAL, ZERO)
+                                .subtract(curValues.getOrDefault(ReportItemConstants.EXP_INCOME_TAX, ZERO));
+                        yr = yearValues.getOrDefault(ReportItemConstants.PROFIT_TOTAL, ZERO)
+                                .subtract(yearValues.getOrDefault(ReportItemConstants.EXP_INCOME_TAX, ZERO));
+                        cmp = cmpValues.getOrDefault(ReportItemConstants.PROFIT_TOTAL, ZERO)
+                                .subtract(cmpValues.getOrDefault(ReportItemConstants.EXP_INCOME_TAX, ZERO));
+                    }
+                }
+                curValues.put(itemCode, cur);
+                yearValues.put(itemCode, yr);
+                cmpValues.put(itemCode, cmp);
+                items.add(buildIncomeItem(lineNo, itemName, level.getCode(), cur, yr, cmp));
+            } else {
+                String[] codes = StringUtils.hasText(m.getSubjectCodes())
+                        ? m.getSubjectCodes().split(",")
+                        : new String[0];
+                for (int i = 0; i < codes.length; i++) {
+                    codes[i] = codes[i].trim();
+                }
+                BigDecimal cur = sumNet(monthNetMap, codes);
+                BigDecimal yr = sumNet(yearNetMap, codes);
+                BigDecimal cmp = sumNet(compareNetMap, codes);
+                curValues.put(itemCode, cur);
+                yearValues.put(itemCode, yr);
+                cmpValues.put(itemCode, cmp);
+                items.add(buildIncomeItem(lineNo, itemName, level.getCode(), cur, yr, cmp));
+            }
+        }
+
+        BigDecimal revCur = curValues.getOrDefault(ReportItemConstants.REV_OPERATING, ZERO);
+        BigDecimal costCur = curValues.getOrDefault(ReportItemConstants.COST_OPERATING, ZERO);
+        BigDecimal opProfitCur = curValues.getOrDefault(ReportItemConstants.PROFIT_OPERATING, ZERO);
+        BigDecimal netProfitCur = curValues.getOrDefault(ReportItemConstants.PROFIT_NET, ZERO);
+        BigDecimal netProfitYear = yearValues.getOrDefault(ReportItemConstants.PROFIT_NET, ZERO);
+        BigDecimal revCmp = cmpValues.getOrDefault(ReportItemConstants.REV_OPERATING, ZERO);
+        BigDecimal netProfitCmp = cmpValues.getOrDefault(ReportItemConstants.PROFIT_NET, ZERO);
+
+        BigDecimal grossMarginRate = ZERO;
+        if (revCur.compareTo(ZERO) > 0) {
+            grossMarginRate = revCur.subtract(costCur).divide(revCur, 4, RoundingMode.HALF_UP).multiply(FinancialAmountUtil.PERCENT_BASE);
+        }
+
+        BigDecimal revYoY = calcRate(revCur, revCmp);
+        BigDecimal netProfitYoY = calcRate(netProfitCur, netProfitCmp);
+
+        IncomeStatementKpiResponse kpi = IncomeStatementKpiResponse.builder()
+                .revenueMonth(revCur)
+                .operatingProfitMonth(opProfitCur)
+                .netProfitMonth(netProfitCur)
+                .grossMarginRate(grossMarginRate.setScale(1, RoundingMode.HALF_UP))
+                .netProfitYearTotal(netProfitYear)
+                .revenueYoY(revYoY)
+                .netProfitYoY(netProfitYoY)
+                .build();
+
+        return IncomeStatementResponse.builder()
+                .periodDesc(periodDesc)
+                .accountingDate(accountingDate)
+                .unitName(Constants.DEFAULT_UNIT_NAME)
+                .currency(Constants.DEFAULT_CURRENCY)
+                .kpi(kpi)
+                .items(items)
+                .build();
+    }
+
+    /**
+     * 动态公式求值器 (支持 SpEL 表达式四则运算与变量替换)
+     *
+     * @param formulaExpr 公式表达式，例如: REV_OPERATING - COST_OPERATING - TAX_SURCHARGE
+     * @param valueMap    各指标变量数值映射
+     * @return 计算结果 (BigDecimal)，失败或异常返回 ZERO
+     */
+    private BigDecimal evaluateFormula(String formulaExpr, Map<String, BigDecimal> valueMap) {
+        if (!StringUtils.hasText(formulaExpr) || valueMap == null) {
+            return ZERO;
+        }
+        try {
+            StandardEvaluationContext context = new StandardEvaluationContext();
+
+            // 扫描表达式中所有变量标识符，未定义的先预置为 ZERO，避免 SpEL 报 null 异常
+            Matcher matcher = Pattern.compile("\\b([A-Za-z_][A-Za-z0-9_]*)\\b").matcher(formulaExpr);
+            while (matcher.find()) {
+                String varName = matcher.group(1);
+                context.setVariable(varName, valueMap.getOrDefault(varName, ZERO));
+            }
+
+            // 将普通变量名替换为 SpEL 变量引用，例如 REV_OPERATING -> #REV_OPERATING
+            String spelExpr = formulaExpr.replaceAll("(?<!#)\\b([A-Za-z_][A-Za-z0-9_]*)\\b", "#$1");
+            Expression expr = SPEL_PARSER.parseExpression(spelExpr);
+            Object result = expr.getValue(context);
+            if (result instanceof BigDecimal bd) {
+                return bd;
+            } else if (result instanceof Number num) {
+                return BigDecimal.valueOf(num.doubleValue());
+            }
+            return ZERO;
+        } catch (Exception e) {
+            log.warn("动态公式表达式求值异常 [formula={}]: {}", formulaExpr, e.getMessage());
+            return ZERO;
+        }
     }
 }
