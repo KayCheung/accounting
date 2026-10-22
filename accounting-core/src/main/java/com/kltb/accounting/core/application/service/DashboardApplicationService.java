@@ -140,6 +140,12 @@ public class DashboardApplicationService {
                     .eq(BufferPostingDetailPO::getIsDelete, 0));
             builder.pendingBufferCount(pendingBufferCount != null ? pendingBufferCount : 0L);
 
+            // 缓冲记账失败异常明细笔数
+            Long failedBufferCount = bufferPostingDetailMapper.selectCount(new LambdaQueryWrapper<BufferPostingDetailPO>()
+                    .eq(BufferPostingDetailPO::getStatus, BufferStatusEnum.FAILED.getCode())
+                    .eq(BufferPostingDetailPO::getIsDelete, 0));
+            builder.failedBufferCount(failedBufferCount != null ? failedBufferCount : 0L);
+
             // 资金冻结中工单数
             Long activeFreezeCount = accountFreezeDetailMapper.selectCount(new LambdaQueryWrapper<AccountFreezeDetailPO>()
                     .eq(AccountFreezeDetailPO::getStatus, FreezeStatusEnum.FROZEN.getCode())
@@ -150,6 +156,7 @@ public class DashboardApplicationService {
             builder.failedPostingCount(0L);
             builder.hangingJournalCount(0L);
             builder.pendingBufferCount(0L);
+            builder.failedBufferCount(0L);
             builder.activeFreezeCount(0L);
         }
 

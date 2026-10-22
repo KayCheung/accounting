@@ -227,13 +227,18 @@
         <!-- 缓冲待入账存量 -->
         <el-col :span="6">
           <div class="fin-card exception-card" @click="$router.push('/business/buffer-monitor')">
-            <div class="stat-icon-box info">
+            <div class="stat-icon-box" :class="(overview.failedBufferCount || 0) > 0 ? 'danger' : 'info'">
               <el-icon><Timer /></el-icon>
             </div>
             <div class="exception-info">
-              <span class="exception-label">缓冲入账待调度</span>
-              <span class="exception-val mono">{{ overview.pendingBufferCount || 0 }} 笔</span>
-              <span class="exception-desc">日终/日间定时入账批量任务</span>
+              <span class="exception-label">
+                缓冲记账待办
+                <el-badge v-if="(overview.failedBufferCount || 0) > 0" :value="`${overview.failedBufferCount} 失败`" type="danger" style="margin-left: 6px;" />
+              </span>
+              <span class="exception-val mono" :class="{ 'danger-text': (overview.failedBufferCount || 0) > 0 }">
+                {{ overview.pendingBufferCount || 0 }} 待入 / {{ overview.failedBufferCount || 0 }} 失败
+              </span>
+              <span class="exception-desc">包含待入账存量与熔断失败明细</span>
             </div>
           </div>
         </el-col>
@@ -430,6 +435,7 @@ const overview = ref<DashboardOverviewResponse>({
   failedPostingCount: 0,
   hangingJournalCount: 0,
   pendingBufferCount: 0,
+  failedBufferCount: 0,
   activeFreezeCount: 0,
   todayVoucherCount: 0,
   todayPostedVoucherCount: 0,

@@ -361,4 +361,50 @@ class BufferPostingEngineDomainServiceTest {
         // 校验：达到 3 次，调用 updateToFailed 将状态置为 FAILED，retryCount 置为 3
         verify(bufferPostingDetailRepository).updateToFailed(eq(6L), contains("已达最大重试次数(3)"), eq(3), isNull());
     }
+
+    @Test
+    @DisplayName("人工重试/补偿：对处于 FAILED 且达到重试上限的明细执行重试，成功重置状态并入账")
+    void processSingleDetail_manualRetryOnFailed_resetsAndSucceeds() {
+        String accountNo = "10010001";
+        BufferPostingDetailPO detail = new BufferPostingDetailPO()
+                .setVoucherNo("V202610130001")
+                .setEntryId("E001")
+                .setAccountNo(accountNo)
+                .setDebitCredit(DebitCreditEnum.DEBIT)
+                .setAmount(new BigDecimal("100.00"))
+                .setAccountingDate(LocalDate.of(2026, 10, 13))
+                .setStatus(BufferStatusEnum.FAILED)
+                .setRetryCount(3);
+        detail.setId(100L);
+
+        AccountPO account = new AccountPO()
+                .setAccountNo(accountNo)
+                .setSubjectCode("1001")
+                .setBalance(new BigDecimal("1000.00"));
+
+        SubAccountPO subAccount = new SubAccountPO()
+                .setAccountNo(accountNo)
+                .setBalanceType(BalanceTypeEnum.AVAILABLE)
+                .setBalanceDirection(BalanceDirectionEnum.DEBIT)
+                .setBalance(new BigDecimal("1000.00"));
+
+        when(accountRepository.selectByAccountNo(accountNo)).thenReturn(account);
+        when(subAccountRepository.selectByAccountNoAndType(accountNo, BalanceTypeEnum.AVAILABLE.getCode())).thenReturn(subAccount);
+
+        AccountingVoucherEntryPO entry = new AccountingVoucherEntryPO();
+        entry.setEntryId("E001");
+        entry.setStatus(VoucherEntryStatusEnum.PENDING);
+        when(accountingVoucherRepository.selectEntryByVoucherNoAndEntryId("V202610130001", "E001")).thenReturn(entry);
+
+        // 人工重试执行
+        bufferPostingEngineDomainService.processSingleDetail(detail, true);
+
+        // 校验 1：触发 resetForRetry 重置明细
+        verify(bufferPostingDetailRepository).resetForRetry(100L);
+        assertThat(detail.getStatus()).isEqualTo(BufferStatusEnum.PENDING);
+        assertThat(detail.getRetryCount()).isEqualTo(0);
+
+        // 校验 2：过账成功并更新为 SUCCESS
+        verify(bufferPostingDetailRepository).updateToSuccess(eq(100L), any(LocalDateTime.class), any(LocalDateTime.class));
+    }
 }

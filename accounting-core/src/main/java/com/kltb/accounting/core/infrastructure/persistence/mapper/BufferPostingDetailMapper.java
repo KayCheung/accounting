@@ -148,4 +148,21 @@ public interface BufferPostingDetailMapper extends BaseMapper<BufferPostingDetai
                 .orderByDesc(BufferPostingDetailPO::getId);
         return this.selectPage(new Page<>(pageNo, pageSize), wrapper);
     }
+
+    /**
+     * 按账户及条件查询明细列表（支持多状态）
+     */
+    default List<BufferPostingDetailPO> selectByAccountAndConditions(
+            LocalDate accountingDate, String accountNo, Integer bufferMode,
+            List<Integer> statuses, int limit) {
+        LambdaQueryWrapper<BufferPostingDetailPO> wrapper = new LambdaQueryWrapper<BufferPostingDetailPO>()
+                .eq(BufferPostingDetailPO::getIsDelete, 0)
+                .eq(accountingDate != null, BufferPostingDetailPO::getAccountingDate, accountingDate)
+                .eq(StrUtil.isNotBlank(accountNo), BufferPostingDetailPO::getAccountNo, accountNo)
+                .eq(bufferMode != null, BufferPostingDetailPO::getBufferMode, bufferMode)
+                .in(statuses != null && !statuses.isEmpty(), BufferPostingDetailPO::getStatus, statuses)
+                .orderByAsc(BufferPostingDetailPO::getId)
+                .last("LIMIT " + limit);
+        return this.selectList(wrapper);
+    }
 }

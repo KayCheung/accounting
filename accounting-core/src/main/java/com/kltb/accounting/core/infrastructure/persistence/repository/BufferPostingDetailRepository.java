@@ -221,4 +221,35 @@ public class BufferPostingDetailRepository {
         return bufferPostingDetailMapper.selectPageByCondition(
                 accountingDate, accountNo, voucherNo, bufferMode, status, startDate, endDate, pageNo, pageSize);
     }
+
+    /**
+     * 按账户及条件查询明细（支持多状态，如 PENDING 与 FAILED）
+     */
+    public List<BufferPostingDetailPO> selectByAccountAndConditions(
+            LocalDate accountingDate, String accountNo, Integer bufferMode,
+            List<Integer> statuses, int limit) {
+        return bufferPostingDetailMapper.selectByAccountAndConditions(
+                accountingDate, accountNo, bufferMode, statuses, limit);
+    }
+
+    /**
+     * 查询指定日期和模式下失败的明细（用于自动补偿）
+     */
+    public List<BufferPostingDetailPO> selectFailedByCondition(
+            LocalDate accountingDate, Integer bufferMode, int limit) {
+        return bufferPostingDetailMapper.selectPendingByCondition(
+                accountingDate, bufferMode, BufferStatusEnum.FAILED.getCode(), limit);
+    }
+
+    /**
+     * 重置明细状态为待处理并清空重试计数（用于人工重试或自动补偿）
+     */
+    public void resetForRetry(Long id) {
+        BufferPostingDetailPO po = new BufferPostingDetailPO();
+        po.setId(id);
+        po.setStatus(BufferStatusEnum.PENDING);
+        po.setRetryCount(0);
+        po.setFailReason("");
+        bufferPostingDetailMapper.updateById(po);
+    }
 }

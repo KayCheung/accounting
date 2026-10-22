@@ -64,3 +64,12 @@ groups:
         annotations:
           summary: "本地消息表存在失败消息，MQ 投递异常"
           description: "本地消息表失败数量 {{ $value }}，MQ 补偿投递已达上限，需排查 MQ 集群状态。"
+
+      - alert: BufferPostingFailed
+        expr: accounting_buffer_failed_count > 0
+        for: 1m
+        labels:
+          severity: P1
+        annotations:
+          summary: "存在缓冲记账失败明细，需及时介入排查"
+          description: "缓冲记账失败数量为 {{ $value }} 笔，已触发重试熔断，请排查账户余额或凭证状态。"

@@ -105,6 +105,7 @@ class DashboardApplicationServiceTest {
         assertThat(response.getPendingReviewCount()).isEqualTo(4L);
         assertThat(response.getPendingBookkeepingCount()).isEqualTo(6L);
         assertThat(response.getPendingBufferCount()).isEqualTo(8L);
+        assertThat(response.getFailedBufferCount()).isEqualTo(8L);
         assertThat(response.getActiveFreezeCount()).isEqualTo(10L);
         assertThat(response.getActiveAccountCount()).isEqualTo(50L);
     }

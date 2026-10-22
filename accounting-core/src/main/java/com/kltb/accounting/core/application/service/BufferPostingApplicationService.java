@@ -14,6 +14,7 @@ import com.kltb.accounting.core.domain.service.RunningBalanceValidator;
 import com.kltb.accounting.core.domain.service.RunningBalanceValidator.ValidationResult;
 import com.kltb.accounting.core.infrastructure.persistence.entity.BufferPostingDetailPO;
 import com.kltb.accounting.core.infrastructure.persistence.repository.BufferPostingDetailRepository;
+import com.kltb.accounting.core.infrastructure.monitor.AccountingMetrics;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -42,6 +43,7 @@ public class BufferPostingApplicationService {
     private final BufferPostingDetailRepository bufferPostingDetailRepository;
     private final RunningBalanceValidator runningBalanceValidator;
     private final BufferPostingAssembler assembler;
+    private final AccountingMetrics accountingMetrics;
 
     /**
      * 手动触发缓冲记账
@@ -60,6 +62,9 @@ public class BufferPostingApplicationService {
             // 不指定账户 → 按模式执行
             result = executeByMode(accountingDate, bufferMode, maxBatchSize);
         }
+
+        // 记账完成后刷新指标
+        refreshBufferMetrics(accountingDate);
 
         return assembler.toExecuteResponse(result);
     }
@@ -106,35 +111,78 @@ public class BufferPostingApplicationService {
     }
 
     /**
-     * 按账户执行
+     * 按账户执行（支持对 PENDING 与 FAILED 状态明细执行，支持人工重试）
      */
     private BatchPostingResult executeForAccount(
             LocalDate accountingDate, Integer bufferMode, int maxBatchSize, String accountNo) {
 
-        List<BufferPostingDetailPO> details = bufferPostingDetailRepository.selectPendingByCondition(
-                accountingDate, bufferMode, BufferStatusEnum.PENDING.getCode(), maxBatchSize);
-
-        // 过滤指定账户
-        details = details.stream()
-                .filter(d -> d.getAccountNo().equals(accountNo))
-                .collect(Collectors.toList());
+        List<Integer> statuses = List.of(BufferStatusEnum.PENDING.getCode(), BufferStatusEnum.FAILED.getCode());
+        List<BufferPostingDetailPO> details = bufferPostingDetailRepository.selectByAccountAndConditions(
+                accountingDate, accountNo, bufferMode, statuses, maxBatchSize);
 
         BatchPostingResult result = new BatchPostingResult();
         result.setTotalCount(details.size());
 
         for (BufferPostingDetailPO detail : details) {
             try {
-                bufferPostingEngineDomainService.processSingleDetail(detail);
+                bufferPostingEngineDomainService.processSingleDetail(detail, true);
                 result.setSuccessCount(result.getSuccessCount() + 1);
             } catch (Exception e) {
-                log.error("[BUFFER-POSTING] 缓冲入账异常", e);
+                log.error("[BUFFER-POSTING] 账户缓冲入账异常: detailId={}, accountNo={}, error={}",
+                        detail.getId(), detail.getAccountNo(), e.getMessage(), e);
                 result.setFailedCount(result.getFailedCount() + 1);
                 result.getFailedList().add(new BufferPostingEngineDomainService.FailedItemInfo(
                         detail.getId(), detail.getAccountNo(), detail.getAmount(), e.getMessage()));
+                bufferPostingEngineDomainService.handlePostingFailure(detail, e);
             }
         }
 
         return result;
+    }
+
+    /**
+     * 自动补偿失败的缓冲明细
+     *
+     * @param accountingDate 会计日期
+     * @param maxBatchSize 批量大小
+     * @return 补偿执行结果
+     */
+    public BatchPostingResult compensateFailedDetails(LocalDate accountingDate, int maxBatchSize) {
+        List<BufferPostingDetailPO> failedDetails = bufferPostingDetailRepository.selectFailedByCondition(
+                accountingDate, null, maxBatchSize);
+
+        BatchPostingResult result = new BatchPostingResult();
+        result.setTotalCount(failedDetails.size());
+
+        for (BufferPostingDetailPO detail : failedDetails) {
+            try {
+                bufferPostingEngineDomainService.processSingleDetail(detail, true);
+                result.setSuccessCount(result.getSuccessCount() + 1);
+            } catch (Exception e) {
+                log.error("[BUFFER-COMPENSATION] 缓冲自动补偿失败: detailId={}, accountNo={}, error={}",
+                        detail.getId(), detail.getAccountNo(), e.getMessage(), e);
+                result.setFailedCount(result.getFailedCount() + 1);
+                result.getFailedList().add(new BufferPostingEngineDomainService.FailedItemInfo(
+                        detail.getId(), detail.getAccountNo(), detail.getAmount(), e.getMessage()));
+                bufferPostingEngineDomainService.handlePostingFailure(detail, e);
+            }
+        }
+
+        refreshBufferMetrics(accountingDate);
+
+        return result;
+    }
+
+    /**
+     * 刷新缓冲记账失败指标（Prometheus Gauge）
+     */
+    public void refreshBufferMetrics(LocalDate accountingDate) {
+        if (accountingDate == null) {
+            accountingDate = LocalDate.now();
+        }
+        int failedCount = bufferPostingDetailRepository.countByAccountingDateAndStatus(
+                accountingDate, BufferStatusEnum.FAILED.getCode());
+        accountingMetrics.setBufferFailedCount(failedCount);
     }
 
     /**

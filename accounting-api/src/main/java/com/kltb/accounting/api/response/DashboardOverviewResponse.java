@@ -68,6 +68,9 @@ public class DashboardOverviewResponse implements Serializable {
     @Schema(description = "缓冲记账待入账存量明细笔数", example = "0")
     private Long pendingBufferCount;
 
+    @Schema(description = "缓冲记账失败异常明细笔数", example = "0")
+    private Long failedBufferCount;
+
     @Schema(description = "资金冻结中工单数", example = "12")
     private Long activeFreezeCount;
 

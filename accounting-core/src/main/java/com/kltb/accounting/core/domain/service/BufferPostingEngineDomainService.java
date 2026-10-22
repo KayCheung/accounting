@@ -193,9 +193,31 @@ public class BufferPostingEngineDomainService {
     }
 
     /**
-     * 单笔缓冲明细过账（核心逻辑）
+     * 单笔缓冲明细过账（核心逻辑，非重试）
      */
     public void processSingleDetail(BufferPostingDetailPO detail) {
+        processSingleDetail(detail, false);
+    }
+
+    /**
+     * 单笔缓冲明细过账（支持人工/自动补偿重试）
+     *
+     * @param detail 明细对象
+     * @param isRetry 是否为人工重试或自动补偿重试
+     */
+    public void processSingleDetail(BufferPostingDetailPO detail, boolean isRetry) {
+        if (detail == null) {
+            return;
+        }
+
+        // 重试场景：如果明细已处于失败状态或已达重试上限，先重置状态与计数，给予重新入账机会
+        if (isRetry && (detail.getStatus() == BufferStatusEnum.FAILED
+                || (detail.getRetryCount() != null && detail.getRetryCount() >= MAX_OPTIMISTIC_RETRIES))) {
+            bufferPostingDetailRepository.resetForRetry(detail.getId());
+            detail.setStatus(BufferStatusEnum.PENDING);
+            detail.setRetryCount(0);
+        }
+
         // 幂等检查
         if (detail.getStatus() != BufferStatusEnum.PENDING) {
             log.info("[BUFFER-POSTING] 跳过非待入账明细: detailId={}, status={}",
@@ -232,7 +254,7 @@ public class BufferPostingEngineDomainService {
     /**
      * 缓冲过账失败兜底处理：更新 retry_count、fail_reason 与首次执行 startTime，重试达到上限标记为 FAILED
      */
-    private void handlePostingFailure(BufferPostingDetailPO detail, Throwable e) {
+    public void handlePostingFailure(BufferPostingDetailPO detail, Throwable e) {
         if (detail == null || detail.getId() == null) {
             return;
         }

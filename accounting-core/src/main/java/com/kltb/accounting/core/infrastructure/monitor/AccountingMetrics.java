@@ -43,6 +43,7 @@ public class AccountingMetrics {
     private static final String POSTING_TOTAL = "accounting.posting.total";
     private static final String POSTING_DURATION = "accounting.posting.duration.seconds";
     private static final String BUFFER_PENDING = "accounting.buffer.pending.count";
+    private static final String BUFFER_FAILED = "accounting.buffer.failed.count";
     private static final String LOCAL_MSG_FAILED = "accounting.local.message.failed.count";
     private static final String EOD_STATUS = "accounting.eod.status";
 
@@ -52,6 +53,7 @@ public class AccountingMetrics {
     private final Timer postingDurationTimer;
 
     private final AtomicLong bufferPendingCount = new AtomicLong(0);
+    private final AtomicLong bufferFailedCount = new AtomicLong(0);
     private final AtomicLong localMessageFailedCount = new AtomicLong(0);
     private final AtomicLong eodStatus = new AtomicLong(1);
 
@@ -78,6 +80,10 @@ public class AccountingMetrics {
 
         Gauge.builder(BUFFER_PENDING, bufferPendingCount, AtomicLong::get)
                 .description("缓冲队列待处理数量")
+                .register(registry);
+
+        Gauge.builder(BUFFER_FAILED, bufferFailedCount, AtomicLong::get)
+                .description("缓冲队列失败未入账数量（status=4）")
                 .register(registry);
 
         Gauge.builder(LOCAL_MSG_FAILED, localMessageFailedCount, AtomicLong::get)
@@ -118,6 +124,15 @@ public class AccountingMetrics {
      */
     public void setBufferPendingCount(long count) {
         bufferPendingCount.set(count);
+    }
+
+    /**
+     * 更新缓冲队列失败未入账数量
+     *
+     * @param count 失败未入账数量
+     */
+    public void setBufferFailedCount(long count) {
+        bufferFailedCount.set(count);
     }
 
     /**

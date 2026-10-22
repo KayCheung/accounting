@@ -23,6 +23,7 @@ export interface DashboardOverviewResponse {
   failedPostingCount: number
   hangingJournalCount: number
   pendingBufferCount: number
+  failedBufferCount?: number
   activeFreezeCount: number
 
   // 资产与业务规模指标（面向 ADMIN / OPERATOR）
