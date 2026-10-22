@@ -193,6 +193,7 @@ import { ElMessage } from 'element-plus'
 import {
   getGeneralLedger,
   getSubjectLevels,
+  exportGeneralLedgerExcel,
   type GeneralLedgerResponse
 } from '@/api/report'
 
@@ -261,8 +262,16 @@ function handleReset() {
   fetchData()
 }
 
-function handleExport() {
-  ElMessage.info('正在导出科目总账 Excel 文件...')
+async function handleExport() {
+  await exportGeneralLedgerExcel({
+    startDate: queryForm.startDate,
+    endDate: queryForm.endDate,
+    startSubjectCode: queryForm.startSubjectCode || undefined,
+    endSubjectCode: queryForm.endSubjectCode || undefined,
+    subjectLevel: queryForm.subjectLevel,
+    showZeroBalance: queryForm.showZeroBalance,
+    keyword: queryForm.keyword ? queryForm.keyword.trim() : undefined
+  })
 }
 
 function handlePrint() {

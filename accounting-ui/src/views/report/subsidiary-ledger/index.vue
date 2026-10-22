@@ -182,6 +182,7 @@ import {
 import { ElMessage } from 'element-plus'
 import {
   getSubsidiaryLedger,
+  exportSubsidiaryLedgerExcel,
   type SubsidiaryLedgerResponse,
   type SubsidiaryLedgerItem
 } from '@/api/report'
@@ -243,8 +244,18 @@ function handleSearch() {
   fetchData()
 }
 
-function handleExport() {
-  ElMessage.info('正在导出科目明细账 Excel 文件...')
+async function handleExport() {
+  if (!queryForm.subjectCode) {
+    ElMessage.warning('请输入要导出的会计科目编码')
+    return
+  }
+  await exportSubsidiaryLedgerExcel({
+    subjectCode: queryForm.subjectCode.trim(),
+    accountNo: queryForm.accountNo ? queryForm.accountNo.trim() : undefined,
+    startDate: queryForm.startDate,
+    endDate: queryForm.endDate,
+    summaryKeyword: queryForm.summaryKeyword ? queryForm.summaryKeyword.trim() : undefined
+  })
 }
 
 function handlePrint() {

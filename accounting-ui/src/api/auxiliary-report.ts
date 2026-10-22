@@ -1,5 +1,6 @@
 // accounting-ui/src/api/auxiliary-report.ts
 import request from '@/utils/request'
+import { downloadReportExcel } from '@/utils/export'
 import type { PageResponse } from '@/api/types'
 import type { DictResponse } from '@/api/dict'
 
@@ -191,4 +192,11 @@ export function getAuxiliaryEntries(
   params: AuxiliaryLedgerQueryParams
 ): Promise<PageResponse<AuxiliaryEntryRecordResponse>> {
   return request.get<PageResponse<AuxiliaryEntryRecordResponse>>('/report/auxiliary/entries', params)
+}
+
+/**
+ * 导出辅助核算账簿 Excel
+ */
+export function exportAuxiliaryLedgerExcel(params: AuxiliaryLedgerQueryParams): Promise<void> {
+  return downloadReportExcel('/report/export/auxiliary', params, '辅助核算账簿.xlsx')
 }

@@ -1,5 +1,6 @@
 // accounting-ui/src/api/report.ts
 import request from '@/utils/request'
+import { downloadReportExcel } from '@/utils/export'
 
 /**
  * 资产负债表查询参数
@@ -251,5 +252,33 @@ export function generateReports(accountingDate?: string): Promise<void> {
  */
 export function getSubjectLevels(): Promise<number[]> {
   return request.get<number[]>('/report/subject-levels')
+}
+
+/**
+ * 导出科目总分类账 Excel
+ */
+export function exportGeneralLedgerExcel(params: GeneralLedgerQueryParams): Promise<void> {
+  return downloadReportExcel('/report/export/general-ledger', params, '科目总分类账.xlsx')
+}
+
+/**
+ * 导出科目明细分类账 Excel
+ */
+export function exportSubsidiaryLedgerExcel(params: SubsidiaryLedgerQueryParams): Promise<void> {
+  return downloadReportExcel('/report/export/subsidiary-ledger', params, '科目明细分类账.xlsx')
+}
+
+/**
+ * 导出资产负债表 Excel
+ */
+export function exportBalanceSheetExcel(params: BalanceSheetQueryParams): Promise<void> {
+  return downloadReportExcel('/report/export/balance-sheet', params, '资产负债表.xlsx')
+}
+
+/**
+ * 导出利润表 Excel
+ */
+export function exportIncomeStatementExcel(params: IncomeStatementQueryParams): Promise<void> {
+  return downloadReportExcel('/report/export/income-statement', params, '利润表.xlsx')
 }
 

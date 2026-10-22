@@ -759,6 +759,7 @@ import {
   getAuxiliaryMatrix,
   getAuxiliarySubjectBreakdown,
   getAuxiliaryEntries,
+  exportAuxiliaryLedgerExcel,
   type AuxiliaryItemResponse,
   type AuxiliarySummaryResponse,
   type AuxiliaryMatrixResponse,
@@ -1118,8 +1119,8 @@ function getProgressColor(pct?: number): string {
   return '#52c41a'
 }
 
-function handleExport() {
-  ElMessage.info(`正在导出 ${currentAuxTypeName.value} 辅助核算账簿 Excel...`)
+async function handleExport() {
+  await exportAuxiliaryLedgerExcel(buildQueryParams())
 }
 
 function handlePrint() {

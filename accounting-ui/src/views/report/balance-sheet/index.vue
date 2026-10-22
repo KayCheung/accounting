@@ -326,6 +326,7 @@ import { ElMessage } from 'element-plus'
 import {
   getBalanceSheet,
   generateReports,
+  exportBalanceSheetExcel,
   type BalanceSheetResponse,
   type BalanceSheetItem
 } from '@/api/report'
@@ -426,8 +427,13 @@ async function handleTriggerGenerate() {
   }
 }
 
-function handleExport() {
-  ElMessage.info('正在导出资产负债表 Excel 文件...')
+async function handleExport() {
+  await exportBalanceSheetExcel({
+    accountingDate: queryForm.accountingDate,
+    compareDate: queryForm.compareDate || undefined,
+    compareYearStart: queryForm.compareYearStart,
+    closingMethod: queryForm.closingMethod
+  })
 }
 
 function handlePrint() {

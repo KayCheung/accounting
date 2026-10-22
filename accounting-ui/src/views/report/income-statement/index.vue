@@ -255,6 +255,7 @@ import {
 import { ElMessage } from 'element-plus'
 import {
   getIncomeStatement,
+  exportIncomeStatementExcel,
   type IncomeStatementResponse,
   type IncomeStatementItem
 } from '@/api/report'
@@ -374,8 +375,23 @@ function handleSearch() {
   fetchData()
 }
 
-function handleExport() {
-  ElMessage.info('正在导出利润表 Excel 文件...')
+async function handleExport() {
+  let params: any
+  if (periodMode.value === 'monthly') {
+    params = {
+      year: queryForm.year,
+      month: queryForm.month,
+      compareType: queryForm.compareType
+    }
+  } else {
+    params = {
+      startDate: queryForm.startDate,
+      endDate: queryForm.endDate,
+      compareStartDate: queryForm.compareStartDate || undefined,
+      compareEndDate: queryForm.compareEndDate || undefined
+    }
+  }
+  await exportIncomeStatementExcel(params)
 }
 
 function handlePrint() {

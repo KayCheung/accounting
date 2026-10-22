@@ -40,6 +40,9 @@ service.interceptors.response.use(
 
     // 若返回的是二进制流（导出文件等），直接返回
     if (response.config.responseType === 'blob' || response.config.responseType === 'arraybuffer') {
+      if ((response.config as any).rawResponse) {
+        return response as any
+      }
       return response.data as any
     }
 
@@ -114,4 +117,5 @@ const request = {
   }
 }
 
+export { service }
 export default request
