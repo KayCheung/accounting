@@ -75,6 +75,14 @@ class FinancialAmountUtilTest {
     }
 
     @Test
+    @DisplayName("PERCENT_BASE: 验证百分比换算基数常量正确性")
+    void percentBase_shouldEqualHundred() {
+        assertThat(FinancialAmountUtil.PERCENT_BASE).isNotNull();
+        assertThat(FinancialAmountUtil.PERCENT_BASE).isEqualByComparingTo(new BigDecimal("100"));
+        assertThat(FinancialAmountUtil.PERCENT_BASE.scale()).isZero();
+    }
+
+    @Test
     @DisplayName("toChineseWords: 中文大写金额转换")
     void toChineseWords_shouldFormatCorrectly() {
         assertThat(FinancialAmountUtil.toChineseWords(null)).isEqualTo("零元整");

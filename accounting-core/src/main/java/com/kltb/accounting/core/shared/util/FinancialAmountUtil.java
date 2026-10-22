@@ -9,6 +9,11 @@ import java.math.BigDecimal;
  */
 public final class FinancialAmountUtil {
 
+    /**
+     * 百分比换算基数（100），用于百分比与小数比率的换算（例如 30% -> 0.3 或 0.25 -> 25%）
+     */
+    public static final BigDecimal PERCENT_BASE = new BigDecimal("100");
+
     private FinancialAmountUtil() {
         // 私有构造，工具类禁止实例化
     }

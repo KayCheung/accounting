@@ -1,6 +1,7 @@
 package com.kltb.accounting.api.request;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.kltb.accounting.api.constant.ClosingMethodEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
@@ -23,4 +24,7 @@ public class BalanceSheetQueryRequest implements Serializable {
 
     @Schema(description = "是否对比年初（兼容字段）", example = "true")
     private Boolean compareYearStart = true;
+
+    @Schema(description = "结账核算方式：REPORT-表结法(动态计算未结转损益，推荐日常查看)；ACCOUNT-账结法(以实际结转凭证为准，用于审计对账)", example = "REPORT")
+    private String closingMethod = ClosingMethodEnum.REPORT.getCode();
 }

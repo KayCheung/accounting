@@ -15,6 +15,7 @@ import com.kltb.accounting.core.infrastructure.spel.JournalSpelContext;
 import com.kltb.accounting.core.infrastructure.spel.RuleScriptExecutor;
 import com.kltb.accounting.core.shared.context.TenantContext;
 import com.kltb.accounting.core.shared.exception.AccountException;
+import com.kltb.accounting.core.shared.util.FinancialAmountUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -172,7 +173,7 @@ public class AuxiliaryDomainService {
                     if (i < proportional.size() - 1) {
                         // allocation_value 为百分比，如 30 表示 30%
                         BigDecimal ratio = config.getAllocationValue().divide(
-                                new BigDecimal("100"), 6, RoundingMode.HALF_UP);
+                                FinancialAmountUtil.PERCENT_BASE, 6, RoundingMode.HALF_UP);
                         auxAmount = remaining.multiply(ratio).setScale(6, RoundingMode.HALF_UP);
                         allocated = allocated.add(auxAmount);
                     } else {

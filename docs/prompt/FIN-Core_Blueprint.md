@@ -1214,6 +1214,15 @@
 
 
 
+       - **资产负债表结账方式（表结法 vs 账结法）多模式自主切换与动态平衡治理（REQ261022-001）**：
+         1. **业务背景与痛点**：用户在未执行期末损益结转前查看资产负债表时，因损益类科目（6 类）尚未结转至所有者权益（4103 本年利润），报表忠实展现账面差额（未结转损益）。原系统仅支持单一取数口径，未提供随时动态轧平查看的选项，无法兼顾日常经营监控与期末审计对账双重诉求；
+         2. **契约层扩展（accounting-api）**：`BalanceSheetQueryRequest` 增加 `closingMethod` 字段（支持 `REPORT` 表结法与 `ACCOUNT` 账结法，默认 `REPORT`）；`BalanceSheetResponse` 扩展 `closingMethod`、`unclosedProfitEnd`（期末未结转损益）与 `unclosedProfitBegin`（对比期未结转损益）；
+         3. **核心领域算法（accounting-core）**：`FinancialReportDomainService` 新增 `calculateUnclosedProfit`，动态汇算损益类科目（6 类）净损益（贷方收益 - 借方支出）。在表结法下动态计入“未分配利润”行项目并生成底层穿透科目明细（包含虚拟明细 `999999 当期未结转净损益`），实现实时借贷绝对平衡；在账结法下严格依据总账实际过账余额展示审计差额；
+         4. **科目明细穿透支持**：实现 `collectSubjectDetails`，支持将货币资金（1001/1002/1012）、未分配利润（4103/4104）等聚合行项目的各子科目明细无缝传导给前端，支持点击展开全景穿透；
+         5. **前端交互与智能对账引导（accounting-ui）**：在资产负债表页面增设【结账方式】单选组（表结法/账结法）及悬浮释义 Tooltip；状态栏透出模式 Tag 与未结转损益标签；账结法存在差额时提供智能差额引导条，支持“一键切换表结法”或“前往期末结转”；
+         6. **测试与构建保障**：`FinancialReportDomainServiceTest` 落地表结法动态轧平与账结法差额断言用例，后端测试全部通过，前端 `vue-tsc && vite build` 生产构建 0 错误。
+         7. **魔法值消除与科目常量规范化**：新增强类型契约枚举 `ClosingMethodEnum` 彻底消除结账模式魔法值；新增 `Constants.DEFAULT_UNIT_NAME` 统一编制单位，全局替换 `"CNY"` 为 `Constants.DEFAULT_CURRENCY`；在领域服务内集中定义 `CAS_SUBJECTS`（中国企业会计准则标准推荐科目映射集），消灭业务方法内离散写死科目代码，为后续平滑演进至数据表驱动奠定规范基石。
+
 ---
 
 ## Phase 10：联调、性能验收与上线

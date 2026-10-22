@@ -52,6 +52,15 @@ public class BalanceSheetResponse implements Serializable {
     @Schema(description = "负债及所有者权益总计年初数")
     private BigDecimal totalLiabilityAndEquityBegin;
 
+    @Schema(description = "当前采用的结账核算方式：REPORT-表结法，ACCOUNT-账结法", example = "REPORT")
+    private String closingMethod;
+
+    @Schema(description = "期末未结转净损益(正数表示盈利，负数表示亏损)", example = "246.68")
+    private BigDecimal unclosedProfitEnd;
+
+    @Schema(description = "对比期未结转净损益", example = "0.00")
+    private BigDecimal unclosedProfitBegin;
+
     @Schema(description = "左侧资产方项目列表")
     private List<BalanceSheetItemResponse> assetItems;
 

@@ -13,6 +13,7 @@ import com.kltb.accounting.core.infrastructure.persistence.mapper.TransactionMap
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountingVoucherRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.TransactionRepository;
 import com.kltb.accounting.core.shared.exception.ServiceException;
+import com.kltb.accounting.core.shared.util.FinancialAmountUtil;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -90,7 +91,7 @@ public class PostingMonitorDomainService {
             progressPercent = BigDecimal.ZERO;
         } else {
             progressPercent = BigDecimal.valueOf(realTimePosted + asyncPosted)
-                .multiply(BigDecimal.valueOf(100))
+                .multiply(FinancialAmountUtil.PERCENT_BASE)
                 .divide(BigDecimal.valueOf(nonBufferTotal), 2, RoundingMode.HALF_UP);
         }
 
@@ -151,7 +152,7 @@ public class PostingMonitorDomainService {
             progressPercent = BigDecimal.ZERO;
         } else {
             progressPercent = BigDecimal.valueOf(postedVouchers)
-                .multiply(BigDecimal.valueOf(100))
+                .multiply(FinancialAmountUtil.PERCENT_BASE)
                 .divide(BigDecimal.valueOf(totalVouchers), 2, RoundingMode.HALF_UP);
         }
 
@@ -215,7 +216,7 @@ public class PostingMonitorDomainService {
 
             BigDecimal successRate = total == 0 ? BigDecimal.ZERO
                 : BigDecimal.valueOf(success)
-                    .multiply(BigDecimal.valueOf(100))
+                    .multiply(FinancialAmountUtil.PERCENT_BASE)
                     .divide(BigDecimal.valueOf(total), 2, RoundingMode.HALF_UP);
 
             result.add(new PostingStatsData(

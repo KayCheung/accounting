@@ -20,6 +20,11 @@ public final class Constants {
     public static final String DEFAULT_CURRENCY = "CNY";
 
     /**
+     * 系统默认编制单位名称
+     */
+    public static final String DEFAULT_UNIT_NAME = "智能账务核心企业";
+
+    /**
      * 系统级默认操作员标识
      */
     public static final String SYSTEM_OPERATOR = "system";

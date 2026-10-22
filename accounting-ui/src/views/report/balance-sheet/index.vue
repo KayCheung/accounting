@@ -36,6 +36,17 @@
           </el-button-group>
         </el-form-item>
 
+        <el-form-item label="结账方式">
+          <el-radio-group v-model="queryForm.closingMethod" size="default" @change="handleSearch">
+            <el-tooltip content="表结法：动态汇算当期净损益并纳入未分配利润，资产负债随时保持平衡（推荐日常经营与动态核算）" placement="top">
+              <el-radio-button value="REPORT">表结法 (动态轧平)</el-radio-button>
+            </el-tooltip>
+            <el-tooltip content="账结法：严格依据总账实际已过账科目余额，未执行期末损益结转时反映账面差额（用于期末关账审计）" placement="top">
+              <el-radio-button value="ACCOUNT">账结法 (凭证对账)</el-radio-button>
+            </el-tooltip>
+          </el-radio-group>
+        </el-form-item>
+
         <el-form-item>
           <el-button type="primary" :icon="Search" :loading="loading" @click="handleSearch">
             生成报表
@@ -63,6 +74,12 @@
         <span class="status-title">
           {{ reportData.balanced ? '资产负债试算借贷平衡' : '警告：资产负债未轧平！' }}
         </span>
+        <el-tag size="small" :type="reportData.closingMethod === 'REPORT' ? 'success' : 'warning'" effect="plain">
+          {{ reportData.closingMethod === 'REPORT' ? '表结法 (动态轧平)' : '账结法 (凭证对账)' }}
+        </el-tag>
+        <span v-if="reportData.unclosedProfitEnd && reportData.unclosedProfitEnd !== 0" class="unclosed-profit-tag">
+          当期未结转损益：<b>{{ formatMoney(reportData.unclosedProfitEnd) }}</b>
+        </span>
         <span class="status-desc">
           编制基准：{{ reportData.accountingDate }} | 对比基准：{{ reportData.compareDate }} | 单位：{{ reportData.currency }}（元）
         </span>
@@ -75,6 +92,30 @@
           差额: {{ formatMoney(reportData.diffAmount) }}
         </span>
       </div>
+    </div>
+
+    <!-- 账结法差额时智能对账引导条 -->
+    <div v-if="reportData && !reportData.balanced && reportData.closingMethod === 'ACCOUNT'" class="closing-guide-alert">
+      <el-alert
+        type="warning"
+        show-icon
+        :closable="false"
+      >
+        <template #title>
+          <span class="guide-title">账结法差额提示与建议</span>
+        </template>
+        <div class="guide-content">
+          <span>当前检测到系统存在未结转损益净额 <b>{{ formatMoney(reportData.unclosedProfitEnd || reportData.diffAmount) }}</b> 元。在账结法下，损益科目尚未通过结转凭证清零并转入所有者权益（本年利润），因此体现账面差额。</span>
+          <div class="guide-actions">
+            <el-button type="primary" size="small" @click="switchClosingMethod('REPORT')">
+              一键切换至【表结法】动态轧平
+            </el-button>
+            <el-button type="success" size="small" plain @click="goToTransfer">
+              前往【期末结转】生成结转凭证
+            </el-button>
+          </div>
+        </div>
+      </el-alert>
     </div>
 
     <!-- 报表标题与抬头 -->
@@ -271,6 +312,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import {
   Search,
   Refresh,
@@ -288,13 +330,16 @@ import {
   type BalanceSheetItem
 } from '@/api/report'
 
+const router = useRouter()
+
 // 默认日期为当月最后一天或当前日期
 const today = new Date().toISOString().split('T')[0]
 
 const queryForm = reactive({
   accountingDate: today,
   compareDate: '',
-  compareYearStart: true
+  compareYearStart: true,
+  closingMethod: 'REPORT' as 'REPORT' | 'ACCOUNT'
 })
 
 const loading = ref(false)
@@ -347,7 +392,8 @@ async function fetchData() {
     const res = await getBalanceSheet({
       accountingDate: queryForm.accountingDate,
       compareDate: queryForm.compareDate || undefined,
-      compareYearStart: queryForm.compareYearStart
+      compareYearStart: queryForm.compareYearStart,
+      closingMethod: queryForm.closingMethod
     })
     reportData.value = res
   } catch (err: any) {
@@ -359,6 +405,15 @@ async function fetchData() {
 
 function handleSearch() {
   fetchData()
+}
+
+function switchClosingMethod(method: 'REPORT' | 'ACCOUNT') {
+  queryForm.closingMethod = method
+  handleSearch()
+}
+
+function goToTransfer() {
+  router.push('/business/transfer')
 }
 
 async function handleTriggerGenerate() {
@@ -464,6 +519,39 @@ onMounted(() => {
       border-radius: 4px;
       font-size: 12px;
     }
+  }
+}
+
+.unclosed-profit-tag {
+  display: inline-flex;
+  align-items: center;
+  background: #e6f4ff;
+  color: #0958d9;
+  border: 1px solid #91caff;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+.closing-guide-alert {
+  .guide-title {
+    font-weight: 600;
+    font-size: 14px;
+  }
+
+  .guide-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 6px;
+    font-size: 13px;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .guide-actions {
+    display: flex;
+    gap: 10px;
   }
 }
 

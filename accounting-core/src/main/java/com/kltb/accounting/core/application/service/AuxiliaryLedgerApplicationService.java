@@ -20,6 +20,7 @@ import com.kltb.accounting.core.infrastructure.persistence.repository.Accounting
 import com.kltb.accounting.core.infrastructure.persistence.repository.DictionaryRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.SubjectRepository;
 import com.kltb.accounting.core.infrastructure.redis.DictionaryCacheService;
+import com.kltb.accounting.core.shared.util.FinancialAmountUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -42,7 +43,6 @@ import java.util.stream.Collectors;
 public class AuxiliaryLedgerApplicationService {
 
     private static final String DICT_TYPE_AUXILIARY = "auxiliary_type";
-    private static final BigDecimal HUNDRED = new BigDecimal("100");
 
     private final AccountingVoucherAuxiliaryRepository auxiliaryRepository;
     private final SubjectRepository subjectRepository;
@@ -155,7 +155,7 @@ public class AuxiliaryLedgerApplicationService {
             BigDecimal amt = item.getTotalAmount() != null ? item.getTotalAmount() : BigDecimal.ZERO;
             BigDecimal pct = BigDecimal.ZERO;
             if (grandTotal.compareTo(BigDecimal.ZERO) > 0 && amt.compareTo(BigDecimal.ZERO) > 0) {
-                pct = amt.multiply(HUNDRED).divide(grandTotal, 2, RoundingMode.HALF_UP);
+                pct = amt.multiply(FinancialAmountUtil.PERCENT_BASE).divide(grandTotal, 2, RoundingMode.HALF_UP);
             }
             String resolvedName = resolveAuxName(request.getAuxType(), item.getAuxCode(), item.getAuxName());
             topItems.add(AuxiliaryItemShareResponse.builder()
@@ -282,7 +282,7 @@ public class AuxiliaryLedgerApplicationService {
         if (grandGrossTotal.compareTo(BigDecimal.ZERO) > 0) {
             for (AuxiliaryMatrixRowResponse row : rows) {
                 if (row.getGrossTotalAmount() != null && row.getGrossTotalAmount().compareTo(BigDecimal.ZERO) > 0) {
-                    row.setPercentage(row.getGrossTotalAmount().multiply(HUNDRED)
+                    row.setPercentage(row.getGrossTotalAmount().multiply(FinancialAmountUtil.PERCENT_BASE)
                             .divide(grandGrossTotal, 2, RoundingMode.HALF_UP));
                 }
             }
@@ -337,7 +337,7 @@ public class AuxiliaryLedgerApplicationService {
             String netDirection = BalanceDirectionEnum.determineDirection(debit, credit).getDesc();
             BigDecimal pct = BigDecimal.ZERO;
             if (totalSum.compareTo(BigDecimal.ZERO) > 0 && amt.compareTo(BigDecimal.ZERO) > 0) {
-                pct = amt.multiply(HUNDRED).divide(totalSum, 2, RoundingMode.HALF_UP);
+                pct = amt.multiply(FinancialAmountUtil.PERCENT_BASE).divide(totalSum, 2, RoundingMode.HALF_UP);
             }
 
             result.add(AuxiliarySubjectDetailResponse.builder()

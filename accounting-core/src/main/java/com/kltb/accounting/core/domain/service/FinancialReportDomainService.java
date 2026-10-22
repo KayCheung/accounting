@@ -1,5 +1,7 @@
 package com.kltb.accounting.core.domain.service;
 
+import com.kltb.accounting.api.constant.ClosingMethodEnum;
+import com.kltb.accounting.api.constant.Constants;
 import com.kltb.accounting.api.request.BalanceSheetQueryRequest;
 import com.kltb.accounting.api.request.GeneralLedgerQueryRequest;
 import com.kltb.accounting.api.request.IncomeStatementQueryRequest;
@@ -7,12 +9,14 @@ import com.kltb.accounting.api.request.SubsidiaryLedgerQueryRequest;
 import com.kltb.accounting.api.response.*;
 import com.kltb.accounting.core.domain.enums.BalanceDirectionEnum;
 import com.kltb.accounting.core.domain.enums.SubjectBalanceDirectionEnum;
+import com.kltb.accounting.core.domain.enums.SubjectCategoryEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountBalancePO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountSubjectPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherEntryPO;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountBalanceRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountingVoucherRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.SubjectRepository;
+import com.kltb.accounting.core.shared.util.FinancialAmountUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -23,6 +27,8 @@ import java.time.LocalDate;
 import java.time.temporal.TemporalAdjusters;
 import java.util.*;
 import java.util.stream.Collectors;
+
+import static java.math.BigDecimal.ZERO;
 
 /**
  * 财务报表核心领域服务
@@ -42,8 +48,60 @@ public class FinancialReportDomainService {
     private final AccountingVoucherRepository voucherRepository;
     private final SubjectRepository subjectRepository;
 
-    private static final BigDecimal ZERO = BigDecimal.ZERO;
-    private static final BigDecimal ONE_HUNDRED = new BigDecimal("100");
+    /**
+     * 中国《企业会计准则》（CAS）财务报表标准推荐科目代码映射规范定义
+     * <p>
+     * 注：各编码源自财政部《企业会计准则——应用指南》会计科目规范，非国际标准（IFRS）。
+     * 此处统一定义收拢，杜绝业务方法内离散硬编码魔法值。未来将平滑演进为 t_financial_report_item_mapping 数据库配置驱动。
+     */
+    public static final class CAS_SUBJECTS {
+        // 资产类 (1xxx)
+        public static final String CASH_ON_HAND = "1001";          // 库存现金
+        public static final String BANK_DEPOSIT = "1002";          // 银行存款
+        public static final String OTHER_MONETARY = "1012";        // 其他货币资金
+        public static final String NOTES_RECEIVABLE = "1121";      // 应收票据
+        public static final String ACCOUNTS_RECEIVABLE = "1122";   // 应收账款
+        public static final String ADVANCE_PAYMENT = "1123";       // 预付款项
+        public static final String OTHER_RECEIVABLES = "1221";     // 其他应收款
+        public static final String RAW_MATERIALS = "1403";         // 原材料
+        public static final String MERCHANDISE = "1405";           // 库存商品
+        public static final String GOODS_IN_TRANSIT = "1406";      // 发出商品
+        public static final String FIXED_ASSETS = "1601";          // 固定资产
+        public static final String ACCUM_DEPRECIATION = "1602";    // 累计折旧
+        public static final String INTANGIBLE_ASSETS = "1701";     // 无形资产
+
+        // 负债类 (2xxx)
+        public static final String SHORT_TERM_LOAN = "2001";       // 短期借款
+        public static final String ACCOUNTS_PAYABLE = "2202";      // 应付账款
+        public static final String ADVANCE_RECEIPTS = "2203";      // 预收款项
+        public static final String PAYROLL_PAYABLE = "2211";       // 应付职工薪酬
+        public static final String TAXES_PAYABLE = "2221";         // 应交税费
+        public static final String OTHER_PAYABLES = "2241";        // 其他应付款
+        public static final String LONG_TERM_LOAN = "2501";        // 长期借款
+
+        // 所有者权益类 (4xxx)
+        public static final String PAID_IN_CAPITAL = "4001";       // 实收资本
+        public static final String CAPITAL_RESERVE = "4002";       // 资本公积
+        public static final String SURPLUS_RESERVE = "4101";       // 盈余公积
+        public static final String CURRENT_YEAR_PROFIT = "4103";   // 本年利润
+        public static final String PROFIT_DISTRIBUTION = "4104";   // 利润分配
+
+        // 损益类 (6xxx)
+        public static final String REVENUE_MAIN = "6001";          // 主营业务收入
+        public static final String REVENUE_OTHER = "6051";         // 其他业务收入
+        public static final String COST_MAIN = "6401";             // 主营业务成本
+        public static final String COST_OTHER = "6402";            // 其他业务成本
+        public static final String TAX_AND_SURCHARGE = "6403";     // 税金及附加
+        public static final String SELLING_EXPENSE = "6601";       // 销售费用
+        public static final String ADMIN_EXPENSE = "6602";         // 管理费用
+        public static final String FINANCIAL_EXPENSE = "6603";     // 财务费用
+        public static final String ASSET_IMPAIRMENT = "6701";      // 资产减值损失
+        public static final String FAIR_VALUE_CHANGE = "6101";     // 公允价值变动损益
+        public static final String INVESTMENT_INCOME = "6111";     // 投资收益
+        public static final String NON_OPERATING_INCOME = "6301";  // 营业外收入
+        public static final String NON_OPERATING_EXPENSE = "6711"; // 营业外支出
+        public static final String INCOME_TAX_EXPENSE = "6801";    // 所得税费用
+    }
 
     // =========================================================================
     // 1. 资产负债表（Balance Sheet）
@@ -54,6 +112,10 @@ public class FinancialReportDomainService {
         LocalDate compareDate = request.getCompareDate() != null
                 ? request.getCompareDate()
                 : LocalDate.of(accountingDate.getYear(), 1, 1);
+
+        // 结账核算模式：REPORT(表结法，动态汇算损益，推荐日常查看) / ACCOUNT(账结法，凭证驱动，审计对账)
+        ClosingMethodEnum closingMethod = ClosingMethodEnum.fromCode(request.getClosingMethod());
+        boolean isReportClosing = closingMethod.isReport();
 
         // 1. 获取所有科目定义并构建映射
         List<AccountSubjectPO> allSubjects = subjectRepository.selectAllSubjects();
@@ -67,57 +129,66 @@ public class FinancialReportDomainService {
         Map<String, BigDecimal> endAmountMap = aggregateBalancesBySubject(endBalances);
         Map<String, BigDecimal> beginAmountMap = aggregateBalancesBySubject(beginBalances);
 
+        // 动态汇算未结转损益净额（6类科目贷方收益 - 借方支出）
+        BigDecimal unclosedProfitEnd = calculateUnclosedProfit(endBalances, subjectMap);
+        BigDecimal unclosedProfitBegin = calculateUnclosedProfit(beginBalances, subjectMap);
+
         // 3. 构建资产端行项目
         List<BalanceSheetItemResponse> assetItems = new ArrayList<>();
         BigDecimal currentAssetEnd = ZERO;
         BigDecimal currentAssetBegin = ZERO;
 
         // 货币资金 (1001, 1002, 1012)
-        BigDecimal cashEnd = sumSubjects(endAmountMap, "1001", "1002", "1012");
-        BigDecimal cashBegin = sumSubjects(beginAmountMap, "1001", "1002", "1012");
+        BigDecimal cashEnd = sumSubjects(endAmountMap, CAS_SUBJECTS.CASH_ON_HAND, CAS_SUBJECTS.BANK_DEPOSIT, CAS_SUBJECTS.OTHER_MONETARY);
+        BigDecimal cashBegin = sumSubjects(beginAmountMap, CAS_SUBJECTS.CASH_ON_HAND, CAS_SUBJECTS.BANK_DEPOSIT, CAS_SUBJECTS.OTHER_MONETARY);
         assetItems.add(buildItem(1, "流动资产：", 1, "", null, null));
-        assetItems.add(buildItem(2, "  货币资金", 2, "1001,1002,1012", cashEnd, cashBegin));
+        BalanceSheetItemResponse cashItem = buildItem(2, "  货币资金", 2, "1001,1002,1012", cashEnd, cashBegin);
+        List<BalanceSheetSubjectDetailResponse> cashDetails = collectSubjectDetails(endAmountMap, beginAmountMap, subjectMap, CAS_SUBJECTS.CASH_ON_HAND, CAS_SUBJECTS.BANK_DEPOSIT, CAS_SUBJECTS.OTHER_MONETARY);
+        if (!cashDetails.isEmpty()) {
+            cashItem.setDetailSubjects(cashDetails);
+        }
+        assetItems.add(cashItem);
         currentAssetEnd = currentAssetEnd.add(cashEnd);
         currentAssetBegin = currentAssetBegin.add(cashBegin);
 
         // 应收票据 (1121)
-        BigDecimal noteRecEnd = sumSubjects(endAmountMap, "1121");
-        BigDecimal noteRecBegin = sumSubjects(beginAmountMap, "1121");
-        assetItems.add(buildItem(3, "  应收票据", 2, "1121", noteRecEnd, noteRecBegin));
+        BigDecimal noteRecEnd = sumSubjects(endAmountMap, CAS_SUBJECTS.NOTES_RECEIVABLE);
+        BigDecimal noteRecBegin = sumSubjects(beginAmountMap, CAS_SUBJECTS.NOTES_RECEIVABLE);
+        assetItems.add(buildItem(3, "  应收票据", 2, CAS_SUBJECTS.NOTES_RECEIVABLE, noteRecEnd, noteRecBegin));
         currentAssetEnd = currentAssetEnd.add(noteRecEnd);
         currentAssetBegin = currentAssetBegin.add(noteRecBegin);
 
         // 应收账款 (1122)
-        BigDecimal arEnd = sumSubjects(endAmountMap, "1122");
-        BigDecimal arBegin = sumSubjects(beginAmountMap, "1122");
-        assetItems.add(buildItem(4, "  应收账款", 2, "1122", arEnd, arBegin));
+        BigDecimal arEnd = sumSubjects(endAmountMap, CAS_SUBJECTS.ACCOUNTS_RECEIVABLE);
+        BigDecimal arBegin = sumSubjects(beginAmountMap, CAS_SUBJECTS.ACCOUNTS_RECEIVABLE);
+        assetItems.add(buildItem(4, "  应收账款", 2, CAS_SUBJECTS.ACCOUNTS_RECEIVABLE, arEnd, arBegin));
         currentAssetEnd = currentAssetEnd.add(arEnd);
         currentAssetBegin = currentAssetBegin.add(arBegin);
 
         // 预付款项 (1123)
-        BigDecimal prepayEnd = sumSubjects(endAmountMap, "1123");
-        BigDecimal prepayBegin = sumSubjects(beginAmountMap, "1123");
-        assetItems.add(buildItem(5, "  预付款项", 2, "1123", prepayEnd, prepayBegin));
+        BigDecimal prepayEnd = sumSubjects(endAmountMap, CAS_SUBJECTS.ADVANCE_PAYMENT);
+        BigDecimal prepayBegin = sumSubjects(beginAmountMap, CAS_SUBJECTS.ADVANCE_PAYMENT);
+        assetItems.add(buildItem(5, "  预付款项", 2, CAS_SUBJECTS.ADVANCE_PAYMENT, prepayEnd, prepayBegin));
         currentAssetEnd = currentAssetEnd.add(prepayEnd);
         currentAssetBegin = currentAssetBegin.add(prepayBegin);
 
         // 其他应收款 (1221)
-        BigDecimal otherRecEnd = sumSubjects(endAmountMap, "1221");
-        BigDecimal otherRecBegin = sumSubjects(beginAmountMap, "1221");
-        assetItems.add(buildItem(6, "  其他应收款", 2, "1221", otherRecEnd, otherRecBegin));
+        BigDecimal otherRecEnd = sumSubjects(endAmountMap, CAS_SUBJECTS.OTHER_RECEIVABLES);
+        BigDecimal otherRecBegin = sumSubjects(beginAmountMap, CAS_SUBJECTS.OTHER_RECEIVABLES);
+        assetItems.add(buildItem(6, "  其他应收款", 2, CAS_SUBJECTS.OTHER_RECEIVABLES, otherRecEnd, otherRecBegin));
         currentAssetEnd = currentAssetEnd.add(otherRecEnd);
         currentAssetBegin = currentAssetBegin.add(otherRecBegin);
 
         // 存货 (1403, 1405, 1406)
-        BigDecimal invEnd = sumSubjects(endAmountMap, "1403", "1405", "1406");
-        BigDecimal invBegin = sumSubjects(beginAmountMap, "1403", "1405", "1406");
+        BigDecimal invEnd = sumSubjects(endAmountMap, CAS_SUBJECTS.RAW_MATERIALS, CAS_SUBJECTS.MERCHANDISE, CAS_SUBJECTS.GOODS_IN_TRANSIT);
+        BigDecimal invBegin = sumSubjects(beginAmountMap, CAS_SUBJECTS.RAW_MATERIALS, CAS_SUBJECTS.MERCHANDISE, CAS_SUBJECTS.GOODS_IN_TRANSIT);
         assetItems.add(buildItem(7, "  存货", 2, "1403,1405,1406", invEnd, invBegin));
         currentAssetEnd = currentAssetEnd.add(invEnd);
         currentAssetBegin = currentAssetBegin.add(invBegin);
 
         // 其他流动资产 (1011, 1101, 1231 等其他 1 开头的流动资产科目)
-        BigDecimal otherCurrentAssetEnd = sumPrefixExcept(endAmountMap, "1", Set.of("1001", "1002", "1012", "1121", "1122", "1123", "1221", "1403", "1405", "1406", "1601", "1602", "1701"));
-        BigDecimal otherCurrentAssetBegin = sumPrefixExcept(beginAmountMap, "1", Set.of("1001", "1002", "1012", "1121", "1122", "1123", "1221", "1403", "1405", "1406", "1601", "1602", "1701"));
+        BigDecimal otherCurrentAssetEnd = sumPrefixExcept(endAmountMap, "1", Set.of(CAS_SUBJECTS.CASH_ON_HAND, CAS_SUBJECTS.BANK_DEPOSIT, CAS_SUBJECTS.OTHER_MONETARY, CAS_SUBJECTS.NOTES_RECEIVABLE, CAS_SUBJECTS.ACCOUNTS_RECEIVABLE, CAS_SUBJECTS.ADVANCE_PAYMENT, CAS_SUBJECTS.OTHER_RECEIVABLES, CAS_SUBJECTS.RAW_MATERIALS, CAS_SUBJECTS.MERCHANDISE, CAS_SUBJECTS.GOODS_IN_TRANSIT, CAS_SUBJECTS.FIXED_ASSETS, CAS_SUBJECTS.ACCUM_DEPRECIATION, CAS_SUBJECTS.INTANGIBLE_ASSETS));
+        BigDecimal otherCurrentAssetBegin = sumPrefixExcept(beginAmountMap, "1", Set.of(CAS_SUBJECTS.CASH_ON_HAND, CAS_SUBJECTS.BANK_DEPOSIT, CAS_SUBJECTS.OTHER_MONETARY, CAS_SUBJECTS.NOTES_RECEIVABLE, CAS_SUBJECTS.ACCOUNTS_RECEIVABLE, CAS_SUBJECTS.ADVANCE_PAYMENT, CAS_SUBJECTS.OTHER_RECEIVABLES, CAS_SUBJECTS.RAW_MATERIALS, CAS_SUBJECTS.MERCHANDISE, CAS_SUBJECTS.GOODS_IN_TRANSIT, CAS_SUBJECTS.FIXED_ASSETS, CAS_SUBJECTS.ACCUM_DEPRECIATION, CAS_SUBJECTS.INTANGIBLE_ASSETS));
         assetItems.add(buildItem(8, "  其他流动资产", 2, "1999", otherCurrentAssetEnd, otherCurrentAssetBegin));
         currentAssetEnd = currentAssetEnd.add(otherCurrentAssetEnd);
         currentAssetBegin = currentAssetBegin.add(otherCurrentAssetBegin);
@@ -130,15 +201,15 @@ public class FinancialReportDomainService {
         BigDecimal nonCurrentAssetBegin = ZERO;
         assetItems.add(buildItem(10, "非流动资产：", 1, "", null, null));
 
-        BigDecimal fixEnd = sumSubjects(endAmountMap, "1601", "1602");
-        BigDecimal fixBegin = sumSubjects(beginAmountMap, "1601", "1602");
+        BigDecimal fixEnd = sumSubjects(endAmountMap, CAS_SUBJECTS.FIXED_ASSETS, CAS_SUBJECTS.ACCUM_DEPRECIATION);
+        BigDecimal fixBegin = sumSubjects(beginAmountMap, CAS_SUBJECTS.FIXED_ASSETS, CAS_SUBJECTS.ACCUM_DEPRECIATION);
         assetItems.add(buildItem(11, "  固定资产", 2, "1601,1602", fixEnd, fixBegin));
         nonCurrentAssetEnd = nonCurrentAssetEnd.add(fixEnd);
         nonCurrentAssetBegin = nonCurrentAssetBegin.add(fixBegin);
 
-        BigDecimal intanEnd = sumSubjects(endAmountMap, "1701");
-        BigDecimal intanBegin = sumSubjects(beginAmountMap, "1701");
-        assetItems.add(buildItem(12, "  无形资产", 2, "1701", intanEnd, intanBegin));
+        BigDecimal intanEnd = sumSubjects(endAmountMap, CAS_SUBJECTS.INTANGIBLE_ASSETS);
+        BigDecimal intanBegin = sumSubjects(beginAmountMap, CAS_SUBJECTS.INTANGIBLE_ASSETS);
+        assetItems.add(buildItem(12, "  无形资产", 2, CAS_SUBJECTS.INTANGIBLE_ASSETS, intanEnd, intanBegin));
         nonCurrentAssetEnd = nonCurrentAssetEnd.add(intanEnd);
         nonCurrentAssetBegin = nonCurrentAssetBegin.add(intanBegin);
 
@@ -246,10 +317,52 @@ public class FinancialReportDomainService {
         equityEnd = equityEnd.add(surpEnd);
         equityBegin = equityBegin.add(surpBegin);
 
-        // 未分配利润（4104 利润分配 + 4103 本年利润）
-        BigDecimal undistEnd = sumSubjects(endAmountMap, "4104", "4103");
-        BigDecimal undistBegin = sumSubjects(beginAmountMap, "4104", "4103");
-        liabEquityItems.add(buildItem(74, "  未分配利润", 2, "4103,4104", undistEnd, undistBegin));
+        // 未分配利润（4104 利润分配 + 4103 本年利润，若为表结法动态纳入未结转净损益）
+        BigDecimal p4103End = sumSubjects(endAmountMap, "4103");
+        BigDecimal p4103Begin = sumSubjects(beginAmountMap, "4103");
+        BigDecimal p4104End = sumSubjects(endAmountMap, "4104");
+        BigDecimal p4104Begin = sumSubjects(beginAmountMap, "4104");
+
+        BigDecimal undistEnd = p4103End.add(p4104End);
+        BigDecimal undistBegin = p4103Begin.add(p4104Begin);
+
+        if (isReportClosing) {
+            undistEnd = undistEnd.add(unclosedProfitEnd);
+            undistBegin = undistBegin.add(unclosedProfitBegin);
+        }
+
+        // 组装未分配利润明细科目清单
+        List<BalanceSheetSubjectDetailResponse> undistDetails = new ArrayList<>();
+        if (p4103End.compareTo(ZERO) != 0 || p4103Begin.compareTo(ZERO) != 0) {
+            undistDetails.add(BalanceSheetSubjectDetailResponse.builder()
+                    .subjectCode("4103")
+                    .subjectName("本年利润 (账面已结转)")
+                    .endAmount(p4103End)
+                    .beginAmount(p4103Begin)
+                    .build());
+        }
+        if (p4104End.compareTo(ZERO) != 0 || p4104Begin.compareTo(ZERO) != 0) {
+            undistDetails.add(BalanceSheetSubjectDetailResponse.builder()
+                    .subjectCode("4104")
+                    .subjectName("利润分配")
+                    .endAmount(p4104End)
+                    .beginAmount(p4104Begin)
+                    .build());
+        }
+        if (isReportClosing && (unclosedProfitEnd.compareTo(ZERO) != 0 || unclosedProfitBegin.compareTo(ZERO) != 0)) {
+            undistDetails.add(BalanceSheetSubjectDetailResponse.builder()
+                    .subjectCode("999999")
+                    .subjectName("当期未结转净损益 (表结法动态汇算)")
+                    .endAmount(unclosedProfitEnd)
+                    .beginAmount(unclosedProfitBegin)
+                    .build());
+        }
+
+        BalanceSheetItemResponse undistItem = buildItem(74, "  未分配利润", 2, "4103,4104", undistEnd, undistBegin);
+        if (!undistDetails.isEmpty()) {
+            undistItem.setDetailSubjects(undistDetails);
+        }
+        liabEquityItems.add(undistItem);
         equityEnd = equityEnd.add(undistEnd);
         equityBegin = equityBegin.add(undistBegin);
 
@@ -267,8 +380,11 @@ public class FinancialReportDomainService {
         return BalanceSheetResponse.builder()
                 .accountingDate(accountingDate)
                 .compareDate(compareDate)
-                .unitName("智能账务核心企业")
-                .currency("CNY")
+                .unitName(Constants.DEFAULT_UNIT_NAME)
+                .currency(Constants.DEFAULT_CURRENCY)
+                .closingMethod(closingMethod.getCode())
+                .unclosedProfitEnd(unclosedProfitEnd)
+                .unclosedProfitBegin(unclosedProfitBegin)
                 .balanced(balanced)
                 .diffAmount(diffAmount)
                 .totalAssetEnd(totalAssetEnd)
@@ -424,7 +540,7 @@ public class FinancialReportDomainService {
         // 2. 构建顶层 KPI 摘要
         BigDecimal grossMarginRate = ZERO;
         if (revCur.compareTo(ZERO) > 0) {
-            grossMarginRate = revCur.subtract(costCur).divide(revCur, 4, RoundingMode.HALF_UP).multiply(ONE_HUNDRED);
+            grossMarginRate = revCur.subtract(costCur).divide(revCur, 4, RoundingMode.HALF_UP).multiply(FinancialAmountUtil.PERCENT_BASE);
         }
 
         BigDecimal revYoY = calcRate(revCur, revCmp);
@@ -443,8 +559,8 @@ public class FinancialReportDomainService {
         return IncomeStatementResponse.builder()
                 .periodDesc(periodDesc)
                 .accountingDate(monthEnd)
-                .currency("CNY")
-                .unitName("智能账务核心企业")
+                .currency(Constants.DEFAULT_CURRENCY)
+                .unitName(Constants.DEFAULT_UNIT_NAME)
                 .kpi(kpi)
                 .items(items)
                 .build();
@@ -908,6 +1024,99 @@ public class FinancialReportDomainService {
         if (cmp == null || cmp.compareTo(ZERO) == 0) {
             return ZERO;
         }
-        return cur.subtract(cmp).divide(cmp.abs(), 4, RoundingMode.HALF_UP).multiply(ONE_HUNDRED).setScale(1, RoundingMode.HALF_UP);
+        return cur.subtract(cmp).divide(cmp.abs(), 4, RoundingMode.HALF_UP).multiply(FinancialAmountUtil.PERCENT_BASE).setScale(1, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * 动态汇算未结转损益净额（表结法核心算法）
+     * <p>
+     * 遍历报告期科目日余额列表中的损益类科目（6 类）：
+     * 贷方余额（收入/收益）为正向利润贡献，借方余额（费用/成本/支出）为负向冲减。
+     *
+     * @param balances   科目日余额列表
+     * @param subjectMap 科目主数据映射表
+     * @return 当期未结转损益净额（正数为净收益，负数为净亏损）
+     */
+    private BigDecimal calculateUnclosedProfit(List<AccountBalancePO> balances, Map<String, AccountSubjectPO> subjectMap) {
+        if (balances == null || balances.isEmpty()) {
+            return ZERO;
+        }
+        BigDecimal unclosedProfit = ZERO;
+        for (AccountBalancePO b : balances) {
+            String code = b.getSubjectCode();
+            if (code == null) {
+                continue;
+            }
+            AccountSubjectPO subject = subjectMap != null ? subjectMap.get(code) : null;
+            boolean isProfitLoss = (subject != null && subject.getSubjectCategory() == SubjectCategoryEnum.PROFIT_LOSS)
+                    || code.startsWith("6");
+            if (!isProfitLoss) {
+                continue;
+            }
+
+            BigDecimal endBal = b.getEndBalance() != null ? b.getEndBalance() : ZERO;
+            if (endBal.compareTo(ZERO) == 0) {
+                continue;
+            }
+
+            // 判断余额方向：贷方为收益(+)，借方为费用/支出(-)
+            BalanceDirectionEnum dir = b.getBalanceDirection();
+            if (dir == null || dir == BalanceDirectionEnum.FLAT) {
+                if (subject != null && subject.getDebitCredit() != null) {
+                    if (subject.getDebitCredit().isCredit()) {
+                        dir = BalanceDirectionEnum.CREDIT;
+                    } else if (subject.getDebitCredit().isDebit()) {
+                        dir = BalanceDirectionEnum.DEBIT;
+                    }
+                }
+            }
+
+            if (dir == BalanceDirectionEnum.CREDIT) {
+                unclosedProfit = unclosedProfit.add(endBal);
+            } else if (dir == BalanceDirectionEnum.DEBIT) {
+                unclosedProfit = unclosedProfit.subtract(endBal);
+            } else {
+                // 若仍无法判定方向，收入/收益类科目默认贷方，成本费用类默认借方
+                if (code.startsWith("60") || code.startsWith("61") || code.startsWith("63")) {
+                    unclosedProfit = unclosedProfit.add(endBal);
+                } else {
+                    unclosedProfit = unclosedProfit.subtract(endBal);
+                }
+            }
+        }
+        return unclosedProfit;
+    }
+
+    /**
+     * 归集多科目明细清单（用于资产负债表行项目穿透展开）
+     */
+    private List<BalanceSheetSubjectDetailResponse> collectSubjectDetails(
+            Map<String, BigDecimal> endMap, Map<String, BigDecimal> beginMap,
+            Map<String, AccountSubjectPO> subjectMap, String... codes) {
+        List<BalanceSheetSubjectDetailResponse> details = new ArrayList<>();
+        Set<String> matchedCodes = new TreeSet<>();
+        for (String code : codes) {
+            for (String key : endMap.keySet()) {
+                if (key.startsWith(code)) matchedCodes.add(key);
+            }
+            for (String key : beginMap.keySet()) {
+                if (key.startsWith(code)) matchedCodes.add(key);
+            }
+        }
+        for (String c : matchedCodes) {
+            BigDecimal end = endMap.getOrDefault(c, ZERO);
+            BigDecimal begin = beginMap.getOrDefault(c, ZERO);
+            if (end.compareTo(ZERO) != 0 || begin.compareTo(ZERO) != 0) {
+                AccountSubjectPO sub = subjectMap != null ? subjectMap.get(c) : null;
+                String name = sub != null ? sub.getSubjectName() : c;
+                details.add(BalanceSheetSubjectDetailResponse.builder()
+                        .subjectCode(c)
+                        .subjectName(name)
+                        .endAmount(end)
+                        .beginAmount(begin)
+                        .build());
+            }
+        }
+        return details;
     }
 }

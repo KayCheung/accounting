@@ -87,6 +87,131 @@ class FinancialReportDomainServiceTest {
     }
 
     @Test
+    @DisplayName("表结法测试：存在未结转损益246.68元时动态轧平资产负债表")
+    void testGenerateBalanceSheet_ReportClosing_WithUnclosedProfit() {
+        LocalDate date = LocalDate.of(2026, 3, 31);
+        BalanceSheetQueryRequest req = new BalanceSheetQueryRequest();
+        req.setAccountingDate(date);
+        req.setClosingMethod("REPORT");
+
+        AccountSubjectPO cashSub = new AccountSubjectPO();
+        cashSub.setSubjectCode("1002");
+        cashSub.setSubjectName("银行存款");
+
+        AccountSubjectPO capSub = new AccountSubjectPO();
+        capSub.setSubjectCode("4001");
+        capSub.setSubjectName("实收资本");
+
+        AccountSubjectPO revSub = new AccountSubjectPO();
+        revSub.setSubjectCode("6011");
+        revSub.setSubjectName("利息收入");
+        revSub.setSubjectCategory(com.kltb.accounting.core.domain.enums.SubjectCategoryEnum.PROFIT_LOSS);
+        revSub.setDebitCredit(com.kltb.accounting.core.domain.enums.SubjectBalanceDirectionEnum.CREDIT);
+
+        when(subjectRepository.selectAllSubjects()).thenReturn(List.of(cashSub, capSub, revSub));
+
+        // 资产端：货币资金 300000246.68
+        AccountBalancePO b1 = new AccountBalancePO();
+        b1.setSubjectCode("100201");
+        b1.setEndBalance(new BigDecimal("300000246.68"));
+        b1.setBeginBalance(new BigDecimal("300000000.00"));
+
+        // 权益端：实收资本 300000000.00
+        AccountBalancePO b2 = new AccountBalancePO();
+        b2.setSubjectCode("4001");
+        b2.setEndBalance(new BigDecimal("300000000.00"));
+        b2.setBeginBalance(new BigDecimal("300000000.00"));
+
+        // 损益端：利息收入 246.68 (贷方余额，尚未结转)
+        AccountBalancePO b3 = new AccountBalancePO();
+        b3.setSubjectCode("6011");
+        b3.setEndBalance(new BigDecimal("246.68"));
+        b3.setBalanceDirection(com.kltb.accounting.core.domain.enums.BalanceDirectionEnum.CREDIT);
+        b3.setBeginBalance(BigDecimal.ZERO);
+
+        when(accountBalanceRepository.selectByDate(date)).thenReturn(List.of(b1, b2, b3));
+        when(accountBalanceRepository.selectByDate(LocalDate.of(2026, 1, 1))).thenReturn(List.of(b1, b2));
+
+        BalanceSheetResponse resp = domainService.generateBalanceSheet(req);
+
+        assertThat(resp).isNotNull();
+        assertThat(resp.getClosingMethod()).isEqualTo("REPORT");
+        assertThat(resp.getUnclosedProfitEnd()).isEqualByComparingTo(new BigDecimal("246.68"));
+        assertThat(resp.getTotalAssetEnd()).isEqualByComparingTo(new BigDecimal("300000246.68"));
+        assertThat(resp.getTotalLiabilityAndEquityEnd()).isEqualByComparingTo(new BigDecimal("300000246.68"));
+        assertThat(resp.getBalanced()).isTrue();
+        assertThat(resp.getDiffAmount()).isEqualByComparingTo(BigDecimal.ZERO);
+
+        // 验证未分配利润行包含未结转损益
+        var undistItem = resp.getLiabilityAndEquityItems().stream()
+                .filter(i -> i.getRowNo() == 74)
+                .findFirst().orElseThrow();
+        assertThat(undistItem.getEndAmount()).isEqualByComparingTo(new BigDecimal("246.68"));
+        assertThat(undistItem.getDetailSubjects()).isNotEmpty();
+        assertThat(undistItem.getDetailSubjects().get(0).getSubjectCode()).isEqualTo("999999");
+    }
+
+    @Test
+    @DisplayName("账结法测试：存在未结转损益246.68元时按账面如实反映差额")
+    void testGenerateBalanceSheet_AccountClosing_WithUnclosedProfit() {
+        LocalDate date = LocalDate.of(2026, 3, 31);
+        BalanceSheetQueryRequest req = new BalanceSheetQueryRequest();
+        req.setAccountingDate(date);
+        req.setClosingMethod("ACCOUNT");
+
+        AccountSubjectPO cashSub = new AccountSubjectPO();
+        cashSub.setSubjectCode("1002");
+        cashSub.setSubjectName("银行存款");
+
+        AccountSubjectPO capSub = new AccountSubjectPO();
+        capSub.setSubjectCode("4001");
+        capSub.setSubjectName("实收资本");
+
+        AccountSubjectPO revSub = new AccountSubjectPO();
+        revSub.setSubjectCode("6011");
+        revSub.setSubjectName("利息收入");
+        revSub.setSubjectCategory(com.kltb.accounting.core.domain.enums.SubjectCategoryEnum.PROFIT_LOSS);
+        revSub.setDebitCredit(com.kltb.accounting.core.domain.enums.SubjectBalanceDirectionEnum.CREDIT);
+
+        when(subjectRepository.selectAllSubjects()).thenReturn(List.of(cashSub, capSub, revSub));
+
+        AccountBalancePO b1 = new AccountBalancePO();
+        b1.setSubjectCode("100201");
+        b1.setEndBalance(new BigDecimal("300000246.68"));
+        b1.setBeginBalance(new BigDecimal("300000000.00"));
+
+        AccountBalancePO b2 = new AccountBalancePO();
+        b2.setSubjectCode("4001");
+        b2.setEndBalance(new BigDecimal("300000000.00"));
+        b2.setBeginBalance(new BigDecimal("300000000.00"));
+
+        AccountBalancePO b3 = new AccountBalancePO();
+        b3.setSubjectCode("6011");
+        b3.setEndBalance(new BigDecimal("246.68"));
+        b3.setBalanceDirection(com.kltb.accounting.core.domain.enums.BalanceDirectionEnum.CREDIT);
+        b3.setBeginBalance(BigDecimal.ZERO);
+
+        when(accountBalanceRepository.selectByDate(date)).thenReturn(List.of(b1, b2, b3));
+        when(accountBalanceRepository.selectByDate(LocalDate.of(2026, 1, 1))).thenReturn(List.of(b1, b2));
+
+        BalanceSheetResponse resp = domainService.generateBalanceSheet(req);
+
+        assertThat(resp).isNotNull();
+        assertThat(resp.getClosingMethod()).isEqualTo("ACCOUNT");
+        assertThat(resp.getUnclosedProfitEnd()).isEqualByComparingTo(new BigDecimal("246.68"));
+        assertThat(resp.getTotalAssetEnd()).isEqualByComparingTo(new BigDecimal("300000246.68"));
+        // 账结法下，未结转前所有者权益未包含损益，故为 300,000,000.00
+        assertThat(resp.getTotalLiabilityAndEquityEnd()).isEqualByComparingTo(new BigDecimal("300000000.00"));
+        assertThat(resp.getBalanced()).isFalse();
+        assertThat(resp.getDiffAmount()).isEqualByComparingTo(new BigDecimal("246.68"));
+
+        var undistItem = resp.getLiabilityAndEquityItems().stream()
+                .filter(i -> i.getRowNo() == 74)
+                .findFirst().orElseThrow();
+        assertThat(undistItem.getEndAmount()).isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    @Test
     @DisplayName("利润表生成与毛利率/净利润测试")
     void testGenerateIncomeStatement() {
         IncomeStatementQueryRequest req = new IncomeStatementQueryRequest();

@@ -8,6 +8,7 @@ export interface BalanceSheetQueryParams {
   accountingDate: string
   compareDate?: string
   compareYearStart?: boolean
+  closingMethod?: string
 }
 
 /**
@@ -47,6 +48,9 @@ export interface BalanceSheetResponse {
   totalAssetBegin: number
   totalLiabilityAndEquityEnd: number
   totalLiabilityAndEquityBegin: number
+  closingMethod?: string
+  unclosedProfitEnd?: number
+  unclosedProfitBegin?: number
   assetItems: BalanceSheetItem[]
   liabilityAndEquityItems: BalanceSheetItem[]
 }
