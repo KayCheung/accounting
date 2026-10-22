@@ -13,6 +13,7 @@ import com.kltb.accounting.core.infrastructure.persistence.bo.*;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountSubjectPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.DictionaryPO;
 import com.kltb.accounting.core.infrastructure.dictionary.DictionaryComponent;
+import com.kltb.accounting.core.infrastructure.dictionary.VoucherTypeMeta;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountingVoucherAuxiliaryRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.DictionaryRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.SubjectRepository;
@@ -343,6 +344,56 @@ class AuxiliaryLedgerApplicationServiceTest {
         assertThat(item.getVoucherStatusDesc()).isEqualTo("已冲销");
         assertThat(item.getTradeType()).isEqualTo(3);
         assertThat(item.getTradeTypeDesc()).isEqualTo("红");
+    }
+
+    @Test
+    @DisplayName("分页查询凭证分录记录测试 - 支持凭证类型与动态字号对齐")
+    void testGetAuxiliaryEntries_DynamicVoucherWord() {
+        AuxiliaryLedgerQueryRequest req = new AuxiliaryLedgerQueryRequest();
+        req.setAuxType("DEPARTMENT");
+        req.setPageNo(1);
+        req.setPageSize(10);
+
+        AuxiliaryEntryRecordBO bo = new AuxiliaryEntryRecordBO();
+        bo.setId(102L);
+        bo.setAccountingDate(LocalDate.of(2026, 3, 2));
+        bo.setVoucherNo("REC20260302000002");
+        bo.setVoucherType("RECEIPT");
+        bo.setEntryId("ENT202603020002");
+        bo.setSummary("收到款项");
+        bo.setAuxType("DEPARTMENT");
+        bo.setAuxCode("DEPT_SALES");
+        bo.setAuxName("销售中心");
+        bo.setSubjectCode("1002");
+        bo.setSubjectName("银行存款");
+        bo.setChangeDirection(1);
+        bo.setDebitCredit(1);
+        bo.setAmount(new BigDecimal("10000.00"));
+        bo.setVoucherStatus(3);
+        bo.setTradeType(1);
+
+        IPage<AuxiliaryEntryRecordBO> page = new Page<>(1, 10);
+        page.setRecords(List.of(bo));
+        page.setTotal(1);
+
+        VoucherTypeMeta receiptMeta = VoucherTypeMeta.builder()
+                .dictCode("RECEIPT")
+                .dictName("收款凭证")
+                .prefix("收")
+                .title("收款凭证")
+                .build();
+        when(dictionaryComponent.getVoucherTypeMeta("RECEIPT")).thenReturn(receiptMeta);
+        when(dictionaryComponent.formatVoucherWord(receiptMeta, "REC20260302000002")).thenReturn("收 20260302000002");
+
+        when(auxiliaryRepository.selectEntryPage(any(), eq(req))).thenReturn(page);
+
+        PageResponse<AuxiliaryEntryRecordResponse> resp = auxiliaryService.getAuxiliaryEntries(req);
+        assertThat(resp.getTotal()).isEqualTo(1L);
+        assertThat(resp.getList()).hasSize(1);
+        AuxiliaryEntryRecordResponse item = resp.getList().get(0);
+        assertThat(item.getVoucherWord()).isEqualTo("收 20260302000002");
+        assertThat(item.getVoucherType()).isEqualTo("RECEIPT");
+        assertThat(item.getVoucherTypeName()).isEqualTo("收款凭证");
     }
 
     @Test

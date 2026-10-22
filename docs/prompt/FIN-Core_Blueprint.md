@@ -1249,6 +1249,13 @@
             - `FinancialReportDomainServiceTest` 覆盖基于 SpEL 动态公式求值的利润表与资产负债表动态平衡验证；
             - 全模块 469 个单测 100% 通过；前端 `vue-tsc` 与 `vite build` 生产构建 0 错误。
 
+       - **凭证字号生成规则全系统对齐与单一公共逻辑收敛（REQ261022-003）**：
+         1. **问题根因定位**：排查辅助核算账簿流水与记账凭证印签详情的凭证字号不一致缺陷，确认原 AuxiliaryLedgerApplicationService 中凭证字头硬编码为 "记 "，且底层 SQL/BO 未查询 voucher_type，导致无论收款、付款还是转账凭证在辅助核算流水中均被硬编码显示为记字凭证，而凭证印签详情动态解析为收/付/转字号，存在数据表达割裂；
+         2. **公共逻辑收敛与去重复（DRY 原则）**：彻底消除多套分散拼装与硬编码实现，将凭证字号格式化逻辑集中收敛至核心支撑组件 DictionaryComponent：新增 formatVoucherWord 统一方法与 doFormatVoucherWord 静态安全执行器，统一支持凭证字头提取、纯数字序号过滤、空值安全降级；
+         3. **全业务链路无缝复用**：AuxiliaryLedgerApplicationService、VoucheringAssembler 与 ManualVoucherApplicationService 全量接入统一的 dictionaryComponent.formatVoucherWord 复用调用；
+         4. **持久层与契约层对齐**：AccountingVoucherAuxiliaryMapper.xml 补充查询 v.voucher_type；AuxiliaryEntryRecordBO 与 AuxiliaryEntryRecordResponse 补齐 voucherType 与 voucherTypeName；前端 auxiliary-report.ts 响应接口同步扩展；
+         5. **测试与构建保障**：DictionaryComponentTest 新增 testFormatVoucherWord；AuxiliaryLedgerApplicationServiceTest 新增 testGetAuxiliaryEntries_DynamicVoucherWord 动态字号联动断言；相关测试用例 100% 绿灯通过，前端生产构建 0 错误通过。
+
 ---
 
 ## Phase 10：联调、性能验收与上线

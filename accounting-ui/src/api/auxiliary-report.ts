@@ -97,6 +97,8 @@ export interface AuxiliaryEntryRecordResponse {
   accountingDate: string
   voucherNo: string
   voucherWord: string
+  voucherType?: string
+  voucherTypeName?: string
   entryId: string
   summary: string
   auxType: string

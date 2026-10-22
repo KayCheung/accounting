@@ -22,6 +22,7 @@ public class AuxiliaryEntryRecordBO {
     private Integer changeDirection;
     private Integer debitCredit;
     private BigDecimal amount;
+    private String voucherType;
     private Integer voucherStatus;
     private Integer tradeType;
 }

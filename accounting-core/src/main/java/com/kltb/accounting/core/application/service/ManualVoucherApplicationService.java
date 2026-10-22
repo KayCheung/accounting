@@ -682,8 +682,13 @@ public class ManualVoucherApplicationService {
         String prefix = vMeta.getPrefix();
         String title = vMeta.getTitle();
 
-        String digits = (po.getVoucherNo() != null ? po.getVoucherNo() : po.getApplyNo()).replaceAll("[^0-9]", "");
-        String voucherWord = prefix + (digits.isEmpty() ? "" : " " + digits);
+        String voucherNoOrApplyNo = po.getVoucherNo() != null ? po.getVoucherNo() : po.getApplyNo();
+        String voucherWord = dictionaryComponent != null
+                ? dictionaryComponent.formatVoucherWord(vMeta, voucherNoOrApplyNo)
+                : null;
+        if (voucherWord == null) {
+            voucherWord = DictionaryComponent.doFormatVoucherWord(prefix, voucherNoOrApplyNo);
+        }
 
         return ManualVoucherApplyDetailResponse.builder()
                 .applyNo(po.getApplyNo())

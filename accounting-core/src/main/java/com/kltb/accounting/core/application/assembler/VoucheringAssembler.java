@@ -293,8 +293,12 @@ public class VoucheringAssembler {
                 ? meta.getPrefix()
                 : (title.length() > 0 ? title.substring(0, 1) : "记");
 
-        String digits = po.getVoucherNo() != null ? po.getVoucherNo().replaceAll("[^0-9]", "") : "";
-        String voucherWord = prefix + (digits.isEmpty() ? "" : " " + digits);
+        String voucherWord = dictionaryComponent != null
+                ? dictionaryComponent.formatVoucherWord(meta, po.getVoucherNo())
+                : null;
+        if (voucherWord == null) {
+            voucherWord = DictionaryComponent.doFormatVoucherWord(prefix, po.getVoucherNo());
+        }
 
         BigDecimal totalAmt = item.getDebitAmount() != null && item.getDebitAmount().compareTo(BigDecimal.ZERO) > 0
                 ? item.getDebitAmount()

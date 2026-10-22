@@ -13,6 +13,7 @@ import com.kltb.accounting.core.domain.enums.DebitCreditEnum;
 import com.kltb.accounting.core.domain.enums.TradeTypeEnum;
 import com.kltb.accounting.core.domain.enums.VoucherStatusEnum;
 import com.kltb.accounting.core.infrastructure.dictionary.DictionaryComponent;
+import com.kltb.accounting.core.infrastructure.dictionary.VoucherTypeMeta;
 import com.kltb.accounting.core.infrastructure.persistence.bo.*;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountSubjectPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.DictionaryPO;
@@ -392,14 +393,23 @@ public class AuxiliaryLedgerApplicationService {
         BigDecimal debitAmt = (DebitCreditEnum.DEBIT == dcEnum) ? amt : BigDecimal.ZERO;
         BigDecimal creditAmt = (DebitCreditEnum.CREDIT == dcEnum) ? amt : BigDecimal.ZERO;
 
-        String digits = bo.getVoucherNo() != null ? bo.getVoucherNo().replaceAll("[^0-9]", "") : "";
-        String voucherWord = "记 " + (digits.isEmpty() ? bo.getVoucherNo() : digits);
+        // 统一通过 DictionaryComponent 解析凭证字号与类型元数据，彻底消除硬编码与多套实现
+        VoucherTypeMeta vMeta = dictionaryComponent != null ? dictionaryComponent.getVoucherTypeMeta(bo.getVoucherType()) : null;
+        String voucherWord = dictionaryComponent != null
+                ? dictionaryComponent.formatVoucherWord(vMeta, bo.getVoucherNo())
+                : null;
+        if (voucherWord == null) {
+            voucherWord = DictionaryComponent.doFormatVoucherWord(null, bo.getVoucherNo());
+        }
+        String voucherTypeName = vMeta != null ? vMeta.getDictName() : bo.getVoucherType();
         String resolvedName = resolveAuxName(bo.getAuxType(), bo.getAuxCode(), bo.getAuxName());
 
         return AuxiliaryEntryRecordResponse.builder()
                 .id(bo.getId())
                 .accountingDate(bo.getAccountingDate())
                 .voucherNo(bo.getVoucherNo())
+                .voucherType(bo.getVoucherType())
+                .voucherTypeName(voucherTypeName)
                 .voucherWord(voucherWord)
                 .entryId(bo.getEntryId())
                 .summary(bo.getSummary() != null ? bo.getSummary() : "")

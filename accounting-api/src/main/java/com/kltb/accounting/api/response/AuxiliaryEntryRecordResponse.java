@@ -39,6 +39,12 @@ public class AuxiliaryEntryRecordResponse implements Serializable {
     @Schema(description = "财务凭证字号", example = "记-2026003-00001")
     private String voucherWord;
 
+    @Schema(description = "凭证类型编码", example = "RECEIPT")
+    private String voucherType;
+
+    @Schema(description = "凭证类型名称", example = "收款凭证")
+    private String voucherTypeName;
+
     @Schema(description = "分录流水号", example = "ENT202603010000010001")
     private String entryId;
 

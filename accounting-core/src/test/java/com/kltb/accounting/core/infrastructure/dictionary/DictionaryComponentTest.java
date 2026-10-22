@@ -109,4 +109,36 @@ class DictionaryComponentTest {
         assertThat(dictionaryComponent.getVoucherTypeMeta("REVERSAL").getVoucherNoPrefix()).isEqualTo("REV");
         assertThat(dictionaryComponent.getVoucherTypeMeta("期末结转凭证").getVoucherNoPrefix()).isEqualTo("PET");
     }
+
+    @Test
+    @DisplayName("formatVoucherWord: 统一格式化凭证字号，支持字头提取与优雅降级")
+    void testFormatVoucherWord() {
+        DictionaryPO receipt = new DictionaryPO();
+        receipt.setDictType(DictTypeEnum.VOUCHER_TYPE.getCode());
+        receipt.setDictCode("RECEIPT");
+        receipt.setDictName("收款凭证");
+        receipt.setExtJson("{\"title\":\"收款凭证\",\"prefix\":\"收\",\"tradeType\":1}");
+
+        when(dictionaryRepository.selectByTypeAndCode(DictTypeEnum.VOUCHER_TYPE.getCode(), "RECEIPT")).thenReturn(receipt);
+
+        // 1. 正常收款凭证字号提取
+        String word1 = dictionaryComponent.formatVoucherWord("RECEIPT", "REC20261022000001");
+        assertThat(word1).isEqualTo("收 20261022000001");
+
+        // 2. 付款凭证智能推导
+        String word2 = dictionaryComponent.formatVoucherWord("付款凭证", "PAY20261022000002");
+        assertThat(word2).isEqualTo("付 20261022000002");
+
+        // 3. 转账凭证
+        String word3 = dictionaryComponent.formatVoucherWord("TRANSFER", "TRF20261022000003");
+        assertThat(word3).isEqualTo("转 20261022000003");
+
+        // 4. 空类型或未知类型优雅降级为 "记"
+        String word4 = dictionaryComponent.formatVoucherWord((String) null, "VOU20261022000004");
+        assertThat(word4).isEqualTo("记 20261022000004");
+
+        // 5. 无数字流水号
+        String word5 = dictionaryComponent.formatVoucherWord("RECEIPT", "REC");
+        assertThat(word5).isEqualTo("收");
+    }
 }

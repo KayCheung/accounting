@@ -205,6 +205,7 @@
             a.change_direction AS changeDirection,
             e.debit_credit AS debitCredit,
             a.amount AS amount,
+            v.voucher_type AS voucherType,
             v.status AS voucherStatus,
             v.trade_type AS tradeType
         FROM t_accounting_voucher_auxiliary a

@@ -193,6 +193,28 @@ public class DictionaryComponent {
         if (StrUtil.isBlank(name)) {
             return "记";
         }
+        String upper = name.toUpperCase();
+        if (upper.contains("RECEIPT") || name.contains("收")) {
+            return "收";
+        }
+        if (upper.contains("PAYMENT") || upper.contains("PAY") || name.contains("付")) {
+            return "付";
+        }
+        if (upper.contains("TRANSFER") || upper.contains("TRF") || name.contains("转")) {
+            return "转";
+        }
+        if (upper.contains("ADJUST") || upper.contains("ADJ") || name.contains("调")) {
+            return "调";
+        }
+        if (upper.contains("REVERSAL") || upper.contains("REV") || name.contains("冲")) {
+            return "冲";
+        }
+        if (upper.contains("PERIOD_END") || upper.contains("PET") || name.contains("结")) {
+            return "结";
+        }
+        if (upper.contains("GENERAL") || upper.contains("VOU") || name.contains("记")) {
+            return "记";
+        }
         // 默认取名称首字，如“收款凭证”->“收”，“调账凭证”->“调”
         return name.substring(0, 1);
     }
@@ -269,5 +291,47 @@ public class DictionaryComponent {
         }
         DictionaryPO po = findByTypeAndCodeOrName(DictTypeEnum.CURRENCY, currencyCode);
         return po != null && StrUtil.isNotBlank(po.getDictName()) ? po.getDictName() : currencyCode;
+    }
+
+    /**
+     * 统一格式化财务凭证字号（字头 + 凭证数字序号，全系统唯一公共实现）
+     * <p>
+     * 规则说明：
+     * 1. 根据凭证类型动态从字典 ext_json 元数据获取字头 prefix（如：RECEIPT->收, PAYMENT->付, TRANSFER->转, ADJUST->调, REVERSAL->冲, PERIOD_END->结, GENERAL/默认->记）；
+     * 2. 从凭证编号（或申请单号）中提取纯数字流水号 digits；
+     * 3. 组合返回：prefix + (digits.isEmpty() ? "" : " " + digits)。
+     *
+     * @param voucherTypeCodeOrName 凭证类型编码或中文名称（支持 null/空，降级默认字头 "记"）
+     * @param voucherNoOrApplyNo    凭证号或申请单号
+     * @return 格式化后的凭证字号，如 "收 20261022000001"、"记 20261022000001"
+     */
+    public String formatVoucherWord(String voucherTypeCodeOrName, String voucherNoOrApplyNo) {
+        VoucherTypeMeta meta = getVoucherTypeMeta(voucherTypeCodeOrName);
+        return formatVoucherWord(meta, voucherNoOrApplyNo);
+    }
+
+    /**
+     * 基于已解析的凭证类型元数据统一格式化财务凭证字号
+     *
+     * @param meta               凭证类型元数据（可为 null）
+     * @param voucherNoOrApplyNo 凭证号或申请单号
+     * @return 格式化后的凭证字号
+     */
+    public String formatVoucherWord(VoucherTypeMeta meta, String voucherNoOrApplyNo) {
+        String prefix = (meta != null && StrUtil.isNotBlank(meta.getPrefix())) ? meta.getPrefix() : "记";
+        return doFormatVoucherWord(prefix, voucherNoOrApplyNo);
+    }
+
+    /**
+     * 基础凭证字号拼接执行器（保证空值安全与降级兜底）
+     *
+     * @param prefix             字头前缀（如 "收", "付", "转", "记"），为空时兜底使用 "记"
+     * @param voucherNoOrApplyNo 凭证编号或申请单号
+     * @return 凭证字号
+     */
+    public static String doFormatVoucherWord(String prefix, String voucherNoOrApplyNo) {
+        String p = StrUtil.isNotBlank(prefix) ? prefix.trim() : "记";
+        String digits = voucherNoOrApplyNo != null ? voucherNoOrApplyNo.replaceAll("[^0-9]", "") : "";
+        return p + (digits.isEmpty() ? "" : " " + digits);
     }
 }
