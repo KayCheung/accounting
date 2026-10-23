@@ -15,11 +15,14 @@ import com.kltb.accounting.core.infrastructure.persistence.entity.*;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountDetailMapper;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.SubAccountDetailMapper;
 import com.kltb.accounting.core.infrastructure.persistence.repository.*;
+import com.kltb.accounting.core.infrastructure.redis.DistributedLockTemplate;
+import com.kltb.accounting.core.infrastructure.redis.RedisKeyConstants;
 import com.kltb.accounting.core.shared.exception.AccountException;
 import com.kltb.accounting.core.shared.exception.ServiceException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -54,6 +57,8 @@ public class AsyncPostingDomainService {
     private final RollbackDomainService rollbackDomainService;
     private final BusinessRecordRepository businessRecordRepository;
     private final SubjectRepository subjectRepository;
+    private final DistributedLockTemplate distributedLockTemplate;
+    private final TransactionTemplate transactionTemplate;
 
     private static final String POSTING_TOPIC = "posting_topic";
     private static final String POSTING_TAG = "POSTING_ENTRY";
@@ -349,13 +354,18 @@ public class AsyncPostingDomainService {
     /**
      * 联动更新凭证状态和事务状态
      * 当所有非缓冲分录都过账成功后：
-     *   - 凭证 status=3(已过账)
+     *   - 若无缓冲分录：凭证 status=3(已过账)
      *   - 事务 status=2(成功)
+     *   - 流水 status=2(成功)
      */
     public void updateStatusIfAllNonBufferPosted(String voucherNo) {
         if (areAllNonBufferEntriesPosted(voucherNo)) {
-            // 更新凭证状态
-            accountingVoucherRepository.updateStatusByVoucherNo(voucherNo, VoucherStatusEnum.POSTED.getCode());
+            List<AccountingVoucherEntryPO> entries = accountingVoucherRepository.selectEntriesByVoucherNo(voucherNo);
+            boolean hasBuffer = entries.stream().anyMatch(e -> e.getBuffered() != null && e.getBuffered() == 1);
+            if (!hasBuffer) {
+                // 无缓冲分录，且所有非缓冲分录均已过账：更新凭证状态为已过账
+                accountingVoucherRepository.updateStatusByVoucherNo(voucherNo, VoucherStatusEnum.POSTED.getCode());
+            }
 
             // 更新事务状态
             AccountingVoucherPO voucher = accountingVoucherRepository.selectByVoucherNoSimple(voucherNo);
@@ -364,7 +374,7 @@ public class AsyncPostingDomainService {
                 if (txn != null) {
                     transactionRepository.updateStatusByTxnNo(
                         voucher.getTxnNo(),
-                        com.kltb.accounting.core.domain.enums.TransactionStatusEnum.SUCCESS,
+                        TransactionStatusEnum.SUCCESS,
                         null,
                         LocalDateTime.now()
                     );
@@ -378,6 +388,37 @@ public class AsyncPostingDomainService {
             }
 
             log.info("[ASYNC-POSTING] 所有非缓冲分录已过账，凭证/事务/流水状态已联动更新: voucherNo={}", voucherNo);
+        }
+    }
+
+    /**
+     * 在凭证分布式锁与全新事务保护下，检查并对齐凭证终态。
+     * <p>
+     * 解决 RocketMQ 多线程并发消费场景下，MySQL 可重复读(REPEATABLE READ)
+     * 隔离级别的 MVCC 快照读导致的多线程均判定“未全部分录过账”从而遗漏凭证终态推进的问题。
+     *
+     * @param voucherNo 凭证号
+     */
+    public void syncVoucherStatusIfAllPosted(String voucherNo) {
+        if (StrUtil.isBlank(voucherNo)) {
+            return;
+        }
+        String lockKey = RedisKeyConstants.Lock.Voucher.voucherMutex(voucherNo);
+        try {
+            distributedLockTemplate.execute(lockKey, 5, 30, () -> {
+                transactionTemplate.execute(status -> {
+                    AccountingVoucherPO voucher = accountingVoucherRepository.selectByVoucherNoSimple(voucherNo);
+                    if (voucher == null || voucher.getStatus() == VoucherStatusEnum.POSTED || voucher.getStatus() == VoucherStatusEnum.REVERSED) {
+                        return null;
+                    }
+                    updateStatusIfAllNonBufferPosted(voucherNo);
+                    return null;
+                });
+                return null;
+            });
+        } catch (Exception e) {
+            log.warn("[ASYNC-POSTING] 凭证终态同步加锁或执行异常，交由定时任务兜底: voucherNo={}, error={}",
+                voucherNo, e.getMessage());
         }
     }
 

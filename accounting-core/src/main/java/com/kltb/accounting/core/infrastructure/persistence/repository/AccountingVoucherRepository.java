@@ -280,8 +280,21 @@ public class AccountingVoucherRepository {
     /**
      * 按凭证号更新凭证状态
      */
-    public void updateStatusByVoucherNo(String voucherNo, Integer status) {
-        voucherMapper.updateStatusByVoucherNo(voucherNo, status, LocalDateTime.now());
+    public int updateStatusByVoucherNo(String voucherNo, Integer status) {
+        int affected = voucherMapper.updateStatusByVoucherNo(voucherNo, status, LocalDateTime.now());
+        if (affected == 0) {
+            throw new AccountException(ResultCode.DATA_NOT_FOUND,
+                    "凭证状态更新失败(记录不存在或已删除): voucherNo=" + voucherNo);
+        }
+        return affected;
+    }
+
+    /**
+     * 查询超时处于过账中的凭证（定时巡检自愈用）
+     */
+    public List<AccountingVoucherPO> selectTimeoutPostingVouchers(LocalDateTime beforeTime, int limit) {
+        List<AccountingVoucherPO> result = voucherMapper.selectTimeoutPostingVouchers(beforeTime, limit);
+        return result != null ? result : Collections.emptyList();
     }
 
     /**

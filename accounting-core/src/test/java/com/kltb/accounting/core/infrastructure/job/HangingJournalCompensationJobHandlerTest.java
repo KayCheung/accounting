@@ -27,6 +27,12 @@ class HangingJournalCompensationJobHandlerTest {
     @Mock
     private JournalingApplicationService journalingApplicationService;
 
+    @Mock
+    private com.kltb.accounting.core.infrastructure.persistence.repository.AccountingVoucherRepository accountingVoucherRepository;
+
+    @Mock
+    private com.kltb.accounting.core.domain.service.AsyncPostingDomainService asyncPostingDomainService;
+
     @InjectMocks
     private HangingJournalCompensationJobHandler jobHandler;
 
@@ -57,5 +63,22 @@ class HangingJournalCompensationJobHandlerTest {
 
         verify(journalingApplicationService).reconcileHangingJournal("TRC_HANG_01");
         verify(journalingApplicationService).reconcileHangingJournal("TRC_HANG_02");
+    }
+
+    @Test
+    @DisplayName("execute: 发现超时过账中凭证并调用终态对齐")
+    void execute_withHangingVouchers_shouldSyncEach() {
+        when(businessRecordRepository.selectTimeoutProcessingRecords(any(LocalDateTime.class), anyInt()))
+                .thenReturn(Collections.emptyList());
+
+        com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherPO v1 = new com.kltb.accounting.core.infrastructure.persistence.entity.AccountingVoucherPO();
+        v1.setVoucherNo("VOU_HANG_01");
+
+        when(accountingVoucherRepository.selectTimeoutPostingVouchers(any(LocalDateTime.class), anyInt()))
+                .thenReturn(List.of(v1));
+
+        jobHandler.execute();
+
+        verify(asyncPostingDomainService).syncVoucherStatusIfAllPosted("VOU_HANG_01");
     }
 }

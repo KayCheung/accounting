@@ -68,6 +68,8 @@ public class PostingMessageConsumer extends AbstractMqConsumer<PostingMessagePay
                 asyncPostingDomainService.consumeAsyncPostingMessage(payload);
                 return null;
             });
+            // 单条分录事务成功提交后，在分布式锁与独立事务中执行终态检查与联动更新
+            asyncPostingDomainService.syncVoucherStatusIfAllPosted(payload.getVoucherNo());
         } catch (Exception e) {
             if (!rollbackDomainService.isRetryable(e)) {
                 log.error("[POSTING-CONSUMER] 不可重试异常，执行单边回滚: entryId={}", payload.getEntryId(), e);

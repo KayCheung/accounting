@@ -94,6 +94,7 @@ class PostingMessageConsumerTest {
         assertThat(status).isEqualTo(ConsumeConcurrentlyStatus.CONSUME_SUCCESS);
         verify(asyncPostingDomainService).consumeAsyncPostingMessage(argThat(p ->
                 VOUCHER_NO.equals(p.getVoucherNo()) && ENTRY_ID.equals(p.getEntryId())));
+        verify(asyncPostingDomainService).syncVoucherStatusIfAllPosted(VOUCHER_NO);
         verify(receiptRepository).save(eq(MESSAGE_ID), eq(VOUCHER_NO), anyString(), anyString(),
                 eq(1), eq(""), eq(""), anyString(), any(), any());
     }

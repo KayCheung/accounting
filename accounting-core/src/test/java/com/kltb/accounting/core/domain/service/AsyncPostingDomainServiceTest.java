@@ -51,6 +51,8 @@ class AsyncPostingDomainServiceTest {
     @Mock private RollbackDomainService rollbackDomainService;
     @Mock private com.kltb.accounting.core.infrastructure.persistence.repository.BusinessRecordRepository businessRecordRepository;
     @Mock private com.kltb.accounting.core.infrastructure.persistence.repository.SubjectRepository subjectRepository;
+    @Mock private com.kltb.accounting.core.infrastructure.redis.DistributedLockTemplate distributedLockTemplate;
+    @Mock private org.springframework.transaction.support.TransactionTemplate transactionTemplate;
 
     @InjectMocks private AsyncPostingDomainService asyncPostingDomainService;
 
@@ -418,6 +420,48 @@ class AsyncPostingDomainServiceTest {
         voucher.setSummary("凭证摘要");
         voucher.setTenantId(1);
         return voucher;
+    }
+
+    @Test
+    @DisplayName("syncVoucherStatusIfAllPosted: 所有分录已过账且无缓冲分录，凭证联动更新为 POSTED")
+    void syncVoucherStatusIfAllPosted_allPosted_shouldUpdateVoucher() {
+        String voucherNo = "VOU001";
+        AccountingVoucherPO voucher = buildVoucher(voucherNo, "TXN001");
+        voucher.setStatus(VoucherStatusEnum.POSTING);
+
+        when(accountingVoucherRepository.selectByVoucherNoSimple(voucherNo)).thenReturn(voucher);
+
+        AccountingVoucherEntryPO e1 = new AccountingVoucherEntryPO();
+        e1.setEntryId("E1");
+        e1.setStatus(VoucherEntryStatusEnum.POSTED);
+        e1.setBuffered(0);
+
+        AccountingVoucherEntryPO e2 = new AccountingVoucherEntryPO();
+        e2.setEntryId("E2");
+        e2.setStatus(VoucherEntryStatusEnum.POSTED);
+        e2.setBuffered(0);
+
+        when(accountingVoucherRepository.selectEntriesByVoucherNo(voucherNo)).thenReturn(List.of(e1, e2));
+        when(transactionRepository.selectByTxnNo("TXN001")).thenReturn(new TransactionPO());
+
+        // mock lock execute
+        when(distributedLockTemplate.execute(anyString(), anyLong(), anyLong(), any()))
+                .thenAnswer(invocation -> {
+                    java.util.function.Supplier<?> supplier = invocation.getArgument(3);
+                    return supplier.get();
+                });
+
+        // mock transactionTemplate execute
+        when(transactionTemplate.execute(any()))
+                .thenAnswer(invocation -> {
+                    org.springframework.transaction.support.TransactionCallback<?> callback = invocation.getArgument(0);
+                    return callback.doInTransaction(new org.springframework.transaction.support.SimpleTransactionStatus());
+                });
+
+        asyncPostingDomainService.syncVoucherStatusIfAllPosted(voucherNo);
+
+        verify(accountingVoucherRepository).updateStatusByVoucherNo(voucherNo, VoucherStatusEnum.POSTED.getCode());
+        verify(transactionRepository).updateStatusByTxnNo(eq("TXN001"), eq(TransactionStatusEnum.SUCCESS), any(), any());
     }
 
     private AccountPO buildAccount(String accountNo, AccountStatusEnum status, BigDecimal balance) {

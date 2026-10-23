@@ -90,16 +90,11 @@ public interface AccountingVoucherMapper extends BaseMapper<AccountingVoucherPO>
     /**
      * 按凭证号更新凭证状态
      */
-    default void updateStatusByVoucherNo(String voucherNo, Integer status, LocalDateTime postTime) {
-        LambdaUpdateWrapper<AccountingVoucherPO> wrapper = new LambdaUpdateWrapper<AccountingVoucherPO>()
-                .eq(AccountingVoucherPO::getVoucherNo, voucherNo)
-                .eq(AccountingVoucherPO::getIsDelete, 0)
-                .set(AccountingVoucherPO::getStatus, status);
-        if (postTime != null) {
-            wrapper.set(AccountingVoucherPO::getPostTime, postTime);
-        }
-        this.update(null, wrapper);
-    }
+    @Update("UPDATE t_accounting_voucher SET status = #{status}, post_time = #{postTime}, version = version + 1 " +
+            "WHERE voucher_no = #{voucherNo} AND is_delete = 0")
+    int updateStatusByVoucherNo(@Param("voucherNo") String voucherNo,
+                                @Param("status") Integer status,
+                                @Param("postTime") LocalDateTime postTime);
 
     /**
      * 按凭证号查询凭证
@@ -152,5 +147,16 @@ public interface AccountingVoucherMapper extends BaseMapper<AccountingVoucherPO>
         @Param("startDate") LocalDate startDate,
         @Param("endDate") LocalDate endDate,
         @Param("businessCode") String businessCode);
+
+    /**
+     * 查询超时处于过账中的凭证（定时巡检自愈用）
+     */
+    default List<AccountingVoucherPO> selectTimeoutPostingVouchers(LocalDateTime beforeTime, int limit) {
+        return this.selectList(new LambdaQueryWrapper<AccountingVoucherPO>()
+                .eq(AccountingVoucherPO::getStatus, com.kltb.accounting.core.domain.enums.VoucherStatusEnum.POSTING.getCode())
+                .eq(AccountingVoucherPO::getIsDelete, 0)
+                .le(AccountingVoucherPO::getCreateTime, beforeTime)
+                .last("LIMIT " + Math.max(1, limit)));
+    }
 
 }

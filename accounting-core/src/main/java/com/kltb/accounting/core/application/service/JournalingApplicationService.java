@@ -776,11 +776,13 @@ public class JournalingApplicationService {
                     // 检查是否所有非缓冲分录实际已全部过账，或满足缓冲记账消峰完成条件
                     boolean logicallySuccess = isJournalLogicallySuccess(voucher.getVoucherNo());
                     if (logicallySuccess) {
-                        log.info("[RECONCILE] 缓冲记账流水满足成功条件(非缓冲已过账+缓冲已入队)，补齐状态联动: voucherNo={}", voucher.getVoucherNo());
+                        log.info("[RECONCILE] 记账流水满足成功条件(非缓冲已过账+缓冲已入队)，补齐状态联动: voucherNo={}", voucher.getVoucherNo());
                         markJournalAndTransactionSuccess(traceNo, voucher.getTxnNo());
                         if (curRecord != null) {
                             curRecord.setStatus(BusinessRecordStatusEnum.SUCCESS);
                         }
+                        // 推进凭证终态（无缓冲分录时更新凭证为 POSTED）
+                        asyncPostingDomainService.syncVoucherStatusIfAllPosted(voucher.getVoucherNo());
                     } else {
                         // 异步过账未完成，检查是否超过超时阈值（如30分钟）
                         if (curRecord.getCreateTime() != null && curRecord.getCreateTime().isBefore(LocalDateTime.now().minusMinutes(30))) {
