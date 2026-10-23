@@ -119,7 +119,7 @@
                     </el-tag>
                   </template>
                 </el-table-column>
-                <el-table-column prop="fundsType" label="款项类型" width="130">
+                <el-table-column prop="fundsType" label="款项类型" min-width="140" show-overflow-tooltip>
                   <template #default="subScope">
                     <span class="code-tag">{{ getFundsTypeLabel(subScope.row.fundsType) }}</span>
                   </template>
@@ -487,16 +487,20 @@
               </template>
             </el-table-column>
 
-            <el-table-column label="交易款项类型 *" width="135">
+            <el-table-column label="交易款项类型 *" min-width="160">
               <template #default="{ row }">
                 <el-select
-                  v-model="row.fundsType"
+                  v-model="row.fundsTypeList"
+                  multiple
+                  collapse-tags
+                  collapse-tags-tooltip
                   placeholder="款项类型"
                   filterable
                   allow-create
                   default-first-option
                   size="small"
                   style="width: 100%;"
+                  @change="(val: string[]) => { row.fundsType = (val || []).join(',') }"
                 >
                   <el-option
                     v-for="item in fundsTypeOptions"
@@ -963,7 +967,7 @@
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="fundsType" label="款项类型" width="110">
+            <el-table-column prop="fundsType" label="款项类型" min-width="140" show-overflow-tooltip>
               <template #default="{ row }">
                 <span class="code-tag">{{ getFundsTypeLabel(row.fundsType) }}</span>
               </template>
@@ -1232,6 +1236,13 @@ const getPayChannelLabel = (code: string) => {
 }
 
 const getFundsTypeLabel = (code: string) => {
+  if (!code) return ''
+  if (code.includes(',')) {
+    return code
+      .split(',')
+      .map(c => fundsTypeMap.value[c.trim()] || c.trim())
+      .join(', ')
+  }
   return fundsTypeMap.value[code] || code
 }
 
@@ -1408,6 +1419,7 @@ const openCreateDialog = () => {
       {
         rowNum: 1,
         fundsType: 'PRINCIPAL',
+        fundsTypeList: ['PRINCIPAL'],
         subjectCode: subjectOptions.value[0]?.value || '',
         accountScope: 2,
         debitCredit: 1,
@@ -1420,6 +1432,7 @@ const openCreateDialog = () => {
       {
         rowNum: 2,
         fundsType: 'PRINCIPAL',
+        fundsTypeList: ['PRINCIPAL'],
         subjectCode: subjectOptions.value[1]?.value || subjectOptions.value[0]?.value || '',
         accountScope: 1,
         debitCredit: 2,
@@ -1440,6 +1453,7 @@ const handleApplyStandardTemplate = () => {
     {
       rowNum: 1,
       fundsType: 'PRINCIPAL',
+      fundsTypeList: ['PRINCIPAL'],
       subjectCode: subjectOptions.value[0]?.value || '',
       accountScope: 2,
       debitCredit: 1,
@@ -1452,6 +1466,7 @@ const handleApplyStandardTemplate = () => {
     {
       rowNum: 2,
       fundsType: 'PRINCIPAL',
+      fundsTypeList: ['PRINCIPAL'],
       subjectCode: subjectOptions.value[1]?.value || subjectOptions.value[0]?.value || '',
       accountScope: 1,
       debitCredit: 2,
@@ -1476,6 +1491,7 @@ const handleAddEntry = () => {
   formModel.value.entries.push({
     rowNum: nextRowNum,
     fundsType: 'PRINCIPAL',
+    fundsTypeList: ['PRINCIPAL'],
     subjectCode: subjectOptions.value[0]?.value || '',
     accountScope: defaultDir === 1 ? 2 : 1,
     debitCredit: defaultDir,
@@ -1546,6 +1562,7 @@ const doOpenEdit = (detail: RuleResponse) => {
     entries: (detail.entries || []).map(e => ({
       rowNum: e.rowNum,
       fundsType: e.fundsType,
+      fundsTypeList: e.fundsType ? e.fundsType.split(',').map((s: string) => s.trim()).filter(Boolean) : [],
       subjectCode: e.subjectCode,
       accountScope: e.accountScope,
       debitCredit: e.debitCredit,
@@ -1765,6 +1782,9 @@ const handleSubmit = async () => {
 
   // 校验每行必填项
   for (const entry of formModel.value.entries) {
+    if (Array.isArray((entry as any).fundsTypeList) && (entry as any).fundsTypeList.length > 0) {
+      entry.fundsType = (entry as any).fundsTypeList.join(',')
+    }
     if (!entry.subjectCode) {
       ElMessage.error(`分录行 #${entry.rowNum} 的会计科目未选择`)
       return

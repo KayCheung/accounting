@@ -106,19 +106,27 @@ public class VoucheringApplicationService {
                         .collect(Collectors.toMap(AccountSubjectPO::getSubjectCode, s -> s, (s1, s2) -> s1));
 
         for (AccountingRuleDetailPO ruleDetail : ruleDetails) {
-            // 找到匹配的款项类型业务明细
-            BusinessDetailPO matchedDetail = findMatchingDetail(
-                    businessDetails, ruleDetail.getFundsType());
-            if (matchedDetail == null) {
+            String fundsTypeConfig = ruleDetail.getFundsType();
+            boolean isMultiFunds = StrUtil.isNotBlank(fundsTypeConfig) && fundsTypeConfig.contains(",");
+
+            // 找到匹配的款项类型业务明细（支持单款项与多款项逗号分隔配置）
+            List<BusinessDetailPO> matchedDetails = findMatchingDetails(businessDetails, fundsTypeConfig);
+            if (matchedDetails.isEmpty()) {
                 // 核心业务设计：若本次交易流水未上传该款项明细（例如免息未上送利息），动态跳过可选分录生成
                 log.info("[Voucher] 流水明细未包含款项类型，动态跳过可选分录生成: fundsType={}, subjectCode={}",
                         ruleDetail.getFundsType(), ruleDetail.getSubjectCode());
                 continue;
             }
 
-            // 计算分录金额（支持 SpEL 与主单/明细扩展属性透传）
-            BigDecimal amount = voucheringDomainService.calculateEntryAmount(
-                    ruleDetail, matchedDetail, journal);
+            // 计算分录金额（多款项逗号分隔配置自动聚合求和，单款项保持原逻辑计算）
+            BigDecimal amount;
+            if (isMultiFunds) {
+                amount = voucheringDomainService.calculateAggregatedEntryAmount(
+                        ruleDetail, matchedDetails, journal);
+            } else {
+                amount = voucheringDomainService.calculateEntryAmount(
+                        ruleDetail, matchedDetails.get(0), journal);
+            }
 
             // 核心财务律法：若分录计算金额为 0 或非正数，动态跳过（绝对值法则严禁 0 元或负数分录过账）
             if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
@@ -127,8 +135,10 @@ public class VoucheringApplicationService {
                 continue;
             }
 
+            BusinessDetailPO primaryDetail = matchedDetails.get(0);
+
             // 确定账户编号（优先从内存字典匹配真实 accountNo，未命中则走仓储查询）
-            String accountNo = resolveAccountNo(ruleDetail, matchedDetail, request.getAccountMapping());
+            String accountNo = resolveAccountNo(ruleDetail, primaryDetail, request.getAccountMapping());
 
             // 核心财务律法：推导分录增减方向 changeDirection（1-增, 2-减）
             AccountSubjectPO subject = subjectMap.get(ruleDetail.getSubjectCode());
@@ -184,7 +194,7 @@ public class VoucheringApplicationService {
             List<AccountingRuleAuxiliaryPO> auxConfigs = auxMap.get(ruleDetail.getId());
             if (auxConfigs != null && !auxConfigs.isEmpty()) {
                 List<AuxiliaryItemData> auxItems = auxiliaryDomainService
-                        .calculateAuxiliaryAllocation(entry, auxConfigs, matchedDetail, journal);
+                        .calculateAuxiliaryAllocation(entry, auxConfigs, primaryDetail, journal);
                 entryAuxMap.put(entry, auxItems);
             }
         }
@@ -303,13 +313,27 @@ public class VoucheringApplicationService {
     }
 
     /**
-     * 找到匹配的款项类型业务明细
+     * 找到匹配的款项类型业务明细列表（支持单款项，或以逗号分隔的多款项类型聚合匹配）
+     */
+    private List<BusinessDetailPO> findMatchingDetails(List<BusinessDetailPO> details, String fundsTypeConfig) {
+        if (StrUtil.isBlank(fundsTypeConfig) || details == null || details.isEmpty()) {
+            return Collections.emptyList();
+        }
+        Set<String> targetFundsTypes = Arrays.stream(fundsTypeConfig.split(","))
+                .map(String::trim)
+                .filter(StrUtil::isNotBlank)
+                .collect(Collectors.toSet());
+        return details.stream()
+                .filter(d -> targetFundsTypes.contains(d.getFundsType()))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 找到匹配的款项类型业务明细（单款项匹配兼容）
      */
     private BusinessDetailPO findMatchingDetail(List<BusinessDetailPO> details, String fundsType) {
-        return details.stream()
-                .filter(d -> fundsType.equals(d.getFundsType()))
-                .findFirst()
-                .orElse(null);
+        List<BusinessDetailPO> list = findMatchingDetails(details, fundsType);
+        return list.isEmpty() ? null : list.get(0);
     }
 
     /**

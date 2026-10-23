@@ -76,6 +76,7 @@ export interface RuleAuxiliaryRequest {
 export interface RuleEntryRequest {
   rowNum: number
   fundsType: string
+  fundsTypeList?: string[]
   subjectCode: string
   accountScope: number
   debitCredit: number

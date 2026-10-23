@@ -345,7 +345,7 @@ CREATE TABLE t_accounting_rule_detail (
     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
     rule_id BIGINT NOT NULL COMMENT '记账规则ID',
     row_num INT NOT NULL COMMENT '凭证分录行号',
-    funds_type VARCHAR(32) NOT NULL COMMENT '交易款项类型(字典CODE)',
+    funds_type VARCHAR(128) NOT NULL COMMENT '交易款项类型(字典CODE，支持多款项逗号分隔)',
     subject_code VARCHAR(32) NOT NULL COMMENT '会计科目编码',
     account_scope TINYINT NOT NULL COMMENT '账户作用域：1-内部分户；2-外部分户',
     debit_credit TINYINT NOT NULL COMMENT '借贷方向：1-借,2-贷',

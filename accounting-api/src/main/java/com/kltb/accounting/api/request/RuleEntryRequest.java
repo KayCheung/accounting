@@ -32,8 +32,8 @@ public class RuleEntryRequest implements Serializable {
     private Integer rowNum;
 
     @NotBlank(message = "交易款项类型不能为空")
-    @Size(max = 32, message = "交易款项类型长度不能超过32")
-    @Schema(description = "交易款项类型", example = "PRINCIPAL")
+    @Size(max = 128, message = "交易款项类型长度不能超过128")
+    @Schema(description = "交易款项类型（支持单款项或多款项逗号分隔）", example = "PRINCIPAL,INTEREST")
     private String fundsType;
 
     @NotBlank(message = "科目编码不能为空")

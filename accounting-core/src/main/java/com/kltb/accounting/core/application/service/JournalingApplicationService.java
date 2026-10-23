@@ -329,8 +329,11 @@ public class JournalingApplicationService {
         List<AccountFreezeDetailPO> freezeDetails = new ArrayList<>();
         for (AccountingRuleDetailPO payoutRuleDetail : payoutRuleDetails) {
             String fundsType = payoutRuleDetail.getFundsType();
+            Set<String> ruleFundsTypes = StrUtil.isNotBlank(fundsType)
+                    ? Arrays.stream(fundsType.split(",")).map(String::trim).collect(Collectors.toSet())
+                    : Collections.emptySet();
             JournalDetailRequest matchedDetail = request.getDetails().stream()
-                    .filter(d -> fundsType.equals(d.getFundsType()))
+                    .filter(d -> ruleFundsTypes.contains(d.getFundsType()))
                     .findFirst()
                     .orElse(null);
             if (matchedDetail == null) {

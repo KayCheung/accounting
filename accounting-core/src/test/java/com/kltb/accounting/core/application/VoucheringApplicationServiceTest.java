@@ -48,6 +48,7 @@ import org.springframework.transaction.support.TransactionCallback;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -790,5 +791,188 @@ class VoucheringApplicationServiceTest {
         assertThat(captured).hasSize(2);
         assertThat(captured.stream().map(VoucherEntryData::getSubjectCode).toList())
                 .containsExactly("1001", "2001");
+    }
+
+    @Test
+    @DisplayName("用户还款（含减免券）多款项聚合分录生成：生成严格6行分录且借贷平衡")
+    void generateVoucher_repaymentWithReliefCoupons_multiFundsAggregation_shouldGenerateBalancedSixEntries() {
+        VoucherGenerateRequest req = new VoucherGenerateRequest();
+        req.setTraceNo("RD202610220000001001");
+        req.setBookkeeperName("SYSTEM");
+
+        BusinessRecordPO journal = new BusinessRecordPO();
+        journal.setTraceNo("RD202610220000001001");
+        journal.setStatus(BusinessRecordStatusEnum.PROCESSING);
+        journal.setBusinessCode("jiedianqian_quant");
+        journal.setTradingCode("LOAN_REPAY");
+        journal.setPayChannel("BANK");
+        journal.setAmount(new BigDecimal("140.00"));
+        journal.setAccountingDate(LocalDate.now());
+
+        // 5 笔款项明细
+        BusinessDetailPO dPrincipal = new BusinessDetailPO();
+        dPrincipal.setFundsType("PRINCIPAL");
+        dPrincipal.setCustomerId("CUST_LF");
+        dPrincipal.setAmount(new BigDecimal("100.00"));
+
+        BusinessDetailPO dInterest = new BusinessDetailPO();
+        dInterest.setFundsType("INTEREST");
+        dInterest.setCustomerId("CUST_LF");
+        dInterest.setAmount(new BigDecimal("10.00"));
+
+        BusinessDetailPO dFee = new BusinessDetailPO();
+        dFee.setFundsType("GUARANTEE_FEE");
+        dFee.setCustomerId("CUST_LF");
+        dFee.setAmount(new BigDecimal("10.00"));
+
+        BusinessDetailPO dInterestRelief = new BusinessDetailPO();
+        dInterestRelief.setFundsType("INTEREST_RELIEF");
+        dInterestRelief.setCustomerId("CUST_LF");
+        dInterestRelief.setAmount(new BigDecimal("10.00"));
+
+        BusinessDetailPO dFeeRelief = new BusinessDetailPO();
+        dFeeRelief.setFundsType("GUARANTEE_FEE_RELIEF");
+        dFeeRelief.setCustomerId("CUST_LF");
+        dFeeRelief.setAmount(new BigDecimal("10.00"));
+
+        List<BusinessDetailPO> details = List.of(dPrincipal, dInterest, dFee, dInterestRelief, dFeeRelief);
+        when(voucheringDomainService.loadJournal("RD202610220000001001"))
+                .thenReturn(new VoucheringDomainService.JournalWithDetails(journal, details));
+
+        AccountingRulePO rule = new AccountingRulePO();
+        rule.setId(88L);
+        rule.setVoucherType("LOAN_REPAY");
+
+        // 6 行规则明细配置（采用多款项配置）
+        AccountingRuleDetailPO rd1 = new AccountingRuleDetailPO();
+        rd1.setId(881L);
+        rd1.setRowNum(1);
+        rd1.setFundsType("PRINCIPAL,INTEREST,GUARANTEE_FEE"); // 借：一般户存款（聚合 100+10+10=120）
+        rd1.setSubjectCode("100202");
+        rd1.setDebitCredit(DebitCreditEnum.DEBIT);
+        rd1.setCurrency("CNY");
+
+        AccountingRuleDetailPO rd2 = new AccountingRuleDetailPO();
+        rd2.setId(882L);
+        rd2.setRowNum(2);
+        rd2.setFundsType("INTEREST_RELIEF"); // 借：利息减免损失（10）
+        rd2.setSubjectCode("670201");
+        rd2.setDebitCredit(DebitCreditEnum.DEBIT);
+        rd2.setCurrency("CNY");
+
+        AccountingRuleDetailPO rd3 = new AccountingRuleDetailPO();
+        rd3.setId(883L);
+        rd3.setRowNum(3);
+        rd3.setFundsType("GUARANTEE_FEE_RELIEF"); // 借：担保费减免损失（10）
+        rd3.setSubjectCode("670203");
+        rd3.setDebitCredit(DebitCreditEnum.DEBIT);
+        rd3.setCurrency("CNY");
+
+        AccountingRuleDetailPO rd4 = new AccountingRuleDetailPO();
+        rd4.setId(884L);
+        rd4.setRowNum(4);
+        rd4.setFundsType("PRINCIPAL"); // 贷：个人消费贷款（100）
+        rd4.setSubjectCode("12010101");
+        rd4.setDebitCredit(DebitCreditEnum.CREDIT);
+        rd4.setCurrency("CNY");
+
+        AccountingRuleDetailPO rd5 = new AccountingRuleDetailPO();
+        rd5.setId(885L);
+        rd5.setRowNum(5);
+        rd5.setFundsType("INTEREST,INTEREST_RELIEF"); // 贷：应收利息（聚合 10+10=20）
+        rd5.setSubjectCode("120301");
+        rd5.setDebitCredit(DebitCreditEnum.CREDIT);
+        rd5.setCurrency("CNY");
+
+        AccountingRuleDetailPO rd6 = new AccountingRuleDetailPO();
+        rd6.setId(886L);
+        rd6.setRowNum(6);
+        rd6.setFundsType("GUARANTEE_FEE,GUARANTEE_FEE_RELIEF"); // 贷：应收担保费（聚合 10+10=20）
+        rd6.setSubjectCode("120501");
+        rd6.setDebitCredit(DebitCreditEnum.CREDIT);
+        rd6.setCurrency("CNY");
+
+        List<AccountingRuleDetailPO> ruleDetails = List.of(rd1, rd2, rd3, rd4, rd5, rd6);
+        when(voucheringDomainService.matchRule("jiedianqian_quant", "LOAN_REPAY", "BANK"))
+                .thenReturn(new VoucheringDomainService.AccountingRuleWithDetails(rule, ruleDetails, Collections.emptyMap()));
+
+        TransactionPO txn = new TransactionPO();
+        txn.setTxnNo("TXN_REPAY_001");
+        when(transactionRepository.selectByTraceNo("RD202610220000001001")).thenReturn(txn);
+
+        // 科目余额方向配置
+        Map<String, AccountSubjectPO> subjects = Map.of(
+                "100202", createSubject("100202", SubjectBalanceDirectionEnum.DEBIT),
+                "670201", createSubject("670201", SubjectBalanceDirectionEnum.DEBIT),
+                "670203", createSubject("670203", SubjectBalanceDirectionEnum.DEBIT),
+                "12010101", createSubject("12010101", SubjectBalanceDirectionEnum.DEBIT),
+                "120301", createSubject("120301", SubjectBalanceDirectionEnum.DEBIT),
+                "120501", createSubject("120501", SubjectBalanceDirectionEnum.DEBIT)
+        );
+        subjects.forEach((code, subj) -> when(subjectRepository.selectByCode(code)).thenReturn(subj));
+
+        // Mock voucheringDomainService 计算金额（验证聚合方法与单方法调用）
+        when(voucheringDomainService.calculateAggregatedEntryAmount(eq(rd1), anyList(), eq(journal)))
+                .thenReturn(new BigDecimal("120.00")); // 100 + 10 + 10
+        when(voucheringDomainService.calculateEntryAmount(eq(rd2), any(), eq(journal)))
+                .thenReturn(new BigDecimal("10.00"));
+        when(voucheringDomainService.calculateEntryAmount(eq(rd3), any(), eq(journal)))
+                .thenReturn(new BigDecimal("10.00"));
+        when(voucheringDomainService.calculateEntryAmount(eq(rd4), any(), eq(journal)))
+                .thenReturn(new BigDecimal("100.00"));
+        when(voucheringDomainService.calculateAggregatedEntryAmount(eq(rd5), anyList(), eq(journal)))
+                .thenReturn(new BigDecimal("20.00")); // 10 + 10
+        when(voucheringDomainService.calculateAggregatedEntryAmount(eq(rd6), anyList(), eq(journal)))
+                .thenReturn(new BigDecimal("20.00")); // 10 + 10
+
+        when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> cb = invocation.getArgument(0);
+            return cb.doInTransaction(null);
+        });
+
+        org.mockito.ArgumentCaptor<List<VoucherEntryData>> entriesCaptor = org.mockito.ArgumentCaptor.forClass(List.class);
+        when(voucheringDomainService.persistVoucher(any(), any(), entriesCaptor.capture(), any())).thenReturn("VOU_REPAY_001");
+        when(accountingVoucherRepository.updateTxnNoByVoucherNo("VOU_REPAY_001", "TXN_REPAY_001")).thenReturn(1);
+
+        AccountingVoucherPO savedVoucher = new AccountingVoucherPO();
+        savedVoucher.setVoucherNo("VOU_REPAY_001");
+        savedVoucher.setAmount(new BigDecimal("140.00"));
+        when(accountingVoucherRepository.selectByTraceNo("RD202610220000001001")).thenReturn(List.of(savedVoucher));
+
+        VoucherGenerateResponse resp = service.generateVoucher(req);
+        assertThat(resp).isNotNull();
+
+        List<VoucherEntryData> entries = entriesCaptor.getValue();
+        // 验证：凭证分录严格为 6 行
+        assertThat(entries).hasSize(6);
+
+        // 验证借贷双方金额
+        BigDecimal debitSum = entries.stream()
+                .filter(e -> e.getDebitCredit() == 1)
+                .map(VoucherEntryData::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal creditSum = entries.stream()
+                .filter(e -> e.getDebitCredit() == 2)
+                .map(VoucherEntryData::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // 验证：借贷平衡且总额均为 140.00
+        assertThat(debitSum).isEqualByComparingTo(new BigDecimal("140.00"));
+        assertThat(creditSum).isEqualByComparingTo(new BigDecimal("140.00"));
+
+        // 验证各明细分录金额
+        assertThat(entries.get(0).getAmount()).isEqualByComparingTo("120.00"); // 100202 一般户存款
+        assertThat(entries.get(1).getAmount()).isEqualByComparingTo("10.00");  // 670201 利息减免损失
+        assertThat(entries.get(2).getAmount()).isEqualByComparingTo("10.00");  // 670203 担保费减免损失
+        assertThat(entries.get(3).getAmount()).isEqualByComparingTo("100.00"); // 12010101 个人消费贷款
+        assertThat(entries.get(4).getAmount()).isEqualByComparingTo("20.00");  // 120301 个人贷款应收利息
+        assertThat(entries.get(5).getAmount()).isEqualByComparingTo("20.00");  // 120501 个人贷款应收担保费
+    }
+
+    private AccountSubjectPO createSubject(String code, SubjectBalanceDirectionEnum dir) {
+        AccountSubjectPO subj = new AccountSubjectPO();
+        subj.setSubjectCode(code);
+        subj.setDebitCredit(dir);
+        return subj;
     }
 }

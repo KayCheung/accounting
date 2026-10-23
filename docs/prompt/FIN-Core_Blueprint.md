@@ -1256,6 +1256,22 @@
          4. **持久层与契约层对齐**：AccountingVoucherAuxiliaryMapper.xml 补充查询 v.voucher_type；AuxiliaryEntryRecordBO 与 AuxiliaryEntryRecordResponse 补齐 voucherType 与 voucherTypeName；前端 auxiliary-report.ts 响应接口同步扩展；
          5. **测试与构建保障**：DictionaryComponentTest 新增 testFormatVoucherWord；AuxiliaryLedgerApplicationServiceTest 新增 testGetAuxiliaryEntries_DynamicVoucherWord 动态字号联动断言；相关测试用例 100% 绿灯通过，前端生产构建 0 错误通过。
 
+       - **还款息费减免多款项聚合分录生成与规则引擎架构增强（REQ261023-001）**：
+         1. **场景痛点与问题根因**：还款场景同时包含本金、利息、担保费以及营销减免券抵扣（如还款 120，本金 100、利息 10、担保费 10、减免利息 10、减免担保费 10，清偿标的 140）。原有记账规则引擎仅支持单一款项类型（fundsType）与业务明细 1:1 映射，导致无法将多笔款项（如本金+实收利息+实收担保费）汇聚到同一银行存款借方，且无法将实收利息与减免利息汇聚冲销同一应收利息贷方，分录被迫碎片化展开为 10 行并产生 10 条账户动账流水，破坏了标准会计凭证的聚合整洁性；
+         2. **多款项配置（Multi-FundsType）架构落地**：
+            - 契约层扩展：`RuleEntryRequest` 的 `fundsType` 校验上限扩容为 128 字符，支持逗号分隔配置多个款项类型（如 `PRINCIPAL,INTEREST,GUARANTEE_FEE` 或 `INTEREST,INTEREST_RELIEF`）；
+            - 持久层支持：新增 Flyway 增量迁移脚本 `V31__alter_rule_detail_funds_type_length.sql` 并同步 `02_accounting_schema.sql`，将 `t_accounting_rule_detail.funds_type` 扩容为 `VARCHAR(128)`；
+            - 领域与应用层重构：`VoucheringApplicationService` 智能识别单款项与多款项配置，单款项保持精准 1:1 匹配，多款项逗号分隔配置触发 `findMatchingDetails` 聚合匹配，通过 `VoucheringDomainService.calculateAggregatedEntryAmount` 自动累加求和并向 SpEL 注入全量上下文变量 `#details`；
+            - 预冻结兼容：`JournalingApplicationService.freezeJournal` 支持多款项包含匹配；
+         3. **前端管理端交互增强（accounting-ui）**：
+            - `accounting-ui/src/api/rule.ts` 契约增强支持 `fundsTypeList` 数组；
+            - 规则编辑弹窗的“交易款项类型”下拉框升级为多选模式（`multiple`、`collapse-tags`、`allow-create`），支持在配置期可视化多选款项类型；
+            - 列表与详情展示支持逗号分隔款项类型的友好中文标签解析（`getFundsTypeLabel`）；
+         4. **质量验收与测试覆盖**：
+            - `VoucheringApplicationServiceTest` 新增用户还款减免真实场景测试用例 `generateVoucher_repaymentWithReliefCoupons_multiFundsAggregation_shouldGenerateBalancedSixEntries`，严格验证生成 6 行分录、借贷双方各 140 元绝对平衡；
+            - `VoucheringDomainServiceTest` 新增多款项聚合金额计算及 SpEL 上下文单测；
+            - 全量单测（479/479）100% 绿灯通过；前端 `vue-tsc && vite build` 生产构建 0 错误通过。
+
 ---
 
 ## Phase 10：联调、性能验收与上线

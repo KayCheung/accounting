@@ -152,6 +152,55 @@ class VoucheringDomainServiceTest {
     }
 
     @Test
+    @DisplayName("多款项聚合金额计算: 无SpEL脚本时，多明细金额自动累加求和")
+    void calculateAggregatedEntryAmount_withoutScript_shouldSumAllDetails() {
+        AccountingRuleDetailPO ruleDetail = new AccountingRuleDetailPO();
+        ruleDetail.setFundsType("PRINCIPAL,INTEREST,GUARANTEE_FEE");
+
+        BusinessDetailPO d1 = new BusinessDetailPO();
+        d1.setFundsType("PRINCIPAL");
+        d1.setAmount(new BigDecimal("100.00"));
+
+        BusinessDetailPO d2 = new BusinessDetailPO();
+        d2.setFundsType("INTEREST");
+        d2.setAmount(new BigDecimal("10.00"));
+
+        BusinessDetailPO d3 = new BusinessDetailPO();
+        d3.setFundsType("GUARANTEE_FEE");
+        d3.setAmount(new BigDecimal("10.00"));
+
+        BigDecimal result = voucheringDomainService.calculateAggregatedEntryAmount(
+                ruleDetail, List.of(d1, d2, d3), null);
+
+        assertThat(result).isEqualByComparingTo(new BigDecimal("120.00"));
+    }
+
+    @Test
+    @DisplayName("多款项聚合金额计算: 有SpEL脚本时，以聚合总额为#root.amount执行脚本")
+    void calculateAggregatedEntryAmount_withScript_shouldPassAggregatedAmountToSpel() {
+        AccountingRuleDetailPO ruleDetail = new AccountingRuleDetailPO();
+        ruleDetail.setFundsType("INTEREST,INTEREST_RELIEF");
+        ruleDetail.setExtendScript("#amount * 0.9");
+
+        BusinessDetailPO d1 = new BusinessDetailPO();
+        d1.setFundsType("INTEREST");
+        d1.setAmount(new BigDecimal("10.00"));
+
+        BusinessDetailPO d2 = new BusinessDetailPO();
+        d2.setFundsType("INTEREST_RELIEF");
+        d2.setAmount(new BigDecimal("10.00"));
+
+        when(ruleScriptExecutor.execute(eq("#amount * 0.9"), any(), any()))
+                .thenReturn(new BigDecimal("18.00"));
+
+        BigDecimal result = voucheringDomainService.calculateAggregatedEntryAmount(
+                ruleDetail, List.of(d1, d2), null);
+
+        assertThat(result).isEqualByComparingTo(new BigDecimal("18.00"));
+        verify(ruleScriptExecutor).execute(eq("#amount * 0.9"), any(), any());
+    }
+
+    @Test
     @DisplayName("规则匹配: 规则不存在抛出异常")
     void matchRule_ruleNotFound_shouldThrow() {
         when(accountingRuleRepository.selectByBusinessKey("LOAN", "DISBURSE", "BANK")).thenReturn(null);

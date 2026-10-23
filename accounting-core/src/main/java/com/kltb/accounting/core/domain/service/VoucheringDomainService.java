@@ -27,8 +27,10 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * 凭证生成领域服务（P1-1 修复：不开启独立事务，由 Application Service 控制事务边界）
@@ -138,10 +140,47 @@ public class VoucheringDomainService {
         String script = ruleDetail.getExtendScript();
         if (StringUtils.isBlank(script)) {
             // 无 SpEL 脚本时，直接使用业务明细金额
-            return businessDetail.getAmount();
+            return businessDetail != null ? businessDetail.getAmount() : BigDecimal.ZERO;
         }
         JournalSpelContext context = JournalSpelContext.of(businessDetail, journal);
         return ruleScriptExecutor.execute(script, context);
+    }
+
+    /**
+     * 计算多款项业务明细聚合金额（支持多款项求和与 SpEL 表达式）
+     *
+     * @param ruleDetail     规则明细配置
+     * @param matchedDetails 匹配的所有款项业务明细
+     * @param journal        业务流水主单
+     * @return 分录计算金额（多款项自动累加）
+     */
+    public BigDecimal calculateAggregatedEntryAmount(
+            AccountingRuleDetailPO ruleDetail,
+            List<BusinessDetailPO> matchedDetails,
+            BusinessRecordPO journal) {
+
+        if (matchedDetails == null || matchedDetails.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+
+        // 计算多款项明细总和
+        BigDecimal aggregatedAmount = matchedDetails.stream()
+                .map(BusinessDetailPO::getAmount)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        String script = ruleDetail.getExtendScript();
+        if (StringUtils.isBlank(script)) {
+            // 无 SpEL 脚本时，直接使用多款项汇总金额
+            return aggregatedAmount;
+        }
+
+        // 有 SpEL 脚本时，以首条明细为主实体，聚合金额为 #root.amount 构建上下文，并注入 #details 列表
+        BusinessDetailPO primaryDetail = matchedDetails.get(0);
+        JournalSpelContext context = JournalSpelContext.of(aggregatedAmount, primaryDetail, journal);
+        Map<String, Object> extraVariables = new HashMap<>();
+        extraVariables.put("details", matchedDetails);
+        return ruleScriptExecutor.execute(script, context, extraVariables);
     }
 
     /**
