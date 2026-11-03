@@ -22,7 +22,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Month;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.TemporalAdjusters;
 import java.util.*;
 import java.util.regex.Pattern;
 
@@ -82,6 +84,10 @@ public class PeriodEndTransferDomainService {
 
     /**
      * 自动结转执行（日切流水线或定时任务专用）
+     * <p>
+     * 包含两阶段流水线：
+     * 1. 历史期末漏结/失败自动补偿（Catch-Up）：前瞻性检查上一个月末/季末/年末是否有未完成结转，以历史期末所属期为凭证日自动补齐；
+     * 2. 当期常规自动结转：执行当天符合周期触发条件的规则。
      *
      * @param accountingDate 会计日期
      * @param transferType   结转类型过滤（选填）
@@ -89,10 +95,128 @@ public class PeriodEndTransferDomainService {
      */
     public List<TransferRuleResult> executeAutoTransfer(LocalDate accountingDate, Integer transferType) {
         TransferTypeEnum typeEnum = transferType != null ? TransferTypeEnum.fromCode(transferType) : null;
+        List<TransferRuleResult> allResults = new ArrayList<>();
 
+        // 阶段 1：历史期末漏结/失败自动补偿（Catch-Up）
+        List<TransferRuleResult> catchUpResults = executeCatchUpTransfers(accountingDate, typeEnum);
+        if (!catchUpResults.isEmpty()) {
+            allResults.addAll(catchUpResults);
+            log.info("[EOD-TRANSFER-AUTO] 历史期末漏结补偿执行完成: date={}, 补偿笔数={}", accountingDate, catchUpResults.size());
+        }
+
+        // 阶段 2：当期常规自动结转
         List<PeriodEndTransferRulePO> rules = ruleRepository.selectAutoTriggerableRules(accountingDate, typeEnum);
-        log.info("[EOD-TRANSFER-AUTO] 扫描自动结转规则: date={}, 自动可触发规则数={}", accountingDate, rules.size());
-        return doExecuteRuleList(rules, accountingDate, false);
+        log.info("[EOD-TRANSFER-AUTO] 扫描当期自动结转规则: date={}, 自动可触发规则数={}", accountingDate, rules.size());
+        List<TransferRuleResult> currentResults = doExecuteRuleList(rules, accountingDate, false);
+        allResults.addAll(currentResults);
+
+        return allResults;
+    }
+
+    /**
+     * 自动补偿检查与执行：扫描最近历史期末（上月末、上季末、上年末）未成功或遗漏的结转规则，
+     * 自动以历史期末所属期为会计日期生成凭证补齐结转，保证财务报表与账实严肃一致。
+     */
+    private List<TransferRuleResult> executeCatchUpTransfers(LocalDate accountingDate, TransferTypeEnum transferType) {
+        if (accountingDate == null) {
+            return Collections.emptyList();
+        }
+
+        List<PeriodEndTransferRulePO> enabledRules = ruleRepository.selectEnabledRules(transferType);
+        if (enabledRules == null || enabledRules.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // 筛选支持自动结转且属于非日常周期的规则（月结/季结/年结）
+        List<PeriodEndTransferRulePO> periodicRules = enabledRules.stream()
+                .filter(r -> Boolean.TRUE.equals(r.getAutoTransfer()))
+                .filter(r -> r.getPeriodCycle() != null
+                        && r.getPeriodCycle() != PeriodCycleEnum.DAILY
+                        && r.getPeriodCycle() != PeriodCycleEnum.MANUAL)
+                .toList();
+
+        if (periodicRules.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<TransferRuleResult> catchUpResults = new ArrayList<>();
+
+        for (PeriodEndTransferRulePO rule : periodicRules) {
+            try {
+                LocalDate lastPeriodEnd = resolveLastPeriodEndDate(rule.getPeriodCycle(), accountingDate);
+                if (lastPeriodEnd == null || !lastPeriodEnd.isBefore(accountingDate)) {
+                    continue;
+                }
+
+                // 防御：不补偿超过 180 天前的陈旧结转，避免冲击已封账的历史审计期
+                if (lastPeriodEnd.isBefore(accountingDate.minusDays(180))) {
+                    continue;
+                }
+
+                // 幂等检查：若该历史期末已有成功结转记录，则说明已正常完成，无需补偿
+                if (recordRepository.existsSuccessfulTransfer(lastPeriodEnd, rule.getRuleCode())) {
+                    continue;
+                }
+
+                // 检查在该历史期末是否存在待结转余额
+                List<AccountBalancePO> pendingBalances = findPendingBalances(rule, lastPeriodEnd);
+                if (pendingBalances.isEmpty()) {
+                    continue;
+                }
+
+                log.warn("[EOD-TRANSFER-CATCHUP] 检测到历史期末未结转，触发自动补偿: ruleCode={}, ruleName={}, periodCycle={}, periodEnd={}",
+                        rule.getRuleCode(), rule.getRuleName(), rule.getPeriodCycle(), lastPeriodEnd);
+
+                // 以历史期末最后一日作为权威凭证所属期进行结转
+                TransferRuleResult result = executeSingleRule(rule, lastPeriodEnd);
+                if (result != null) {
+                    catchUpResults.add(result);
+                }
+            } catch (Exception e) {
+                log.error("[EOD-TRANSFER-CATCHUP-ERROR] 历史期末补偿结转异常: ruleCode={}, error={}",
+                        rule.getRuleCode(), e.getMessage(), e);
+            }
+        }
+
+        return catchUpResults;
+    }
+
+    /**
+     * 计算指定结转周期在上一个已截止的历史期末最后一日
+     */
+    private LocalDate resolveLastPeriodEndDate(PeriodCycleEnum cycle, LocalDate accountingDate) {
+        if (cycle == null || accountingDate == null) {
+            return null;
+        }
+
+        LocalDate currentMonthEnd = accountingDate.with(TemporalAdjusters.lastDayOfMonth());
+        boolean isMonthEnd = accountingDate.equals(currentMonthEnd);
+
+        return switch (cycle) {
+            case MONTHLY -> {
+                // 若当天本身就是月末，则当天的月结归入当期流水线；已截止的历史月末为上月末
+                if (isMonthEnd) {
+                    yield accountingDate.minusMonths(1).with(TemporalAdjusters.lastDayOfMonth());
+                } else {
+                    yield accountingDate.minusMonths(1).with(TemporalAdjusters.lastDayOfMonth());
+                }
+            }
+            case QUARTERLY -> {
+                int monthVal = accountingDate.getMonthValue();
+                int year = accountingDate.getYear();
+                if (monthVal <= 3) {
+                    yield LocalDate.of(year - 1, 12, 31);
+                } else if (monthVal <= 6) {
+                    yield LocalDate.of(year, 3, 31);
+                } else if (monthVal <= 9) {
+                    yield LocalDate.of(year, 6, 30);
+                } else {
+                    yield LocalDate.of(year, 9, 30);
+                }
+            }
+            case YEARLY -> LocalDate.of(accountingDate.getYear() - 1, 12, 31);
+            default -> null;
+        };
     }
 
     /**

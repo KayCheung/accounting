@@ -3,6 +3,7 @@ package com.kltb.accounting.core.infrastructure.job;
 import com.kltb.accounting.core.domain.enums.TransferRecordStatusEnum;
 import com.kltb.accounting.core.domain.service.PeriodEndTransferDomainService;
 import com.kltb.accounting.core.domain.service.PeriodEndTransferDomainService.TransferRuleResult;
+import com.kltb.accounting.core.infrastructure.cache.AccountingDateCache;
 import com.xxl.job.core.handler.annotation.XxlJob;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,12 +17,12 @@ import java.util.List;
  * <p>
  * 调度配置：
  * <ul>
- *   <li>日结调度：每日日终（如 23:30）执行</li>
- *   <li>月末调度：每月最后一日（如 23:45）执行</li>
+ *   <li>日终全自动调度：每日日终（如 23:30）执行</li>
+ *   <li>失败重试次数：建议配置 3 次</li>
  * </ul>
  * 路由策略：FIRST（单实例执行）
- * 任务参数：可选传入会计日期（格式 yyyy-MM-dd），不传默认系统前一日/当前日。
- * 业务逻辑：仅扫描并自动执行支持自动结转（autoTransfer=true）且当前会计日期符合周期定义（每日/月末/季末/年末）的有效规则。
+ * 任务参数：可选传入会计日期（格式 yyyy-MM-dd），不传默认优先获取 AccountingDateCache 全局权威会计日期，兜底当前日期。
+ * 业务逻辑：自动执行历史期末漏结/失败自动补偿（Catch-Up）与当期自动结转（日结/月末/季末/年末）。
  */
 @Slf4j
 @Component
@@ -29,6 +30,7 @@ import java.util.List;
 public class PeriodEndTransferJobHandler extends AbstractXxlJobHandler {
 
     private final PeriodEndTransferDomainService transferDomainService;
+    private final AccountingDateCache accountingDateCache;
 
     @Override
     protected String jobName() {
@@ -37,14 +39,14 @@ public class PeriodEndTransferJobHandler extends AbstractXxlJobHandler {
 
     @XxlJob("periodEndTransferJob")
     public void execute() {
-        initContext().accountingDate(parseAccountingDate(ctx().param, LocalDate.now().minusDays(1)));
+        LocalDate defaultDate = resolveDefaultAccountingDate();
+        initContext().accountingDate(parseAccountingDate(ctx().param, defaultDate));
 
         logStart("date=" + ctx().accountingDate);
 
         try {
             LocalDate date = ctx().accountingDate;
             List<TransferRuleResult> results = transferDomainService.executeAutoTransfer(date);
-
 
             ctx().totalCount(results.size());
 
@@ -74,5 +76,22 @@ public class PeriodEndTransferJobHandler extends AbstractXxlJobHandler {
                     jobName(), ctx().accountingDate, e.getMessage(), e);
             markFailed("期末结转系统异常: " + e.getMessage());
         }
+    }
+
+    /**
+     * 解析默认会计日期：优先使用系统权威会计日期缓存，未配置或异常时回退到服务器系统日期
+     */
+    private LocalDate resolveDefaultAccountingDate() {
+        try {
+            if (accountingDateCache != null) {
+                LocalDate currentDate = accountingDateCache.getCurrentDate();
+                if (currentDate != null) {
+                    return currentDate;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[{}] 从 AccountingDateCache 获取会计日期失败，回退系统当前日期: error={}", jobName(), e.getMessage());
+        }
+        return LocalDate.now();
     }
 }

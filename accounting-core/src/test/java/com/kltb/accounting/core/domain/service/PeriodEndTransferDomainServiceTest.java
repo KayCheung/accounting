@@ -272,6 +272,106 @@ class PeriodEndTransferDomainServiceTest {
         assertThat(results.get(0).getStatus()).isEqualTo(TransferRecordStatusEnum.SUCCESS);
         verify(ruleRepository).selectAutoTriggerableRules(date, null);
     }
+
+    @Test
+    @DisplayName("自动结转执行：跨天自动补偿（Catch-Up）——在非月末自动检测上月末漏结并以原月末日期补齐凭证")
+    @SuppressWarnings("unchecked")
+    void executeAutoTransfer_catchUpMissedMonthEnd_success() {
+        // 当前会计日为 11月3日（非月末）
+        LocalDate currentDate = LocalDate.of(2026, 11, 3);
+        LocalDate lastMonthEnd = LocalDate.of(2026, 10, 31);
+
+        PeriodEndTransferRulePO monthlyRule = new PeriodEndTransferRulePO();
+        monthlyRule.setRuleCode("TR_REV_GUARANTEE");
+        monthlyRule.setRuleName("担保费收入月末结转");
+        monthlyRule.setTransferType(TransferTypeEnum.PROFIT_LOSS);
+        monthlyRule.setSourceSubjectCode("602101");
+        monthlyRule.setTargetSubjectCode("410301");
+        monthlyRule.setTransferDirection(TransferDirectionEnum.CREDIT_TO_DEBIT);
+        monthlyRule.setStatus(AvailableStatusEnum.ENABLED);
+        monthlyRule.setAutoTransfer(true);
+        monthlyRule.setPeriodCycle(PeriodCycleEnum.MONTHLY);
+
+        // 阶段 1 Catch-Up 扫描启用规则包含该月结规则
+        when(ruleRepository.selectEnabledRules(null)).thenReturn(List.of(monthlyRule));
+        // 10月31日未成功结转（如之前失败或遗漏）
+        when(recordRepository.existsSuccessfulTransfer(lastMonthEnd, "TR_REV_GUARANTEE")).thenReturn(false);
+
+        // 10月31日有待结转余额 500.00
+        AccountBalancePO balance = new AccountBalancePO();
+        balance.setAccountingDate(lastMonthEnd);
+        balance.setSubjectCode("602101");
+        balance.setAccountNo("ACT_602101_001");
+        balance.setCurrency("CNY");
+        balance.setBalanceDirection(BalanceDirectionEnum.CREDIT);
+        balance.setEndBalance(new BigDecimal("500.00"));
+        when(accountBalanceRepository.selectByDate(lastMonthEnd)).thenReturn(List.of(balance));
+
+        AccountPO targetAccount = new AccountPO();
+        targetAccount.setAccountNo("INNER410301001");
+        targetAccount.setStatus(AccountStatusEnum.NORMAL);
+        when(accountRepository.selectBySubjectCode("410301")).thenReturn(List.of(targetAccount));
+
+        AccountPO srcAccount = new AccountPO();
+        srcAccount.setAccountNo("ACT_602101_001");
+        srcAccount.setStatus(AccountStatusEnum.NORMAL);
+        when(accountRepository.selectByAccountNo("ACT_602101_001")).thenReturn(srcAccount);
+
+        when(businessNoGenerator.generateTransferNo(lastMonthEnd)).thenReturn("TRN20261031001");
+        when(businessNoGenerator.generateVoucherNo("PET", lastMonthEnd)).thenReturn("PET20261031001");
+        when(businessNoGenerator.generateTxnNo(lastMonthEnd)).thenReturn("TXN20261031001");
+        when(businessNoGenerator.generateEntryId()).thenReturn("ENT001", "ENT002");
+
+        when(transactionTemplate.execute(any())).thenAnswer(inv -> {
+            TransactionCallback<?> callback = inv.getArgument(0);
+            return callback.doInTransaction(null);
+        });
+
+        // 阶段 2 当期 11-03 无常规触发规则
+        when(ruleRepository.selectAutoTriggerableRules(currentDate, null)).thenReturn(List.of());
+
+        List<PeriodEndTransferDomainService.TransferRuleResult> results =
+                transferDomainService.executeAutoTransfer(currentDate, null);
+
+        assertThat(results).hasSize(1);
+        PeriodEndTransferDomainService.TransferRuleResult catchUpRes = results.get(0);
+        assertThat(catchUpRes.getRuleCode()).isEqualTo("TR_REV_GUARANTEE");
+        assertThat(catchUpRes.getStatus()).isEqualTo(TransferRecordStatusEnum.SUCCESS);
+        assertThat(catchUpRes.getTotalAmount()).isEqualByComparingTo(new BigDecimal("500.00"));
+
+        // 验证关键点：生成的凭证日期与流水必须归属于原月末 2026-10-31，绝不污染 11 月
+        verify(recordRepository).insert(argThat(rec ->
+                rec.getAccountingDate().equals(lastMonthEnd) && rec.getRuleCode().equals("TR_REV_GUARANTEE")
+        ));
+        verify(voucherRepository).insert(argThat(v ->
+                v.getAccountingDate().equals(lastMonthEnd) && v.getAmount().compareTo(new BigDecimal("500.00")) == 0
+        ));
+    }
+
+    @Test
+    @DisplayName("自动结转执行：跨天自动补偿（Catch-Up）——若上月末已成功结转，则自动幂等跳过")
+    void executeAutoTransfer_catchUpSkippedWhenAlreadySuccess() {
+        LocalDate currentDate = LocalDate.of(2026, 11, 3);
+        LocalDate lastMonthEnd = LocalDate.of(2026, 10, 31);
+
+        PeriodEndTransferRulePO monthlyRule = new PeriodEndTransferRulePO();
+        monthlyRule.setRuleCode("TR_REV_GUARANTEE");
+        monthlyRule.setStatus(AvailableStatusEnum.ENABLED);
+        monthlyRule.setAutoTransfer(true);
+        monthlyRule.setPeriodCycle(PeriodCycleEnum.MONTHLY);
+
+        when(ruleRepository.selectEnabledRules(null)).thenReturn(List.of(monthlyRule));
+        // 10月31日已成功结转
+        when(recordRepository.existsSuccessfulTransfer(lastMonthEnd, "TR_REV_GUARANTEE")).thenReturn(true);
+        when(ruleRepository.selectAutoTriggerableRules(currentDate, null)).thenReturn(List.of());
+
+        List<PeriodEndTransferDomainService.TransferRuleResult> results =
+                transferDomainService.executeAutoTransfer(currentDate, null);
+
+        assertThat(results).isEmpty();
+        verify(recordRepository, never()).insert(any());
+        verify(voucherRepository, never()).insert(any());
+    }
 }
 
 
