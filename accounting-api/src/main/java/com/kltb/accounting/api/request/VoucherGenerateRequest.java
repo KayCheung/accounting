@@ -1,0 +1,27 @@
+package com.kltb.accounting.api.request;
+
+import com.kltb.accounting.api.constant.Constants;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+import lombok.Data;
+
+/**
+ * 凭证生成请求 DTO
+ */
+@Data
+public class VoucherGenerateRequest {
+
+    @NotBlank(message = "traceNo 不能为空")
+    @Size(max = 64, message = "traceNo 长度不能超过 64")
+    private String traceNo;
+
+    @Size(max = 32, message = "bookkeeperName 长度不能超过 32")
+    private String bookkeeperName = Constants.SYSTEM_OPERATOR;
+
+    /**
+     * 可选：账户映射字典（Key: ownerId:subjectCode，Value: 真实的 accountNo）
+     * 记账主流程中由前置开户预检（AccountPreCheckDomainService）零成本内存透传，避免凭证生成二次查库
+     */
+    private java.util.Map<String, String> accountMapping;
+}
+

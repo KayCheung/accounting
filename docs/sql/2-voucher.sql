@@ -56,6 +56,9 @@ CREATE TABLE t_accounting_voucher_entry (
     summary VARCHAR(64) NOT NULL DEFAULT '' COMMENT '摘要',
     status TINYINT NOT NULL DEFAULT '1' COMMENT '分录明细状态：1-未过账,2-已过账,3-过账失败',
     accounting_date DATE NOT NULL COMMENT '会计日',
+    is_unilateral TINYINT NOT NULL DEFAULT 0 COMMENT '资金单边处理(是否实时更新账户余额)：0-否(MQ异步过账/缓冲),1-是(实时过账)',
+    is_buffered TINYINT NOT NULL DEFAULT 0 COMMENT '是否缓冲入账：0-否,1-是(匹配到缓冲规则)',
+    change_direction TINYINT NOT NULL DEFAULT 0 COMMENT '增减方向：1-增,2-减（过账时直接使用，由Step10规则推导写入）',
     balance_update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '余额更新时间',
     version INT NOT NULL DEFAULT 0 COMMENT '版本号（乐观锁）',
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -99,3 +102,8 @@ CREATE TABLE t_accounting_voucher_attachment (
     tenant_id INT NOT NULL DEFAULT '-1' COMMENT '租户ID',
     KEY idx_voucher_no (voucher_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='记账凭证附件表';
+
+-- t_accounting_voucher 新增列（Step 12 P0-8）
+ALTER TABLE t_accounting_voucher ADD COLUMN fail_reason VARCHAR(500) DEFAULT NULL COMMENT '过账失败原因';
+ALTER TABLE t_accounting_voucher ADD COLUMN retry_count INT NOT NULL DEFAULT 0 COMMENT '手动重试次数';
+ALTER TABLE t_accounting_voucher ADD COLUMN skip_flag TINYINT NOT NULL DEFAULT 0 COMMENT '跳过标记：0-未跳过,1-人工跳过';

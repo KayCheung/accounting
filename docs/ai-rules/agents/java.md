@@ -99,6 +99,7 @@ infrastructure/ Repository / Mapper：持久化实现，不含业务判断
 - 枚举：`@EnumValue`（MyBatis-Plus）+ `@JsonValue`（Jackson）
 - 逻辑删除：`is_delete = System.currentTimeMillis()`
 - 带唯一索引的表：唯一索引必须包含 `is_delete`
+- 使用中文注释，中文异常提示
 
 ---
 

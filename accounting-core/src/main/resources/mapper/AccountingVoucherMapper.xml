@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kltb.accounting.core.infrastructure.persistence.mapper.AccountingVoucherMapper">
+
+    <!-- 按凭证状态分组统计（支持多维度：business_code/trading_code/pay_channel/accounting_date） -->
+    <select id="countByStatusGroup" resultType="java.util.Map">
+        SELECT
+            status,
+            COUNT(*) AS count,
+            business_code,
+            trading_code,
+            pay_channel,
+            accounting_date
+        FROM t_accounting_voucher
+        WHERE is_delete = 0
+        <if test="startDate != null">
+        AND accounting_date &gt;= #{startDate}
+        </if>
+        <if test="endDate != null">
+        AND accounting_date &lt;= #{endDate}
+        </if>
+        <if test="businessCode != null and businessCode != ''">
+        AND business_code = #{businessCode}
+        </if>
+        GROUP BY status, business_code, trading_code, pay_channel, accounting_date
+    </select>
+
+</mapper>

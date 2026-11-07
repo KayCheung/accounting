@@ -105,5 +105,5 @@ BusinessRecord:  INIT → PROCESSING → SUCCESS / FAILED
 Transaction:     PROCESSING → SUCCESS / FAILED
 Voucher:         PENDING(1) → POSTING(2) → POSTED(3) / FAILED(4)
 VoucherEntry:    PENDING(1) → POSTED(2)
-LocalMessage:    PENDING(1) → SENDING(2) → SENT(3) / FAILED(4)
+LocalMessage:    PENDING(1) → SENT(2) / FAILED(3)
 ```

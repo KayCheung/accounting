@@ -1,0 +1,69 @@
+/* 全局金融管理系统基础样式 */
+:root {
+  --fin-font-mono: 'Roboto Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+  --fin-amount-positive: #67c23a;
+  --fin-amount-negative: #f56c6c;
+  --fin-header-height: 56px;
+  --fin-sidebar-width: 220px;
+  --fin-sidebar-collapse-width: 64px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #app {
+  width: 100%;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+    'Noto Color Emoji';
+  color: #303133;
+  background-color: #f5f7fa;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 金额专用等宽字体与样式 */
+.fin-amount {
+  font-family: var(--fin-font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.2px;
+
+  &.is-negative {
+    color: var(--el-color-danger, #f56c6c);
+    font-weight: 500;
+  }
+
+  &.is-positive {
+    color: #303133;
+  }
+
+  &.is-zero {
+    color: #909399;
+  }
+}
+
+/* 表格全局定制 */
+.fin-table {
+  .el-table__header th {
+    background-color: #f8f9fb !important;
+    color: #606266;
+    font-weight: 600;
+  }
+
+  /* 标记为金额列时右对齐 */
+  .fin-col-amount {
+    text-align: right;
+  }
+}
+
+/* 统一卡片样式 */
+.fin-card {
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  background: #ffffff;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}

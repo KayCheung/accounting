@@ -71,8 +71,8 @@
 
 ### t_accounting_voucher_entry · 分录流水表
 - **唯一键**：`uk(entry_id)`
-- **核心字段**：`voucher_no` · `entry_id` · `row_num` · `subject_code` · `account_no` · `debit_credit(1借/2贷)` · `amount(DECIMAL18,6)` · `status(1未过账/2已过账/3过账失败)` · `accounting_date` · `version(乐观锁)`
-- **约束**：`is_unilateral=1` 的分录实时过账；`is_unilateral=0` 的分录发 MQ 异步处理（字段来自 `t_accounting_rule_detail`）
+- **核心字段**：`voucher_no` · `entry_id` · `row_num` · `subject_code` · `account_no` · `debit_credit(1借/2贷)` · `amount(DECIMAL18,6)` · `status(1未过账/2已过账/3过账失败)` · `accounting_date` · `is_unilateral(0否/1实时过账)` · `is_buffered(0否/1缓冲入账)` · `change_direction(1增/2减)` · `version(乐观锁)`
+- **约束**：`is_unilateral=1` 的分录实时过账；`is_unilateral=0 且 is_buffered=0` 的分录发 MQ 异步处理；`is_buffered=1` 的分录留给 Step 16 缓冲记账处理
 - **关联**：← `t_accounting_voucher(voucher_no)` · → `t_account_detail(entry_id)`
 - **所在 DDL**：`docs/sql/2-voucher.sql`
 

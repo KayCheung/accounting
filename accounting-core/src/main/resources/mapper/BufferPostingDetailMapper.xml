@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kltb.accounting.core.infrastructure.persistence.mapper.BufferPostingDetailMapper">
+
+    <!-- 按账户编号汇总待入账缓冲金额（PENDING + PROCESSING） -->
+    <select id="sumPendingAmountByAccountNo" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(amount), 0)
+        FROM t_buffer_posting_detail
+        WHERE account_no = #{accountNo}
+          AND status IN (1, 2)
+          AND is_delete = 0
+    </select>
+
+    <!-- 按账户汇总缓冲金额（用于 bufferMode=2 日间批量） -->
+    <select id="sumByAccountNo" resultType="java.util.HashMap">
+        SELECT account_no,
+               SUM(amount) AS total_amount,
+               COUNT(*) AS detail_count
+        FROM t_buffer_posting_detail
+        WHERE accounting_date = #{accountingDate}
+          AND status = #{status}
+          AND is_delete = 0
+        GROUP BY account_no
+    </select>
+</mapper>
