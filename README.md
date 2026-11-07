@@ -88,7 +88,7 @@ flowchart TD
 
     subgraph API["契约定义层 (accounting-api)"]
         DTO["Request / Response DTO"]
-        ENUM["业务状态机 & 财务枚举"]
+        ENUM["业务状态机与财务枚举"]
         ERR["全局金融错误码定义"]
     end
 

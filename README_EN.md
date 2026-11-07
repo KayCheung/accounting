@@ -27,11 +27,11 @@
 Traditional business systems often scatter accounting logic across application services, directly updating account balances via SQL statements like `UPDATE balance = balance - 100`. This approach creates critical vulnerabilities: **lack of double-entry debit-credit balancing, inability to reconcile transactions, severe row-lock contention on hot accounts, absence of immutable voucher audit trails, and missing automated End-of-Day (EOD) trial balance mechanisms**.
 
 **FIN-Core** strictly adheres to modern accounting principles and financial regulatory standards. It provides a robust, end-to-end closed-loop solution:
-$$\text{Business Journal} \longrightarrow \text{SpEL Rule Engine} \longrightarrow \text{Vouchers \& Entries (Balanced)} \longrightarrow \text{Multi-Mode Posting Engine} \longrightarrow \text{Sub-Account Updates} \longrightarrow \text{Zero-Downtime EOD \& Trial Balance}$$
+$$\text{Business Journal} \longrightarrow \text{SpEL Rule Engine} \longrightarrow \text{Vouchers and Entries (Balanced)} \longrightarrow \text{Multi-Mode Posting Engine} \longrightarrow \text{Sub-Account Updates} \longrightarrow \text{Zero-Downtime EOD and Trial Balance}$$
 
 ---
 
-## 🌟 Key Features & Highlights
+## 🌟 Key Features and Highlights
 
 ### 1. Strict Adherence to Financial Accounting Standards
 - **Double-Entry Bookkeeping**: "Every debit must have an equal credit." Strict entry-level balance verification guarantees total debits equal total credits for every transaction.
@@ -55,17 +55,17 @@ To mitigate row-lock contention on ultra-hot accounts (e.g., platform fee accoun
 - **Buffer Posting (`BUFFER`)**: For ultra-high concurrency hot accounts. Requests write lightweight buffer records (`t_buffer_posting_detail`). Background jobs periodically aggregate hundreds or thousands of transactions into a single batch posting, turning massive lock contention into bulk throughput.
 - **Asynchronous Posting (`ASYNC`)**: Built on **Apache RocketMQ + Transactional Outbox (Local Message Table)**. Smoothly absorbs traffic spikes while guaranteeing eventual consistency across distributed microservices.
 
-### 4. Dynamic SpEL Rule Engine & Multi-Funds Aggregation
+### 4. Dynamic SpEL Rule Engine and Multi-Funds Aggregation
 - **Zero Hardcoding**: Subject codes, debit/credit directions, and calculations are completely externalized from code.
 - **Dynamic Formula Evaluation**: Evaluates Spring Expression Language (SpEL) scripts at runtime, computing amounts from transaction payload attributes (e.g., base amount, handling fee, installments).
 - **Multi-Funds Aggregation**: In loan repayment or multi-party settlement scenarios, multiple funds (e.g., Principal + Interest + Guarantee Fee) can be dynamically aggregated into a single bank deposit debit entry, keeping financial vouchers concise and readable.
 
-### 5. Zero-Downtime Date Switch & Automated 8-Step EOD Engine
+### 5. Zero-Downtime Date Switch and Automated 8-Step EOD Engine
 - **Instant Accounting Date Switch**: Powered by `Caffeine L1 + Redis L2 + Redis Pub/Sub`, switching accounting date ($T+1$) in microseconds with 24/7 service availability.
 - **Automated 8-Step EOD Pipeline**:
   $$\text{Date Switch} \rightarrow \text{Buffer Flush} \rightarrow \text{Daily Balance Aggregation} \rightarrow \text{Snapshots} \rightarrow \text{Trial Balance} \rightarrow \text{Ledger Verification} \rightarrow \text{Balance Verification} \rightarrow \text{Period-End Closing} \rightarrow \text{Archival}$$
 - **Trial Balance Verification**: Strictly asserts $\sum \text{Debit Balances} = \sum \text{Credit Balances}$ with an error tolerance under $0.000001$. Any imbalance triggers immediate alerts and halts the pipeline.
-- **Period-End Profit & Loss Closing**: Automatically sweeps revenue and expense balances into Retained Earnings via wildcard rule-based closing vouchers.
+- **Period-End Profit and Loss Closing**: Automatically sweeps revenue and expense balances into Retained Earnings via wildcard rule-based closing vouchers.
 
 ### 6. Financial-Grade Defensive Architecture
 - **Absolute Value Law**: All voucher and journal amounts must be strictly positive (`BigDecimal > 0`). Negative operations are strictly prohibited.
@@ -75,20 +75,20 @@ To mitigate row-lock contention on ultra-hot accounts (e.g., platform fee accoun
 
 ---
 
-## 🏗️ Architecture & Workflows
+## 🏗️ Architecture and Workflows
 
 ### 1. Layered Architecture
 
 ```mermaid
 flowchart TD
-    subgraph Client["Client & Presentation Layer"]
+    subgraph Client["Client and Presentation Layer"]
         UI["Management Console (accounting-ui)<br/>Vue 3 + Vite 6 + Element Plus + Pinia"]
         GW["API Gateway / BFF<br/>OpenAPI 3.0 / Swagger"]
     end
 
     subgraph API["Contract Layer (accounting-api)"]
         DTO["Request / Response DTOs"]
-        ENUM["Financial Enums & State Machines"]
+        ENUM["Financial Enums and State Machines"]
         ERR["Global Financial Error Codes"]
     end
 
@@ -98,13 +98,13 @@ flowchart TD
             APP_VOU["Vouchering Orchestration"]
             APP_POS["Posting Orchestration"]
             APP_EOD["EOD Engine Orchestration"]
-            APP_ACT["Account & Freeze Services"]
+            APP_ACT["Account and Freeze Services"]
         end
 
-        subgraph Domain["Domain Services & Models"]
+        subgraph Domain["Domain Services and Models"]
             DOM_RULE["SpEL Accounting Rule Engine"]
             DOM_CALC["Balance Calculator (Optimistic Lock)"]
-            DOM_REV["Reversal & Red-Ink Service"]
+            DOM_REV["Reversal and Red-Ink Service"]
             DOM_RUN["Running Balance Validator"]
             DOM_CACHE["Multi-Level Date Cache (Caffeine + Redis)"]
         end
@@ -112,7 +112,7 @@ flowchart TD
         subgraph Infra["Infrastructure Layer"]
             MYBATIS["MyBatis-Plus 3.5.9<br/>Multi-Tenant + Optimistic Locking"]
             REDISSON["Redisson 4.8.0<br/>Ordered Distributed Locks + Caches"]
-            ROCKETMQ["Apache RocketMQ 5.x<br/>Reliable Messaging & De-peaking"]
+            ROCKETMQ["Apache RocketMQ 5.x<br/>Reliable Messaging and De-peaking"]
             OUTBOX["Transactional Outbox<br/>Local Message Consistency"]
             XXLJOB["XXL-JOB 3.4.2<br/>EOD / Buffer Shards / Auto-Unfreeze"]
         end
@@ -140,7 +140,7 @@ sequenceDiagram
     participant RULE as SpEL Rule Engine
     participant VOU as Voucher Engine
     participant POS as Posting Router
-    participant ACT as Accounts & Sub-Accounts
+    participant ACT as Accounts and Sub-Accounts
     participant MQ as RocketMQ / Outbox Table
 
     Biz->>JRN: Submit business transaction (Idempotency check by traceNo)
@@ -172,12 +172,12 @@ sequenceDiagram
 ```text
 accounting
 ├── accounting-api          # [Contract Layer] Clean API interfaces, DTOs, and error codes (Zero persistence dependencies)
-├── accounting-core         # [Core Engine] Domain models, SpEL rules, voucher & posting engines, EOD jobs, and persistence
+├── accounting-core         # [Core Engine] Domain models, SpEL rules, voucher and posting engines, EOD jobs, and persistence
 ├── accounting-ui           # [Frontend Console] Modern Vue 3 + Vite 6 + TypeScript + Element Plus web console
 ├── docker                  # [Deployment Suite] Production-ready Docker Compose stack (MySQL 8, Redis 7.2, RocketMQ 5, Nacos 3, XXL-JOB)
 ├── docs                    # [Documentation] Architecture blueprints, full SQL migration scripts, and design docs
 ├── pom.xml                 # Top-level Maven aggregator POM
-├── CONTRIBUTING.md         # Open-source contribution guidelines & financial rules
+├── CONTRIBUTING.md         # Open-source contribution guidelines and financial rules
 ├── LICENSE                 # Apache License 2.0
 ├── README.md               # Chinese Documentation
 └── README_EN.md            # English Documentation
@@ -226,10 +226,10 @@ cd accounting
 | **Frontend Console** | `8000` | [http://localhost:8000](http://localhost:8000) | - | Financial Web Admin Console |
 | **Backend API (Swagger)** | `8080` | [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html) | - | OpenAPI 3.0 Documentation |
 | **Nacos Config Center** | `8848` | [http://localhost:8848/nacos](http://localhost:8848/nacos) | `dev` / `dev@kltb@2026` | Pre-configured System Properties |
-| **RocketMQ Dashboard** | `8088` | [http://localhost:8088](http://localhost:8088) | None | Message Trace & Topic Monitoring |
-| **XXL-JOB Admin** | `8082` | [http://localhost:8082/xxl-job-admin](http://localhost:8082/xxl-job-admin) | `admin` / `123456` | EOD, Buffer & Unfreeze Schedulers |
+| **RocketMQ Dashboard** | `8088` | [http://localhost:8088](http://localhost:8088) | None | Message Trace and Topic Monitoring |
+| **XXL-JOB Admin** | `8082` | [http://localhost:8082/xxl-job-admin](http://localhost:8082/xxl-job-admin) | `admin` / `123456` | EOD, Buffer and Unfreeze Schedulers |
 | **MySQL 8.0** | `3306` | `localhost:3306` | `root` / `dev@1234` | Core Financial Database |
-| **Redis 7.2** | `6379` | `localhost:6379` | Password: `dev@1234` | Distributed Locks & Caching |
+| **Redis 7.2** | `6379` | `localhost:6379` | Password: `dev@1234` | Distributed Locks and Caching |
 
 ---
 
@@ -271,10 +271,10 @@ Open your browser and visit [http://localhost:3000](http://localhost:3000).
 | **Accounting Rules** | `/config/rule` | Dynamic debit/credit entry templates, SpEL calculation rules, real-time balance validation indicators, multi-funds aggregations |
 | **Buffer Posting Rules** | `/config/buffer-rule` | Granular configurations for Per-Item, Daily Batch, and EOD Summary buffer modes |
 | **Account Management** | `/business/account` | Customer and Internal account dual-tab views, full drawer audit records, available/frozen breakdown, lifecycle status transitions |
-| **Balance & Details** | `/business/balance` | 4-dimensional asset KPIs, transaction entry audit drawer, arithmetic reconciliation cards ($Pre \pm Change = Post$) |
-| **Fund Freeze & Deductions** | `/business/freeze` | Fund freezing, full or partial release, freeze deductions with irreversible financial voucher generation |
+| **Balance and Details** | `/business/balance` | 4-dimensional asset KPIs, transaction entry audit drawer, arithmetic reconciliation cards ($Pre \pm Change = Post$) |
+| **Fund Freeze and Deductions** | `/business/freeze` | Fund freezing, full or partial release, freeze deductions with irreversible financial voucher generation |
 | **Voucher Management** | `/business/voucher` | Complete voucher drawer, balance indicator lights, standardized voucher typography ("Receipt/Payment/Transfer"), full auxiliary items |
-| **EOD & Trial Balance** | `/business/eod` | Zero-downtime date switch controls, 8-step automated pipeline tracking, trial balance sheets, general vs. subsidiary ledger audits |
+| **EOD and Trial Balance** | `/business/eod` | Zero-downtime date switch controls, 8-step automated pipeline tracking, trial balance sheets, general vs. subsidiary ledger audits |
 
 ---
 
