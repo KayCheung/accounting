@@ -1272,6 +1272,21 @@
             - `VoucheringDomainServiceTest` 新增多款项聚合金额计算及 SpEL 上下文单测；
             - 全量单测（479/479）100% 绿灯通过；前端 `vue-tsc && vite build` 生产构建 0 错误通过。
 
+       - **本地消息发件箱死信慢补偿与运维重放全链路治理（Outbox Dead-Letter Recovery & Ops Replay）**：
+         1. **场景痛点与问题根因**：
+            - 历史实现中 `LocalMessageRetryJob` 仅扫描 `status = 1 (PENDING)` 待发送消息，退避策略为 10s/30s/60s，重试耗尽（默认 3 次，累计约 100 秒）后强制置为 `status = 3 (FAILED)`；
+            - 当 RocketMQ 发生中长时段故障（>2分钟）、网络分区或平滑重启时，大批量消息瞬间打满重试上限并永久滞留在 FAILED 状态，失去任何后台自动补偿或外部重放途径，造成异步记账分录与凭证状态永久挂起；
+         2. **快慢分层重试架构落地（Tier-1 Fast Retry + Tier-2 Dead-Letter Recovery）**：
+            - **Tier-1 快重试（LocalMessageRetryJob）**：保持高频秒级扫描应对瞬时抖动，同时扩展退避阶梯（支持 10s/30s/60s/120s/300s）；通过 `ctx().param` 深度支持参数化动态调度（`retryFailed=true` / `mode=FAILED` 定向重放失败消息，`mode=ALL` 全量重试，`limit=XX` 动态批次）；
+            - **Tier-2 死信慢补偿任务（LocalMessageDeadLetterJobHandler）**：新建专职 XXL-JOB 处理器（`@XxlJob("localMessageDeadLetterJob")`），以更低频率（每 10~30 分钟）慢巡检过去 7 天内 `status = 3 (FAILED)` 且已过 5 分钟冷却期的消息，支持 CAS 防并发抢占投递与慢重试计数控制（默认上限 10 次，超限触发 CRITICAL 级别告警）；
+         3. **契约层与运维管理能力（Admin & Ops Replay API）**：
+            - 契约层（accounting-api）：新建 `LocalMessagePageQueryRequest`、`LocalMessageReplayRequest`、`LocalMessageResetRequest`、`LocalMessageResponse`、`LocalMessageBatchOpResponse`；
+            - 核心领域与应用层（accounting-core）：`LocalMessageService` 扩充分片死信查询、CAS 抢占、批量/区间重置与分页查询能力；新建 `LocalMessageApplicationService` 编排重放与重置逻辑；
+            - 接口层（interfaces）：新增 `LocalMessageOpsController`（`/accounting/ops/local-messages/{page, replay, reset}`），支持运维端分页检索失败死信、单笔/批量手动强推重放（Replay），以及按故障时间区间一键重置为 PENDING；
+         4. **质量验收与测试保障**：
+            - 新增并扩展 `LocalMessageRetryJobTest`、`LocalMessageDeadLetterJobHandlerTest`、`LocalMessageApplicationServiceTest`、`LocalMessageOpsControllerTest`（15 个测试用例 100% 绿灯通过）；
+            - 全模块编译与测试 100% 成功。
+
 ---
 
 ## Phase 10：联调、性能验收与上线

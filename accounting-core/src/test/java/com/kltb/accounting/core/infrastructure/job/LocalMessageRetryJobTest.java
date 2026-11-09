@@ -1,5 +1,6 @@
 package com.kltb.accounting.core.infrastructure.job;
 
+import org.apache.rocketmq.client.producer.SendResult;
 import com.kltb.accounting.core.infrastructure.messaging.LocalMessageService;
 import com.kltb.accounting.core.infrastructure.messaging.RocketMqProducerTemplate;
 import com.kltb.accounting.core.infrastructure.persistence.entity.LocalMessagePO;
@@ -39,7 +40,7 @@ class LocalMessageRetryJobTest {
         when(rocketMqProducerTemplate.send(any(), any(), any(), any())).thenReturn(null);
 
         TestableLocalMessageRetryJob job = new TestableLocalMessageRetryJob(
-                localMessageService, rocketMqProducerTemplate, fixedNow, 0, 1);
+                localMessageService, rocketMqProducerTemplate, fixedNow, 0, 1, null);
 
         job.execute();
 
@@ -59,7 +60,7 @@ class LocalMessageRetryJobTest {
         when(rocketMqProducerTemplate.send(any(), any(), any(), any())).thenReturn(null);
 
         TestableLocalMessageRetryJob job = new TestableLocalMessageRetryJob(
-                localMessageService, rocketMqProducerTemplate, fixedNow, 0, 1);
+                localMessageService, rocketMqProducerTemplate, fixedNow, 0, 1, null);
 
         job.execute();
 
@@ -79,7 +80,7 @@ class LocalMessageRetryJobTest {
         when(rocketMqProducerTemplate.send(any(), any(), any(), any())).thenReturn(null);
 
         TestableLocalMessageRetryJob job = new TestableLocalMessageRetryJob(
-                localMessageService, rocketMqProducerTemplate, fixedNow, 0, 1);
+                localMessageService, rocketMqProducerTemplate, fixedNow, 0, 1, null);
 
         job.execute();
 
@@ -94,12 +95,32 @@ class LocalMessageRetryJobTest {
         when(localMessageService.queryPendingByShard(100, 1, 4)).thenReturn(List.of());
 
         TestableLocalMessageRetryJob job = new TestableLocalMessageRetryJob(
-                localMessageService, rocketMqProducerTemplate, fixedNow, 1, 4);
+                localMessageService, rocketMqProducerTemplate, fixedNow, 1, 4, null);
 
         job.execute();
 
         verify(localMessageService).queryPendingByShard(100, 1, 4);
         verifyNoMoreInteractions(rocketMqProducerTemplate);
+    }
+
+    @Test
+    @DisplayName("支持参数 retryFailed=true 定向重发失败死信消息")
+    void retryFailedMode_shouldScanFailedMessagesAndReplay() {
+        LocalDateTime fixedNow = LocalDateTime.of(2026, 3, 20, 10, 0, 0);
+        LocalMessagePO failedMessage = buildMessage(10L, "failed-msg-1", 3, 3);
+
+        when(localMessageService.queryFailedByShard(eq(50), eq(0), eq(1), eq(10), any(), any()))
+                .thenReturn(List.of(failedMessage));
+        when(localMessageService.claimForDeadLetter(10L, 3, 30L)).thenReturn(true);
+        when(rocketMqProducerTemplate.send(any(), any(), any(), any())).thenReturn(mock(SendResult.class));
+
+        TestableLocalMessageRetryJob job = new TestableLocalMessageRetryJob(
+                localMessageService, rocketMqProducerTemplate, fixedNow, 0, 1, "retryFailed=true,limit=50");
+
+        job.execute();
+
+        verify(localMessageService).markSent("failed-msg-1");
+        verify(localMessageService, never()).queryPendingByShard(anyInt(), anyInt(), anyInt());
     }
 
     private LocalMessagePO buildMessage(Long id, String messageId, Integer retryCount, Integer maxRetry) {
@@ -118,28 +139,38 @@ class LocalMessageRetryJobTest {
         private final LocalDateTime fixedNow;
         private final int testShardIndex;
         private final int testShardTotal;
+        private final String testParam;
 
         private TestableLocalMessageRetryJob(LocalMessageService localMessageService,
                                              RocketMqProducerTemplate rocketMqProducerTemplate,
                                              LocalDateTime fixedNow,
                                              int shardIndex,
-                                             int shardTotal) {
+                                             int shardTotal,
+                                             String testParam) {
             super(localMessageService, rocketMqProducerTemplate);
             this.fixedNow = fixedNow;
             this.testShardIndex = shardIndex;
             this.testShardTotal = shardTotal;
+            this.testParam = testParam;
         }
 
         @Override
         public void execute() {
             initContext();
-            retryPendingMessages(testShardIndex, testShardTotal);
+            int batchLimit = parseBatchLimit(testParam);
+            if (isRetryFailedOnly(testParam)) {
+                retryFailedMessages(testShardIndex, testShardTotal, batchLimit);
+            } else if (isRetryAll(testParam)) {
+                retryPendingMessages(testShardIndex, testShardTotal, batchLimit);
+                retryFailedMessages(testShardIndex, testShardTotal, batchLimit);
+            } else {
+                retryPendingMessages(testShardIndex, testShardTotal, batchLimit);
+            }
         }
 
         @Override
         LocalDateTime now() {
             return fixedNow;
         }
-
     }
 }

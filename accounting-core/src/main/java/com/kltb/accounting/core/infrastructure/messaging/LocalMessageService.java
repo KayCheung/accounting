@@ -1,7 +1,10 @@
 package com.kltb.accounting.core.infrastructure.messaging;
 
+import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.kltb.accounting.api.request.LocalMessagePageQueryRequest;
 import com.kltb.accounting.core.domain.enums.MessageStatusEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.LocalMessagePO;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.LocalMessageMapper;
@@ -283,6 +286,255 @@ public class LocalMessageService {
                         .set(LocalMessagePO::getStatus, MessageStatusEnum.FAILED)
                         .set(LocalMessagePO::getUpdateTime, LocalDateTime.now())
         );
+    }
+
+    /**
+     * 分片查询失败死信消息（用于慢补偿/死信定时任务）
+     *
+     * <p>是否记账：否。
+     * <p>异常处理：
+     * <ul>
+     *   <li>分片参数非法：返回空列表</li>
+     * </ul>
+     *
+     * @param limit 扫描数量上限（最大 100）
+     * @param shardIndex 分片序号（从 0 开始）
+     * @param shardTotal 分片总数
+     * @param maxDeadLetterRetry 最大死信重试次数限制
+     * @param updatedBefore 更新时间上限（冷却时间防抖）
+     * @param createdAfter 创建时间下限（避免无限期扫描远古死信）
+     * @return 当前分片符合条件的失败消息列表
+     */
+    public List<LocalMessagePO> queryFailedByShard(int limit, int shardIndex, int shardTotal,
+                                                   int maxDeadLetterRetry, LocalDateTime updatedBefore,
+                                                   LocalDateTime createdAfter) {
+        if (shardTotal <= 0 || shardIndex < 0 || shardIndex >= shardTotal) {
+            return Collections.emptyList();
+        }
+        int actualLimit = Math.min(Math.max(limit, 1), MAX_SCAN_LIMIT);
+
+        LambdaQueryWrapper<LocalMessagePO> wrapper = new LambdaQueryWrapper<LocalMessagePO>()
+                .eq(LocalMessagePO::getStatus, MessageStatusEnum.FAILED)
+                .lt(maxDeadLetterRetry > 0, LocalMessagePO::getRetryCount, maxDeadLetterRetry)
+                .le(Objects.nonNull(updatedBefore), LocalMessagePO::getUpdateTime, updatedBefore)
+                .ge(Objects.nonNull(createdAfter), LocalMessagePO::getCreateTime, createdAfter)
+                .orderByAsc(LocalMessagePO::getId);
+
+        if (shardTotal > 1) {
+            wrapper.apply("MOD(id, {0}) = {1}", shardTotal, shardIndex);
+        }
+        wrapper.last("LIMIT " + actualLimit);
+        return localMessageMapper.selectList(wrapper);
+    }
+
+    /**
+     * 抢占死信消息处理权（防并发重复处理）
+     *
+     * <p>是否记账：否。
+     * <p>异常处理：
+     * <ul>
+     *   <li>参数为空：返回 false</li>
+     * </ul>
+     *
+     * @param id 主键 ID
+     * @param expectedRetryCount 期望的重试次数
+     * @param protectSeconds 抢占保护秒数
+     * @return true-抢占成功；false-已被其他任务抢占
+     */
+    public boolean claimForDeadLetter(Long id, Integer expectedRetryCount, long protectSeconds) {
+        if (id == null) {
+            return false;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        int affected = localMessageMapper.update(
+                null,
+                new LambdaUpdateWrapper<LocalMessagePO>()
+                        .eq(LocalMessagePO::getId, id)
+                        .eq(LocalMessagePO::getStatus, MessageStatusEnum.FAILED)
+                        .eq(Objects.nonNull(expectedRetryCount), LocalMessagePO::getRetryCount, expectedRetryCount)
+                        .set(LocalMessagePO::getUpdateTime, now.plusSeconds(protectSeconds))
+        );
+        return affected > 0;
+    }
+
+    /**
+     * 记录死信重试失败并更新重试次数
+     *
+     * <p>是否记账：否。
+     * <p>异常处理：
+     * <ul>
+     *   <li>messageId 为空：抛出 IllegalArgumentException</li>
+     * </ul>
+     *
+     * @param messageId 消息 ID
+     * @param nextRetryCount 新重试次数
+     * @param reason 失败原因
+     */
+    public void recordDeadLetterFailure(String messageId, int nextRetryCount, String reason) {
+        if (isBlank(messageId)) {
+            throw new IllegalArgumentException("messageId 不能为空");
+        }
+        log.warn("[LOCAL-MSG-DEADLETTER] 死信重试失败 messageId={} retryCount={} reason={}",
+                messageId, nextRetryCount, reason);
+        localMessageMapper.update(
+                null,
+                new LambdaUpdateWrapper<LocalMessagePO>()
+                        .eq(LocalMessagePO::getMessageId, messageId)
+                        .set(LocalMessagePO::getRetryCount, nextRetryCount)
+                        .set(LocalMessagePO::getUpdateTime, LocalDateTime.now())
+        );
+    }
+
+    /**
+     * 按消息 ID 查询单笔本地消息
+     *
+     * <p>是否记账：否。
+     * <p>异常处理：
+     * <ul>
+     *   <li>messageId 为空：返回 null</li>
+     * </ul>
+     *
+     * @param messageId 消息 ID
+     * @return 本地消息实体
+     */
+    public LocalMessagePO selectByMessageId(String messageId) {
+        if (isBlank(messageId)) {
+            return null;
+        }
+        return localMessageMapper.selectOne(
+                new LambdaQueryWrapper<LocalMessagePO>()
+                        .eq(LocalMessagePO::getMessageId, messageId)
+        );
+    }
+
+    /**
+     * 批量查询本地消息
+     *
+     * <p>是否记账：否。
+     * <p>异常处理：
+     * <ul>
+     *   <li>messageIds 为空：返回空列表</li>
+     * </ul>
+     *
+     * @param messageIds 消息 ID 列表
+     * @return 本地消息列表
+     */
+    public List<LocalMessagePO> selectByMessageIds(List<String> messageIds) {
+        if (messageIds == null || messageIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return localMessageMapper.selectList(
+                new LambdaQueryWrapper<LocalMessagePO>()
+                        .in(LocalMessagePO::getMessageId, messageIds)
+                        .orderByAsc(LocalMessagePO::getId)
+        );
+    }
+
+    /**
+     * 将失败消息重置为待发送（PENDING）
+     *
+     * <p>是否记账：否。
+     * <p>异常处理：
+     * <ul>
+     *   <li>messageIds 为空：返回 0</li>
+     * </ul>
+     *
+     * @param messageIds 待重置的消息 ID 列表
+     * @return 实际重置成功的记录数
+     */
+    public int resetToPending(List<String> messageIds) {
+        if (messageIds == null || messageIds.isEmpty()) {
+            return 0;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        return localMessageMapper.update(
+                null,
+                new LambdaUpdateWrapper<LocalMessagePO>()
+                        .in(LocalMessagePO::getMessageId, messageIds)
+                        .eq(LocalMessagePO::getStatus, MessageStatusEnum.FAILED)
+                        .set(LocalMessagePO::getStatus, MessageStatusEnum.PENDING)
+                        .set(LocalMessagePO::getRetryCount, 0)
+                        .set(LocalMessagePO::getNextRetryTime, now)
+                        .set(LocalMessagePO::getUpdateTime, now)
+        );
+    }
+
+    /**
+     * 按时间范围将失败消息批量重置为待发送（PENDING）
+     *
+     * <p>是否记账：否。
+     * <p>异常处理：
+     * <ul>
+     *   <li>无异常抛出，返回影响行数</li>
+     * </ul>
+     *
+     * @param startTime 创建时间下限（可选）
+     * @param endTime 创建时间上限（可选）
+     * @return 实际重置成功的记录数
+     */
+    public int resetFailedByTimeRange(LocalDateTime startTime, LocalDateTime endTime) {
+        LocalDateTime now = LocalDateTime.now();
+        LambdaUpdateWrapper<LocalMessagePO> wrapper = new LambdaUpdateWrapper<LocalMessagePO>()
+                .eq(LocalMessagePO::getStatus, MessageStatusEnum.FAILED)
+                .ge(Objects.nonNull(startTime), LocalMessagePO::getCreateTime, startTime)
+                .le(Objects.nonNull(endTime), LocalMessagePO::getCreateTime, endTime)
+                .set(LocalMessagePO::getStatus, MessageStatusEnum.PENDING)
+                .set(LocalMessagePO::getRetryCount, 0)
+                .set(LocalMessagePO::getNextRetryTime, now)
+                .set(LocalMessagePO::getUpdateTime, now);
+        return localMessageMapper.update(null, wrapper);
+    }
+
+    /**
+     * 本地消息分页条件查询
+     *
+     * <p>是否记账：否。
+     * <p>异常处理：
+     * <ul>
+     *   <li>参数非法时内部进行安全默认值修正</li>
+     * </ul>
+     *
+     * @param request 分页查询请求
+     * @return 分页结果
+     */
+    public Page<LocalMessagePO> pageQuery(LocalMessagePageQueryRequest request) {
+        int pageNo = (request != null && request.getPageNo() != null && request.getPageNo() > 0)
+                ? request.getPageNo() : 1;
+        int pageSize = (request != null && request.getPageSize() != null && request.getPageSize() > 0)
+                ? Math.min(request.getPageSize(), 200) : 20;
+
+        Page<LocalMessagePO> page = new Page<>(pageNo, pageSize);
+        if (request == null) {
+            return localMessageMapper.selectPage(page, new LambdaQueryWrapper<LocalMessagePO>().orderByDesc(LocalMessagePO::getId));
+        }
+
+        MessageStatusEnum statusEnum = resolveStatusEnum(request.getStatus());
+
+        LambdaQueryWrapper<LocalMessagePO> wrapper = new LambdaQueryWrapper<LocalMessagePO>()
+                .eq(Objects.nonNull(statusEnum), LocalMessagePO::getStatus, statusEnum)
+                .like(StrUtil.isNotBlank(request.getTopic()), LocalMessagePO::getTopic, request.getTopic())
+                .eq(StrUtil.isNotBlank(request.getMessageId()), LocalMessagePO::getMessageId, request.getMessageId())
+                .eq(StrUtil.isNotBlank(request.getBusinessKey()), LocalMessagePO::getBusinessKey, request.getBusinessKey())
+                .ge(Objects.nonNull(request.getStartTime()), LocalMessagePO::getCreateTime, request.getStartTime())
+                .le(Objects.nonNull(request.getEndTime()), LocalMessagePO::getCreateTime, request.getEndTime())
+                .orderByDesc(LocalMessagePO::getId);
+
+        return localMessageMapper.selectPage(page, wrapper);
+    }
+
+    /**
+     * 解析状态枚举码
+     */
+    public MessageStatusEnum resolveStatusEnum(Integer code) {
+        if (code == null) {
+            return null;
+        }
+        for (MessageStatusEnum e : MessageStatusEnum.values()) {
+            if (e.getCode().equals(code)) {
+                return e;
+            }
+        }
+        return null;
     }
 
     private boolean isBlank(String str) {
