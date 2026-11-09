@@ -16,10 +16,10 @@ spring:
   cloud:
     nacos:
       config:
-        # Nacos 服务地址，例如 10.36.1.100:8848
-        server-addr: ${NACOS_HOST:10.36.6.252}:${NACOS_PORT:8848}
-        username: ${NACOS_USERNAME:dev}
-        password: ${NACOS_PASSWORD:dev@kltb@2026}
+        # Nacos 服务地址，例如 127.0.0.1:8848
+        server-addr: ${NACOS_HOST:127.0.0.1}:${NACOS_PORT:8848}
+        username: ${NACOS_USERNAME:}
+        password: ${NACOS_PASSWORD:}
         namespace: ${NACOS_NAMESPACE:dev}
         group: DEFAULT_GROUP
         file-extension: yml
@@ -28,9 +28,9 @@ spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     # 生产环境通过 Nacos 注入，此处为占位符
-    url: ${DB_URL:jdbc:mysql://test-mysql.kltb.com.cn:3306/accounting?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowMultiQueries=true}
+    url: ${DB_URL:jdbc:mysql://127.0.0.1:3306/accounting?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowMultiQueries=true}
     username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:dev@1234}
+    password: ${DB_PASSWORD:}
     hikari:
       # 连接池最大连接数（金融场景建议 20~50）
       maximum-pool-size: 20
@@ -47,9 +47,9 @@ spring:
   # ==================== Redis 配置（Redisson 接管，此处仅保留基础配置） ====================
   data:
     redis:
-      host: ${REDIS_HOST:test-redis.kltb.com.cn}
+      host: ${REDIS_HOST:127.0.0.1}
       port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:dev@1234}
+      password: ${REDIS_PASSWORD:}
       database: 0
 
   # ==================== Jackson 全局配置 ====================

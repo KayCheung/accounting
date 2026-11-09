@@ -202,12 +202,6 @@
         </pluginManagement>
     </build>
 
-    <repositories>
-        <repository>
-            <id>kltb-repo</id>
-            <url>http://10.36.1.48:8081/repository/maven-public/</url>
-        </repository>
-    </repositories>
 
     <profiles>
         <profile>

@@ -93,3 +93,12 @@ coverage/
 .nyc_output/
 # Docker 临时文件
 .dockerignore
+
+# ===================== 本地环境与机密配置文件 =====================
+**/application-local.yml
+**/application-local.yaml
+**/application-local.properties
+**/.env
+**/.env.*
+!**/.env.example
+!**/application-local.yml.example
