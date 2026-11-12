@@ -1287,6 +1287,31 @@
             - 新增并扩展 `LocalMessageRetryJobTest`、`LocalMessageDeadLetterJobHandlerTest`、`LocalMessageApplicationServiceTest`、`LocalMessageOpsControllerTest`（15 个测试用例 100% 绿灯通过）；
             - 全模块编译与测试 100% 成功。
 
+       - **日切总分核对（GL_RECONCILIATION）异常治理与断档结转一键智能修复（GL Reconciliation & Auto-Healing）**：
+         1. **场景痛点与问题根因**：
+            - RocketMQ 中长时段故障或积压导致异步记账消息滞后消费（例如 2026-11-03 生成的 81 笔个人消费贷款凭证合计 512,865.00 在后续恢复后记账，但 2026-11-03 历史会计日未执行日切 EOD，导致 `t_account_balance` 断档缺失）；
+            - 2026-11-09 执行日切时，原有日余额计算仅向前寻找最近一条日末余额（读取到 2026-11-03 之前的旧余额 0.00），丢失了 2026-11-03 的 512,865.00 变动；而分户实时账户 `t_account` 包含了全量过账交易（573,982.85），引发 Step 5 `GL_RECONCILIATION` 总分核对失败阻断；
+            - 运维控制台仅笼统提示“总分核对失败”，缺乏科目总账与分户账户的差额明细、根因诊断及修复手段，导致问题排查与修复极难推进。
+         2. **底层计算韧性长期机制（Penetrative Carryforward Resiliency）**：
+            - `EodDomainService.calculateDailyBalances` 引入穿透式期初累加算法：当检测到上一日余额的会计日期与当前日之间存在跨天断档时，批量聚合区间内所有未日切凭证分录的借贷变动并累加入期初余额，彻底避免历史漏日切导致后续日余额断层；
+            - `t_account_balance` 的 `batchUpsert` 修复 `begin_balance` 更新策略。
+         3. **智能化差异诊断与二级账户穿透引擎（GlReconciliation & Account Drill-Down）**：
+            - `TrialBalanceDomainService.executeGlReconciliation` 升级：自动扫描历史未日切凭证日期，智能输出诊断原因（如“检测到历史日(2026-11-03)未日切断档，导致总账未累加历史已过账分录”）；
+            - 新增 `TrialBalanceDomainService.getGlAccountDiffDetails`，支持按科目下钻到分户账户级对比（`account_no`, `account_name`, `glEndBalance`, `accountBalance`, `diff`, `latestVoucherDate`, `statusDesc`）；
+            - `accounting-api` 契约层新增 `GlReconciliationResponse`, `GlDiffDetail`, `GlAccountDiffResponse`, `GlRepairRequest`, `GlRepairResponse`。
+         4. **线上总分核对一键智能修复引擎（GlReconciliationRepairDomainService）**：
+            - 新增 `GlReconciliationRepairDomainService`，支持单科目或全局一键修复：按时间序自动扫描断档会计日并补录生成各日 `t_account_balance`，重算目标日日末余额，实时复核总分核对状态并原子重置日切失败阻断；
+            - `EodController` 新增 3 个接口：`GET /eod/gl-reconciliation`、`GET /eod/gl-reconciliation/accounts`、`POST /eod/gl-reconciliation/repair`。
+         5. **前端管理端交互增强（accounting-ui）**：
+            - `src/api/eod.ts` 完整对接后端核对与修复接口；
+            - `src/views/business/eod/index.vue` 新增【总账分户核对诊断看板】与明细表格（展示科目日末总账、分户实时余额、核对差额、关联分户数、智能根因诊断）；
+            - 新增【分户账户核对穿透抽屉 (el-drawer)】支持一键查看差异分户详情；
+            - 新增【一键智能修复】按钮与【修复报告控制台弹窗】，一键自动补全历史断档并刷新页面；
+            - 日切执行结果抽屉新增“总分核对 (GL)”阶段状态。
+         6. **质量验收与构建**：
+            - 后端全模块 `mvn clean test-compile` 及核心单元测试（`EodDomainServiceTest`, `TrialBalanceDomainServiceTest` 等）100% 绿灯通过；
+            - 前端 `vue-tsc && vite build` 生产构建 0 错误通过。
+
 ---
 
 ## Phase 10：联调、性能验收与上线

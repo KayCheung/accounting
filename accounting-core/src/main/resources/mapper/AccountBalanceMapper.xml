@@ -14,6 +14,7 @@
              NOW(), NOW(), 0, COALESCE(#{item.tenantId}, -1))
         </foreach>
         ON DUPLICATE KEY UPDATE
+            begin_balance = VALUES(begin_balance),
             debit_amount = VALUES(debit_amount),
             credit_amount = VALUES(credit_amount),
             end_balance = VALUES(end_balance),
@@ -32,6 +33,27 @@
         WHERE accounting_date = #{accountingDate}
           AND is_delete = 0
         GROUP BY subject_code
+    </select>
+
+    <!-- 查询指定会计日期之前（含当日）已生成日余额的所有不重复会计日（升序） -->
+    <select id="selectDistinctDatesBeforeDate" resultType="java.time.LocalDate">
+        SELECT DISTINCT accounting_date
+        FROM t_account_balance
+        WHERE accounting_date &lt;= #{endDate}
+          AND is_delete = 0
+        ORDER BY accounting_date ASC
+    </select>
+
+    <!-- 按科目和会计日期查询各账户日余额明细（总分核对穿透用） -->
+    <select id="selectBySubjectAndDate" resultType="com.kltb.accounting.core.infrastructure.persistence.entity.AccountBalancePO">
+        SELECT id, accounting_date, subject_code, account_no, currency,
+               balance_direction, begin_balance, debit_amount, credit_amount, end_balance,
+               create_time, update_time, is_delete, tenant_id
+        FROM t_account_balance
+        WHERE subject_code = #{subjectCode}
+          AND accounting_date = #{accountingDate}
+          AND is_delete = 0
+        ORDER BY account_no ASC
     </select>
 
 </mapper>

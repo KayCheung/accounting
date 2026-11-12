@@ -1,19 +1,13 @@
 package com.kltb.accounting.core.interfaces;
 
-import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.api.request.DateSwitchRequest;
 import com.kltb.accounting.api.request.EodExecuteRequest;
-import com.kltb.accounting.api.response.ApiResponse;
-import com.kltb.accounting.api.response.DateSwitchResponse;
-import com.kltb.accounting.api.response.EodExecuteResponse;
-import com.kltb.accounting.api.response.EodPreCheckResponse;
-import com.kltb.accounting.api.response.EodStatusResponse;
-import com.kltb.accounting.api.response.TrialBalanceResponse;
+import com.kltb.accounting.api.response.*;
 import com.kltb.accounting.core.application.service.EodApplicationService;
+import com.kltb.accounting.core.domain.enums.EodStatusEnum;
 import com.kltb.accounting.core.domain.service.AccountingDateSwitchDomainService;
 import com.kltb.accounting.core.domain.service.AccountingDateSwitchDomainService.DateSwitchResult;
 import com.kltb.accounting.core.domain.service.EodStatusDomainService;
-import com.kltb.accounting.core.domain.enums.EodStatusEnum;
 import com.kltb.accounting.core.infrastructure.cache.AccountingDateCache;
 import com.kltb.accounting.core.infrastructure.persistence.entity.EodStatusPO;
 import io.swagger.v3.oas.annotations.Operation;
@@ -60,6 +54,31 @@ public class EodController {
             @Parameter(name = "accountingDate", description = "会计日期 yyyy-MM-dd")
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate accountingDate) {
         return ApiResponse.ok(eodApplicationService.getTrialBalance(accountingDate));
+    }
+
+    @GetMapping("/gl-reconciliation")
+    @Operation(summary = "查询总账与分户账核对结果", description = "逐科目对比日余额总账与分户账户余额汇总，包含差异原因诊断")
+    public ApiResponse<GlReconciliationResponse> getGlReconciliation(
+            @Parameter(name = "accountingDate", description = "会计日期 yyyy-MM-dd")
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate accountingDate) {
+        return ApiResponse.ok(eodApplicationService.getGlReconciliation(accountingDate));
+    }
+
+    @GetMapping("/gl-reconciliation/accounts")
+    @Operation(summary = "查询科目下各分户账户穿透明细", description = "穿透查看指定科目在指定会计日下所有分户账户的总账期末 vs 分户余额明细")
+    public ApiResponse<GlAccountDiffResponse> getGlAccountDiffDetails(
+            @Parameter(name = "accountingDate", description = "会计日期 yyyy-MM-dd", required = true)
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate accountingDate,
+            @Parameter(name = "subjectCode", description = "会计科目代码", required = true)
+            @RequestParam String subjectCode) {
+        return ApiResponse.ok(eodApplicationService.getGlAccountDiffDetails(accountingDate, subjectCode));
+    }
+
+    @PostMapping("/gl-reconciliation/repair")
+    @Operation(summary = "总分核对一键诊断与线上自动修复", description = "自动扫描历史断档会计日并时序回补日余额，重算当前日余额并消除总分差额")
+    public ApiResponse<GlRepairResponse> repairGlReconciliation(
+            @Valid @RequestBody com.kltb.accounting.api.request.GlRepairRequest request) {
+        return ApiResponse.ok(eodApplicationService.repairGlReconciliation(request));
     }
 
     @GetMapping("/status")

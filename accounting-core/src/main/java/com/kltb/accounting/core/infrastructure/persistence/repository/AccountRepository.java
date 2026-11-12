@@ -124,6 +124,18 @@ public class AccountRepository {
         return result != null ? result : Collections.emptyList();
     }
 
+    /**
+     * 按科目代码查询未注销的有效账户列表
+     */
+    public List<AccountPO> selectActiveAccountsBySubject(String subjectCode) {
+        List<AccountPO> result = accountMapper.selectList(new LambdaQueryWrapper<AccountPO>()
+                .eq(AccountPO::getSubjectCode, subjectCode)
+                .eq(AccountPO::getIsDelete, 0)
+                .ne(AccountPO::getStatus, AccountStatusEnum.CANCELLED)
+                .orderByAsc(AccountPO::getAccountNo));
+        return result != null ? result : Collections.emptyList();
+    }
+
 
     /**
      * 按账户编号列表加悲观锁批量查询

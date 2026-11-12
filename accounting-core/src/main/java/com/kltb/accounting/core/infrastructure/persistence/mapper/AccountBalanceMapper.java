@@ -34,4 +34,16 @@ public interface AccountBalanceMapper extends BaseMapper<AccountBalancePO> {
      * @return 科目汇总列表，每项包含 subject_code / total_balance / total_debit / total_credit / account_count
      */
     List<Map<String, Object>> sumBalancesBySubject(@Param("accountingDate") LocalDate accountingDate);
+
+    /**
+     * 查询指定会计日期之前（含当日）已生成日余额的所有不重复会计日（升序）
+     */
+    List<LocalDate> selectDistinctDatesBeforeDate(@Param("endDate") LocalDate endDate);
+
+    /**
+     * 按科目和会计日期查询各账户日余额明细（总分核对穿透用）
+     */
+    List<AccountBalancePO> selectBySubjectAndDate(
+            @Param("subjectCode") String subjectCode,
+            @Param("accountingDate") LocalDate accountingDate);
 }

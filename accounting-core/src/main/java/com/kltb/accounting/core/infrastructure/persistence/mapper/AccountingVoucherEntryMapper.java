@@ -9,6 +9,7 @@ import org.apache.ibatis.annotations.Update;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -75,6 +76,25 @@ public interface AccountingVoucherEntryMapper extends BaseMapper<AccountingVouch
      * 按会计日期汇总各科目借贷方金额（试算平衡用）
      */
     List<Map<String, Object>> sumEntriesBySubject(@Param("accountingDate") LocalDate accountingDate);
+
+    /**
+     * 按会计日期区间汇总各账户借贷方金额（用于历史断档穿透结转）
+     */
+    List<Map<String, Object>> sumEntriesByAccountDateRange(
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate);
+
+    /**
+     * 查询指定会计日期之前（含当日）存在已过账分录的所有不重复会计日（升序）
+     */
+    List<LocalDate> selectDistinctDatesWithEntriesBeforeDate(@Param("endDate") LocalDate endDate);
+
+    /**
+     * 查询指定会计日期之后（不含当日）某科目的净变动发生额（借-贷）
+     */
+    BigDecimal sumNetChangeAfterDate(
+            @Param("subjectCode") String subjectCode,
+            @Param("afterDate") LocalDate afterDate);
 
     /**
      * 批量插入分录（红冲用）

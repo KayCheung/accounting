@@ -91,6 +91,68 @@ export interface TrialBalanceResponse {
 }
 
 /**
+ * 总账分户核对差异明细
+ */
+export interface GlDiffDetail {
+  subjectCode: string
+  subjectName: string
+  accountType?: number
+  accountTypeDesc?: string
+  glEndBalance: number
+  accountBalance: number
+  diff: number
+  accountCount: number
+  reasonDesc?: string
+  repairable: boolean
+}
+
+/**
+ * 总账分户核对响应结构
+ */
+export interface GlReconciliationResponse {
+  accountingDate: string
+  passed: boolean
+  totalGlBalance: number
+  totalAccountBalance: number
+  totalDiff: number
+  diffDetails: GlDiffDetail[]
+}
+
+/**
+ * 账户级总分核对差异明细
+ */
+export interface GlAccountDiffResponse {
+  accountNo: string
+  accountName: string
+  glEndBalance: number
+  accountBalance: number
+  diff: number
+  latestVoucherDate?: string | null
+  statusDesc: string
+}
+
+/**
+ * 总分核对智能修复请求
+ */
+export interface GlRepairRequest {
+  accountingDate: string
+  subjectCode?: string
+}
+
+/**
+ * 总分核对智能修复响应
+ */
+export interface GlRepairResponse {
+  success: boolean
+  repairedDateCount: number
+  repairedAccountCount: number
+  repairedAmount: number
+  remainingDiff: number
+  message: string
+  repairLogs: string[]
+}
+
+/**
  * 期末结转明细记录
  */
 export interface TransferRecord {
@@ -122,6 +184,8 @@ export interface EodExecuteResponse {
   balanceCount: number
   trialBalancePassed: boolean
   trialBalanceDetails?: TrialBalanceResponse | null
+  glReconciliationPassed?: boolean
+  glReconciliationDetails?: GlReconciliationResponse | null
   transferResults?: TransferRecord[]
   snapshotGenerated: boolean
   snapshotCount: number
@@ -176,4 +240,25 @@ export function getTrialBalance(accountingDate: string): Promise<TrialBalanceRes
  */
 export function executeEod(data: EodExecuteRequest): Promise<EodExecuteResponse> {
   return request.post<EodExecuteResponse>('/eod/execute', data)
+}
+
+/**
+ * 查询总账分户核对结果
+ */
+export function getGlReconciliation(accountingDate: string): Promise<GlReconciliationResponse> {
+  return request.get<GlReconciliationResponse>('/eod/gl-reconciliation', { accountingDate })
+}
+
+/**
+ * 查询账户级总分核对差异明细（二级穿透）
+ */
+export function getGlAccountDiffs(accountingDate: string, subjectCode?: string): Promise<GlAccountDiffResponse[]> {
+  return request.get<GlAccountDiffResponse[]>('/eod/gl-reconciliation/accounts', { accountingDate, subjectCode })
+}
+
+/**
+ * 触发总分核对一键智能修复
+ */
+export function repairGlReconciliation(data: GlRepairRequest): Promise<GlRepairResponse> {
+  return request.post<GlRepairResponse>('/eod/gl-reconciliation/repair', data)
 }

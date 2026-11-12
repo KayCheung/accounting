@@ -2,9 +2,11 @@ package com.kltb.accounting.core.application.assembler;
 
 import com.kltb.accounting.api.response.EodExecuteResponse;
 import com.kltb.accounting.api.response.EodPreCheckResponse;
+import com.kltb.accounting.api.response.GlReconciliationResponse;
 import com.kltb.accounting.api.response.TrialBalanceResponse;
 import com.kltb.accounting.core.domain.service.EodCheckDomainService.EodPreCheckResult;
 import com.kltb.accounting.core.domain.service.PeriodEndTransferDomainService.TransferRuleResult;
+import com.kltb.accounting.core.domain.service.TrialBalanceDomainService.GlReconciliationResult;
 import com.kltb.accounting.core.domain.service.TrialBalanceDomainService.TrialBalanceResult;
 import com.kltb.accounting.core.domain.enums.TransferRecordStatusEnum;
 import org.springframework.stereotype.Component;
@@ -79,5 +81,30 @@ public class EodAssembler {
                         .status(Optional.ofNullable(r.getStatus()).map(TransferRecordStatusEnum::getCode).orElse(null))
                         .build())
                 .toList();
+    }
+
+    public GlReconciliationResponse toGlReconciliationResponse(GlReconciliationResult result) {
+        if (result == null) {
+            return null;
+        }
+        return GlReconciliationResponse.builder()
+                .accountingDate(result.getAccountingDate())
+                .passed(result.isPassed())
+                .totalGlBalance(result.getTotalGlBalance())
+                .totalAccountBalance(result.getTotalAccountBalance())
+                .totalDiff(result.getTotalDiff())
+                .diffDetails(result.getDiffDetails() != null ? result.getDiffDetails().stream()
+                        .map(d -> GlReconciliationResponse.GlDiffDetail.builder()
+                                .subjectCode(d.getSubjectCode())
+                                .subjectName(d.getSubjectName())
+                                .glTotal(d.getGlTotalBalance())
+                                .accountTotal(d.getAccountTotalBalance())
+                                .diff(d.getDiff())
+                                .accountCount(d.getAccountCount())
+                                .reasonDesc(d.getReasonDesc())
+                                .repairable(d.getRepairable())
+                                .build())
+                        .toList() : List.of())
+                .build();
     }
 }

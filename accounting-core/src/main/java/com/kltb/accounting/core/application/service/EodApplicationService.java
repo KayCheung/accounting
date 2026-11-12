@@ -1,8 +1,12 @@
 package com.kltb.accounting.core.application.service;
 
 import com.kltb.accounting.api.request.EodExecuteRequest;
+import com.kltb.accounting.api.request.GlRepairRequest;
 import com.kltb.accounting.api.response.EodExecuteResponse;
 import com.kltb.accounting.api.response.EodPreCheckResponse;
+import com.kltb.accounting.api.response.GlAccountDiffResponse;
+import com.kltb.accounting.api.response.GlReconciliationResponse;
+import com.kltb.accounting.api.response.GlRepairResponse;
 import com.kltb.accounting.api.response.TrialBalanceResponse;
 import com.kltb.accounting.core.application.assembler.EodAssembler;
 import com.kltb.accounting.core.domain.service.EodArchiveDomainService;
@@ -10,10 +14,12 @@ import com.kltb.accounting.core.domain.service.EodCheckDomainService;
 import com.kltb.accounting.core.domain.service.EodCheckDomainService.EodPreCheckResult;
 import com.kltb.accounting.core.domain.service.EodDomainService;
 import com.kltb.accounting.core.domain.service.EodStatusDomainService;
+import com.kltb.accounting.core.domain.service.GlReconciliationRepairDomainService;
 import com.kltb.accounting.core.domain.service.PeriodEndTransferDomainService;
 import com.kltb.accounting.core.domain.service.PeriodEndTransferDomainService.TransferRuleResult;
 import com.kltb.accounting.core.domain.service.TrialBalanceDomainService;
 import com.kltb.accounting.core.domain.service.TrialBalanceDomainService.BalanceReconciliationResult;
+import com.kltb.accounting.core.domain.service.TrialBalanceDomainService.GlDiffDetail;
 import com.kltb.accounting.core.domain.service.TrialBalanceDomainService.GlReconciliationResult;
 import com.kltb.accounting.core.domain.service.TrialBalanceDomainService.TrialBalanceResult;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountBalancePO;
@@ -44,6 +50,7 @@ public class EodApplicationService {
     private final AccountingDateSwitchDomainService accountingDateSwitchDomainService;
     private final AccountingDateCache accountingDateCache;
     private final EodAssembler eodAssembler;
+    private final GlReconciliationRepairDomainService glReconciliationRepairDomainService;
 
     public EodExecuteResponse executeEod(EodExecuteRequest request) {
         long startTime = System.currentTimeMillis();
@@ -89,7 +96,8 @@ public class EodApplicationService {
             // Step 5: 总分核对（NEW）
             GlReconciliationResult glResult = trialBalanceDomainService.executeGlReconciliation(accountingDate);
             if (!glResult.isPassed()) {
-                eodStatusDomainService.markFailed(accountingDate, "GL_RECONCILIATION", "总分核对失败");
+                String failReason = buildGlFailReason(glResult);
+                eodStatusDomainService.markFailed(accountingDate, "GL_RECONCILIATION", failReason);
                 long duration = System.currentTimeMillis() - startTime;
                 return buildGlReconciliationFailureResponse(accountingDate, checkResult,
                         balances.size(), trialResult, glResult, snapshotCount, duration);
@@ -148,6 +156,8 @@ public class EodApplicationService {
                     .balanceCount(balances.size())
                     .trialBalancePassed(trialBalancePassed)
                     .trialBalanceDetails(eodAssembler.toTrialBalanceResponse(trialResult))
+                    .glReconciliationPassed(true)
+                    .glReconciliationDetails(eodAssembler.toGlReconciliationResponse(glResult))
                     .transferResults(eodAssembler.toTransferRecords(transferResults))
                     .snapshotGenerated(snapshotCount > 0)
                     .snapshotCount(snapshotCount)
@@ -183,6 +193,35 @@ public class EodApplicationService {
     public TrialBalanceResponse getTrialBalance(LocalDate accountingDate) {
         TrialBalanceResult result = trialBalanceDomainService.executeTrialBalance(accountingDate);
         return eodAssembler.toTrialBalanceResponse(result);
+    }
+
+    public GlReconciliationResponse getGlReconciliation(LocalDate accountingDate) {
+        GlReconciliationResult result = trialBalanceDomainService.executeGlReconciliation(accountingDate);
+        return eodAssembler.toGlReconciliationResponse(result);
+    }
+
+    public GlAccountDiffResponse getGlAccountDiffDetails(LocalDate accountingDate, String subjectCode) {
+        return trialBalanceDomainService.getGlAccountDiffDetails(accountingDate, subjectCode);
+    }
+
+    public GlRepairResponse repairGlReconciliation(GlRepairRequest request) {
+        return glReconciliationRepairDomainService.repairGlReconciliation(
+                request.getAccountingDate(), request.getSubjectCode());
+    }
+
+    private String buildGlFailReason(GlReconciliationResult glResult) {
+        if (glResult == null || glResult.getDiffDetails() == null || glResult.getDiffDetails().isEmpty()) {
+            return "总分核对失败: 存在未平差额";
+        }
+        GlDiffDetail first = glResult.getDiffDetails().get(0);
+        StringBuilder sb = new StringBuilder();
+        sb.append("总分核对失败: 科目[").append(first.getSubjectCode()).append(" ").append(first.getSubjectName()).append("] ")
+                .append("总账¥").append(first.getGlTotalBalance()).append(" != 分户¥").append(first.getAccountTotalBalance())
+                .append("(差额¥").append(first.getDiff()).append(")");
+        if (first.getReasonDesc() != null && !first.getReasonDesc().isEmpty()) {
+            sb.append("; ").append(first.getReasonDesc());
+        }
+        return sb.toString();
     }
 
     private EodExecuteResponse buildPreCheckFailureResponse(
@@ -229,8 +268,10 @@ public class EodApplicationService {
                 .preCheckDetails(checkResult != null ? eodAssembler.toPreCheckResponse(checkResult) : null)
                 .balanceCalculated(true)
                 .balanceCount(balanceCount)
-                .trialBalancePassed(trialResult.isPassed())
-                .trialBalanceDetails(eodAssembler.toTrialBalanceResponse(trialResult))
+                .trialBalancePassed(trialResult != null && trialResult.isPassed())
+                .trialBalanceDetails(trialResult != null ? eodAssembler.toTrialBalanceResponse(trialResult) : null)
+                .glReconciliationPassed(false)
+                .glReconciliationDetails(eodAssembler.toGlReconciliationResponse(glResult))
                 .transferResults(List.of())
                 .snapshotGenerated(snapshotCount > 0)
                 .snapshotCount(snapshotCount)
@@ -251,6 +292,8 @@ public class EodApplicationService {
                 .balanceCount(balanceCount)
                 .trialBalancePassed(trialResult.isPassed())
                 .trialBalanceDetails(eodAssembler.toTrialBalanceResponse(trialResult))
+                .glReconciliationPassed(glResult != null && glResult.isPassed())
+                .glReconciliationDetails(eodAssembler.toGlReconciliationResponse(glResult))
                 .transferResults(List.of())
                 .snapshotGenerated(snapshotCount > 0)
                 .snapshotCount(snapshotCount)

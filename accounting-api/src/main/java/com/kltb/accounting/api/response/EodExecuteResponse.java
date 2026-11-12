@@ -25,6 +25,8 @@ public class EodExecuteResponse {
     private int balanceCount;
     private boolean trialBalancePassed;
     private TrialBalanceResponse trialBalanceDetails;
+    private boolean glReconciliationPassed;
+    private GlReconciliationResponse glReconciliationDetails;
     private List<TransferRecord> transferResults;
     private boolean snapshotGenerated;
     private int snapshotCount;

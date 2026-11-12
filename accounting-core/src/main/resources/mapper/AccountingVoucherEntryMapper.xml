@@ -29,6 +29,42 @@
         GROUP BY subject_code
     </select>
 
+    <!-- 按会计日期区间汇总各账户借贷方金额（用于历史断档穿透结转） -->
+    <select id="sumEntriesByAccountDateRange" resultType="java.util.HashMap">
+        SELECT MAX(subject_code) AS subject_code,
+               account_no,
+               accounting_date,
+               SUM(CASE WHEN debit_credit = 1 THEN amount ELSE 0 END) AS total_debit,
+               SUM(CASE WHEN debit_credit = 2 THEN amount ELSE 0 END) AS total_credit,
+               COUNT(*) AS entry_count
+        FROM t_accounting_voucher_entry
+        WHERE accounting_date &gt; #{startDate}
+          AND accounting_date &lt;= #{endDate}
+          AND status = 2
+          AND is_delete = 0
+        GROUP BY account_no, accounting_date
+    </select>
+
+    <!-- 查询指定会计日期之前（含当日）存在已过账分录的所有不重复会计日（升序） -->
+    <select id="selectDistinctDatesWithEntriesBeforeDate" resultType="java.time.LocalDate">
+        SELECT DISTINCT accounting_date
+        FROM t_accounting_voucher_entry
+        WHERE accounting_date &lt;= #{endDate}
+          AND status = 2
+          AND is_delete = 0
+        ORDER BY accounting_date ASC
+    </select>
+
+    <!-- 查询指定会计日期之后某科目的净变动发生额（借-贷） -->
+    <select id="sumNetChangeAfterDate" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(CASE WHEN debit_credit = 1 THEN amount ELSE -amount END), 0)
+        FROM t_accounting_voucher_entry
+        WHERE subject_code = #{subjectCode}
+          AND accounting_date &gt; #{afterDate}
+          AND status = 2
+          AND is_delete = 0
+    </select>
+
     <!-- 批量插入红冲分录（Step 18 P0-6） -->
     <insert id="batchInsert">
         INSERT INTO t_accounting_voucher_entry

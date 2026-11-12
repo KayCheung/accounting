@@ -1,13 +1,16 @@
 package com.kltb.accounting.core.domain.service;
 
 import com.kltb.accounting.api.constant.ResultCode;
+import com.kltb.accounting.api.response.GlAccountDiffResponse;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountBalancePO;
+import com.kltb.accounting.core.infrastructure.persistence.entity.AccountPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountSubjectPO;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountBalanceMapper;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountDetailMapper;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountMapper;
 import com.kltb.accounting.core.infrastructure.persistence.mapper.AccountingVoucherEntryMapper;
 import com.kltb.accounting.core.infrastructure.persistence.repository.AccountBalanceRepository;
+import com.kltb.accounting.core.infrastructure.persistence.repository.AccountRepository;
 import com.kltb.accounting.core.infrastructure.persistence.repository.SubjectRepository;
 import com.kltb.accounting.core.shared.exception.AccountException;
 import com.kltb.accounting.core.shared.util.FinancialAmountUtil;
@@ -18,10 +21,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -37,6 +37,7 @@ public class TrialBalanceDomainService {
     private final AccountMapper accountMapper;
     private final AccountDetailMapper accountDetailMapper;
     private final AccountBalanceRepository accountBalanceRepository;
+    private final AccountRepository accountRepository;
 
     public TrialBalanceResult executeTrialBalance(LocalDate accountingDate) {
         List<Map<String, Object>> subjectSummaries = voucherEntryMapper.sumEntriesBySubject(accountingDate);
@@ -111,18 +112,30 @@ public class TrialBalanceDomainService {
         // 总账侧：余额表按科目汇总（t_account_balance）
         List<Map<String, Object>> glSums = accountBalanceMapper.sumBalancesBySubject(accountingDate);
         Map<String, BigDecimal> glBalanceBySubject = new HashMap<>();
+        BigDecimal totalGlAll = BigDecimal.ZERO;
         for (Map<String, Object> row : glSums) {
             String subjectCode = (String) row.get("subject_code");
-            glBalanceBySubject.put(subjectCode, FinancialAmountUtil.toBigDecimal(row.get("total_balance")));
+            BigDecimal bal = FinancialAmountUtil.toBigDecimal(row.get("total_balance"));
+            glBalanceBySubject.put(subjectCode, bal);
+            totalGlAll = totalGlAll.add(bal);
         }
 
         // 分户侧：账户余额按科目汇总（t_account）
         List<Map<String, Object>> accountSums = accountMapper.sumBalancesBySubject();
         Map<String, BigDecimal> accountBalanceBySubject = new HashMap<>();
+        Map<String, Integer> accountCountBySubject = new HashMap<>();
+        BigDecimal totalAccountAll = BigDecimal.ZERO;
         for (Map<String, Object> row : accountSums) {
             String subjectCode = (String) row.get("subject_code");
-            accountBalanceBySubject.put(subjectCode, FinancialAmountUtil.toBigDecimal(row.get("total_balance")));
+            BigDecimal bal = FinancialAmountUtil.toBigDecimal(row.get("total_balance"));
+            accountBalanceBySubject.put(subjectCode, bal);
+            totalAccountAll = totalAccountAll.add(bal);
+            Object countObj = row.get("account_count");
+            accountCountBySubject.put(subjectCode, countObj instanceof Number ? ((Number) countObj).intValue() : 0);
         }
+
+        // 识别历史断档会计日（凭证存在但日余额缺失的日期）
+        List<LocalDate> missingHistoryDates = findMissingHistoryDates(accountingDate);
 
         // 逐科目对比
         List<GlDiffDetail> diffDetails = new ArrayList<>();
@@ -136,11 +149,13 @@ public class TrialBalanceDomainService {
             BigDecimal diff = glTotal.subtract(accountTotal).abs();
 
             if (diff.compareTo(BALANCE_THRESHOLD) > 0) {
+                Integer acctCount = accountCountBySubject.getOrDefault(subjectCode, 0);
+                String reason = diagnoseSubjectDiffReason(subjectCode, glTotal, accountTotal, accountingDate, missingHistoryDates);
                 diffDetails.add(new GlDiffDetail(subjectCode, getSubjectName(subjectCode),
-                        glTotal, accountTotal, diff));
+                        glTotal, accountTotal, diff, acctCount, reason, true));
                 totalDiff = totalDiff.add(diff);
-                log.error("[GL-RECONCILIATION-IMBALANCED] subject={}, glTotal={}, accountTotal={}, diff={}",
-                        subjectCode, glTotal, accountTotal, diff);
+                log.error("[GL-RECONCILIATION-IMBALANCED] subject={}, glTotal={}, accountTotal={}, diff={}, reason={}",
+                        subjectCode, glTotal, accountTotal, diff, reason);
             }
         }
 
@@ -151,11 +166,13 @@ public class TrialBalanceDomainService {
                 BigDecimal accountTotal = entry.getValue();
                 BigDecimal diff = accountTotal.abs();
                 if (diff.compareTo(BALANCE_THRESHOLD) > 0) {
+                    Integer acctCount = accountCountBySubject.getOrDefault(subjectCode, 0);
+                    String reason = diagnoseSubjectDiffReason(subjectCode, BigDecimal.ZERO, accountTotal, accountingDate, missingHistoryDates);
                     diffDetails.add(new GlDiffDetail(subjectCode, getSubjectName(subjectCode),
-                            BigDecimal.ZERO, accountTotal, diff));
+                            BigDecimal.ZERO, accountTotal, diff, acctCount, reason, true));
                     totalDiff = totalDiff.add(diff);
-                    log.error("[GL-RECONCILIATION-IMBALANCED] subject={}, glTotal=0, accountTotal={}, diff={}",
-                            subjectCode, accountTotal, diff);
+                    log.error("[GL-RECONCILIATION-IMBALANCED] subject={}, glTotal=0, accountTotal={}, diff={}, reason={}",
+                            subjectCode, accountTotal, diff, reason);
                 }
             }
         }
@@ -169,7 +186,100 @@ public class TrialBalanceDomainService {
             log.info("[GL-RECONCILIATION] date={}, PASSED, subjects={}", accountingDate, glBalanceBySubject.size());
         }
 
-        return new GlReconciliationResult(accountingDate, passed, totalDiff, diffDetails);
+        return new GlReconciliationResult(accountingDate, passed, totalGlAll, totalAccountAll, totalDiff, diffDetails);
+    }
+
+    /**
+     * 查询指定科目在指定会计日的分户账户穿透明细对比
+     */
+    public GlAccountDiffResponse getGlAccountDiffDetails(
+            LocalDate accountingDate, String subjectCode) {
+        List<AccountPO> activeAccounts =
+                accountRepository.selectActiveAccountsBySubject(subjectCode);
+        List<AccountBalancePO> dayBalances = accountBalanceMapper.selectBySubjectAndDate(subjectCode, accountingDate);
+        Map<String, AccountBalancePO> balanceMap = dayBalances.stream()
+                .filter(b -> b.getAccountNo() != null)
+                .collect(Collectors.toMap(AccountBalancePO::getAccountNo, b -> b, (b1, b2) -> b1));
+
+        List<GlAccountDiffResponse.AccountItem> items = new ArrayList<>();
+        Set<String> processedAccountNos = new HashSet<>();
+
+        for (AccountPO acct : activeAccounts) {
+            String no = acct.getAccountNo();
+            processedAccountNos.add(no);
+            AccountBalancePO bal = balanceMap.get(no);
+            BigDecimal glEnd = bal != null && bal.getEndBalance() != null ? bal.getEndBalance() : BigDecimal.ZERO;
+            BigDecimal acctBal = acct.getBalance() != null ? acct.getBalance() : BigDecimal.ZERO;
+            BigDecimal diff = glEnd.subtract(acctBal).abs();
+
+            items.add(GlAccountDiffResponse.AccountItem.builder()
+                    .accountNo(no)
+                    .accountName(acct.getAccountName())
+                    .glEndBalance(glEnd)
+                    .accountBalance(acctBal)
+                    .diff(diff)
+                    .statusDesc(acct.getStatus() != null ? acct.getStatus().getDesc() : "正常")
+                    .latestVoucherDate(bal != null && bal.getAccountingDate() != null ? bal.getAccountingDate().toString() : null)
+                    .build());
+        }
+
+        // 补充日余额表中存在但分户表中已注销或特殊的记录
+        for (AccountBalancePO bal : dayBalances) {
+            String no = bal.getAccountNo();
+            if (no != null && !processedAccountNos.contains(no)) {
+                BigDecimal glEnd = bal.getEndBalance() != null ? bal.getEndBalance() : BigDecimal.ZERO;
+                items.add(GlAccountDiffResponse.AccountItem.builder()
+                        .accountNo(no)
+                        .accountName("历史结转/未激活账户")
+                        .glEndBalance(glEnd)
+                        .accountBalance(BigDecimal.ZERO)
+                        .diff(glEnd)
+                        .statusDesc("无分户")
+                        .latestVoucherDate(bal.getAccountingDate() != null ? bal.getAccountingDate().toString() : null)
+                        .build());
+            }
+        }
+
+        // 差异倒序排列（差异最大的排在最前）
+        items.sort((a, b) -> b.getDiff().compareTo(a.getDiff()));
+
+        return com.kltb.accounting.api.response.GlAccountDiffResponse.builder()
+                .subjectCode(subjectCode)
+                .subjectName(getSubjectName(subjectCode))
+                .accounts(items)
+                .build();
+    }
+
+    private List<LocalDate> findMissingHistoryDates(LocalDate accountingDate) {
+        try {
+            List<LocalDate> voucherDates = voucherEntryMapper.selectDistinctDatesWithEntriesBeforeDate(accountingDate);
+            List<LocalDate> balanceDates = accountBalanceMapper.selectDistinctDatesBeforeDate(accountingDate);
+            Set<LocalDate> balanceDateSet = new HashSet<>(balanceDates != null ? balanceDates : List.of());
+            if (voucherDates != null) {
+                return voucherDates.stream()
+                        .filter(d -> !balanceDateSet.contains(d) && d.isBefore(accountingDate))
+                        .collect(Collectors.toList());
+            }
+        } catch (Exception e) {
+            log.warn("[GL-RECONCILIATION] 检查历史断档日期异常: {}", e.getMessage());
+        }
+        return List.of();
+    }
+
+    private String diagnoseSubjectDiffReason(String subjectCode, BigDecimal glTotal, BigDecimal accountTotal,
+                                             LocalDate accountingDate, List<LocalDate> missingHistoryDates) {
+        if (missingHistoryDates != null && !missingHistoryDates.isEmpty()) {
+            return "检测到前序历史会计日存在未日切结转的分录（如 " + missingHistoryDates.get(0) + "），导致总账期初少计，建议点击【一键修复】";
+        }
+        try {
+            BigDecimal futureNet = voucherEntryMapper.sumNetChangeAfterDate(subjectCode, accountingDate);
+            if (futureNet != null && futureNet.abs().compareTo(BALANCE_THRESHOLD) > 0) {
+                return "检测到分户表包含未来会计日（> " + accountingDate + "）的新发生额 ¥" + futureNet + "，当前为跨日对账截面差异";
+            }
+        } catch (Exception ignored) {
+        }
+        BigDecimal diff = glTotal.subtract(accountTotal).abs();
+        return "总账汇总 (¥" + glTotal + ") 与分户汇总 (¥" + accountTotal + ") 存在差额 ¥" + diff + "，建议点击【一键修复】重新校准";
     }
 
     /**
@@ -284,8 +394,25 @@ public class TrialBalanceDomainService {
     public static class GlReconciliationResult {
         private final LocalDate accountingDate;
         private final boolean passed;
+        private final BigDecimal totalGlBalance;
+        private final BigDecimal totalAccountBalance;
         private final BigDecimal totalDiff;
         private final List<GlDiffDetail> diffDetails;
+
+        public GlReconciliationResult(LocalDate accountingDate, boolean passed, BigDecimal totalDiff, List<GlDiffDetail> diffDetails) {
+            this(accountingDate, passed, BigDecimal.ZERO, BigDecimal.ZERO, totalDiff, diffDetails);
+        }
+
+        public GlReconciliationResult(LocalDate accountingDate, boolean passed,
+                                      BigDecimal totalGlBalance, BigDecimal totalAccountBalance,
+                                      BigDecimal totalDiff, List<GlDiffDetail> diffDetails) {
+            this.accountingDate = accountingDate;
+            this.passed = passed;
+            this.totalGlBalance = totalGlBalance;
+            this.totalAccountBalance = totalAccountBalance;
+            this.totalDiff = totalDiff;
+            this.diffDetails = diffDetails;
+        }
     }
 
     @Data
@@ -295,15 +422,27 @@ public class TrialBalanceDomainService {
         private final BigDecimal glTotalBalance;
         private final BigDecimal accountTotalBalance;
         private final BigDecimal diff;
+        private final Integer accountCount;
+        private final String reasonDesc;
+        private final Boolean repairable;
 
         public GlDiffDetail(String subjectCode, String subjectName,
                             BigDecimal glTotalBalance, BigDecimal accountTotalBalance,
                             BigDecimal diff) {
+            this(subjectCode, subjectName, glTotalBalance, accountTotalBalance, diff, null, null, true);
+        }
+
+        public GlDiffDetail(String subjectCode, String subjectName,
+                            BigDecimal glTotalBalance, BigDecimal accountTotalBalance,
+                            BigDecimal diff, Integer accountCount, String reasonDesc, Boolean repairable) {
             this.subjectCode = subjectCode;
             this.subjectName = subjectName;
             this.glTotalBalance = glTotalBalance;
             this.accountTotalBalance = accountTotalBalance;
             this.diff = diff;
+            this.accountCount = accountCount;
+            this.reasonDesc = reasonDesc;
+            this.repairable = repairable;
         }
     }
 

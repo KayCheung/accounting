@@ -234,6 +234,182 @@
       </el-col>
     </el-row>
 
+    <!-- ==================== 卡片 3.5: 总账分户核对 (总分核对看板与异常诊断) ==================== -->
+    <div class="fin-card section-card gl-reconciliation-card" v-loading="loadingGlReconciliation">
+      <div class="section-title-row">
+        <div class="title-with-icon">
+          <el-icon class="title-icon"><DataAnalysis /></el-icon>
+          <span class="title-text">总账分户核对诊断 (总分核对)</span>
+          <span class="table-subtitle" style="margin-left: 10px; font-size: 13px; color: #909399;">
+            校验各科目日末总账余额与分户账户实时余额是否完全一致
+          </span>
+        </div>
+        <div class="action-wrap">
+          <el-tag
+            :type="glReconciliationData?.passed ? 'success' : 'danger'"
+            size="small"
+            effect="dark"
+          >
+            {{ glReconciliationData?.passed ? '总分一致 · 核对通过' : '总分不平 · 存在差额' }}
+          </el-tag>
+          <el-button
+            size="small"
+            :icon="RefreshRight"
+            :loading="loadingGlReconciliation"
+            @click="fetchGlReconciliation"
+          >
+            重新核对
+          </el-button>
+          <el-button
+            v-if="glReconciliationData && !glReconciliationData.passed"
+            type="danger"
+            size="small"
+            :icon="Tools"
+            :loading="repairingGl"
+            @click="handleRepairAll"
+          >
+            一键智能修复
+          </el-button>
+        </div>
+      </div>
+
+      <!-- 总分核对三大核心指标 -->
+      <div class="trial-balance-stats gl-stats">
+        <div class="stat-box debit-box">
+          <span class="stat-label">科目日末总账余额 (GL Balance)</span>
+          <div class="stat-amount">
+            <AmountDisplay :value="glReconciliationData?.totalGlBalance || 0" prefix="¥ " align="left" />
+          </div>
+        </div>
+
+        <div class="stat-operator">=</div>
+
+        <div class="stat-box credit-box">
+          <span class="stat-label">分户账户实时余额 (Account Balance)</span>
+          <div class="stat-amount">
+            <AmountDisplay :value="glReconciliationData?.totalAccountBalance || 0" prefix="¥ " align="left" />
+          </div>
+        </div>
+
+        <div class="stat-operator">|</div>
+
+        <div class="stat-box diff-box" :class="{ 'is-imbalanced': !glReconciliationData?.passed }">
+          <span class="stat-label">总分核对总差额 (|GL - Account|)</span>
+          <div class="stat-amount">
+            <AmountDisplay :value="glReconciliationData?.totalDiff || 0" prefix="¥ " align="left" />
+          </div>
+        </div>
+      </div>
+
+      <!-- 总分不平告警与修复提示条 -->
+      <div v-if="glReconciliationData && !glReconciliationData.passed" class="imbalanced-alert-box">
+        <el-alert
+          type="error"
+          :closable="false"
+          show-icon
+          title="总分核对失败阻断！"
+          :description="`检测到 ${glReconciliationData.diffDetails?.length || 0} 个科目总账与分户存在差额（总差额 ¥ ${glReconciliationData.totalDiff || 0}）。通常由于历史会计日未日切导致日余额断档，或跨日消息异步记账产生期初断层。点击【一键智能修复】可自动追溯并补全断档日余额！`"
+        />
+      </div>
+
+      <!-- 总分核对科目明细列表 -->
+      <div class="gl-table-wrap" style="margin-top: 14px;">
+        <el-table
+          :data="glReconciliationData?.diffDetails || []"
+          border
+          stripe
+          size="small"
+          class="fin-table"
+          empty-text="总账与分户实时余额完全核对一致，无异常科目"
+        >
+          <el-table-column type="index" label="序号" width="55" align="center" />
+
+          <el-table-column prop="subjectCode" label="科目代码" min-width="140" show-overflow-tooltip>
+            <template #default="{ row }">
+              <span class="mono code-link" @click="copyText(row.subjectCode, '科目代码')">
+                {{ row.subjectCode }}
+              </span>
+              <el-button
+                link
+                type="primary"
+                size="small"
+                :icon="CopyDocument"
+                title="复制科目代码"
+                @click="copyText(row.subjectCode, '科目代码')"
+              />
+            </template>
+          </el-table-column>
+
+          <el-table-column prop="subjectName" label="科目名称" min-width="150" show-overflow-tooltip />
+
+          <el-table-column prop="accountTypeDesc" label="账户类型" width="100" align="center">
+            <template #default="{ row }">
+              <el-tag size="small" type="info">{{ row.accountTypeDesc || '内部/分户' }}</el-tag>
+            </template>
+          </el-table-column>
+
+          <el-table-column prop="glEndBalance" label="科目日末总账 (GL)" min-width="150" align="right">
+            <template #default="{ row }">
+              <AmountDisplay :value="row.glEndBalance" align="right" />
+            </template>
+          </el-table-column>
+
+          <el-table-column prop="accountBalance" label="分户实时余额 (Account)" min-width="150" align="right">
+            <template #default="{ row }">
+              <AmountDisplay :value="row.accountBalance" align="right" />
+            </template>
+          </el-table-column>
+
+          <el-table-column prop="diff" label="核对差额" min-width="140" align="right">
+            <template #default="{ row }">
+              <span class="text-danger mono font-bold">
+                <AmountDisplay :value="row.diff" align="right" />
+              </span>
+            </template>
+          </el-table-column>
+
+          <el-table-column prop="accountCount" label="关联分户数" width="95" align="center">
+            <template #default="{ row }">
+              <span class="mono">{{ row.accountCount || 0 }} 户</span>
+            </template>
+          </el-table-column>
+
+          <el-table-column prop="reasonDesc" label="智能诊断与根因分析" min-width="260" show-overflow-tooltip>
+            <template #default="{ row }">
+              <div class="reason-cell">
+                <el-icon class="text-warning"><Warning /></el-icon>
+                <span class="reason-text">{{ row.reasonDesc || '总账期末余额与分户账户当前余额不一致' }}</span>
+              </div>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="操作" width="180" align="center" fixed="right">
+            <template #default="{ row }">
+              <el-button
+                link
+                type="primary"
+                size="small"
+                :icon="View"
+                @click="openAccountDrawer(row)"
+              >
+                查看分户
+              </el-button>
+              <el-button
+                link
+                type="danger"
+                size="small"
+                :icon="Tools"
+                :loading="repairingGl"
+                @click="handleRepairSubject(row)"
+              >
+                修复此科目
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+    </div>
+
     <!-- ==================== 卡片 4: 科目明细发生额试算表格 ==================== -->
     <div class="fin-card table-card" v-loading="loadingTrialBalance">
       <div class="table-header-bar">
@@ -449,6 +625,11 @@
                 {{ eodExecuteResult.trialBalancePassed ? '借贷平衡通过' : '试算不平衡' }}
               </el-tag>
             </el-descriptions-item>
+            <el-descriptions-item label="总分核对 (GL)">
+              <el-tag :type="eodExecuteResult.glReconciliationPassed !== false ? 'success' : 'danger'" size="small">
+                {{ eodExecuteResult.glReconciliationPassed !== false ? '总分核对通过' : '总分核对失败' }}
+              </el-tag>
+            </el-descriptions-item>
             <el-descriptions-item label="余额快照生成">
               <el-tag :type="eodExecuteResult.snapshotGenerated ? 'success' : 'danger'" size="small">
                 {{ eodExecuteResult.snapshotGenerated ? `成功 (已快照 ${eodExecuteResult.snapshotCount} 条)` : '未生成' }}
@@ -489,6 +670,158 @@
         </div>
       </div>
     </el-drawer>
+
+    <!-- ==================== 抽屉 2: 账户级总分核对差异穿透详情 ==================== -->
+    <el-drawer
+      v-model="accountDrawerVisible"
+      :title="`分户账户核对穿透明细【科目：${selectedSubject?.subjectCode || ''} - ${selectedSubject?.subjectName || ''}】`"
+      size="880px"
+      destroy-on-close
+    >
+      <div class="account-drawer-content" v-loading="loadingAccounts">
+        <div class="drawer-header-summary">
+          <div class="summary-item">
+            <span class="label">科目总账余额：</span>
+            <span class="val mono"><AmountDisplay :value="selectedSubject?.glEndBalance || 0" /></span>
+          </div>
+          <div class="summary-item">
+            <span class="label">分户合计余额：</span>
+            <span class="val mono"><AmountDisplay :value="selectedSubject?.accountBalance || 0" /></span>
+          </div>
+          <div class="summary-item">
+            <span class="label">当前总分差额：</span>
+            <span class="val mono text-danger font-bold"><AmountDisplay :value="selectedSubject?.diff || 0" /></span>
+          </div>
+          <div class="action-btn" v-if="selectedSubject">
+            <el-button
+              type="danger"
+              size="small"
+              :icon="Tools"
+              :loading="repairingGl"
+              @click="handleRepairSubject(selectedSubject)"
+            >
+              修复本科目
+            </el-button>
+          </div>
+        </div>
+
+        <el-alert
+          type="info"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 14px;"
+          title="账户级穿透说明"
+          description="展示本科目下所有激活分户账户在日末余额表（t_account_balance）与实时账户表（t_account）的数值对比及最近分录日期。"
+        />
+
+        <el-table
+          :data="accountDiffList"
+          border
+          stripe
+          size="small"
+          class="fin-table"
+          empty-text="暂无分户账户数据"
+        >
+          <el-table-column type="index" label="序号" width="55" align="center" />
+          <el-table-column prop="accountNo" label="分户账号" min-width="160" show-overflow-tooltip>
+            <template #default="{ row }">
+              <span class="mono code-link" @click="copyText(row.accountNo, '分户账号')">
+                {{ row.accountNo }}
+              </span>
+              <el-button
+                link
+                type="primary"
+                size="small"
+                :icon="CopyDocument"
+                @click="copyText(row.accountNo, '分户账号')"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column prop="accountName" label="账户名称" min-width="140" show-overflow-tooltip />
+          <el-table-column prop="glEndBalance" label="日末余额 (t_account_balance)" min-width="150" align="right">
+            <template #default="{ row }">
+              <AmountDisplay :value="row.glEndBalance" align="right" />
+            </template>
+          </el-table-column>
+          <el-table-column prop="accountBalance" label="实时余额 (t_account)" min-width="150" align="right">
+            <template #default="{ row }">
+              <AmountDisplay :value="row.accountBalance" align="right" />
+            </template>
+          </el-table-column>
+          <el-table-column prop="diff" label="差额" min-width="130" align="right">
+            <template #default="{ row }">
+              <span :class="Number(row.diff) !== 0 ? 'text-danger font-bold mono' : 'mono'">
+                <AmountDisplay :value="row.diff" align="right" />
+              </span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="latestVoucherDate" label="最近分录日期" width="120" align="center">
+            <template #default="{ row }">
+              <span class="mono">{{ row.latestVoucherDate || '--' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="statusDesc" label="状态诊断" min-width="140" show-overflow-tooltip>
+            <template #default="{ row }">
+              <el-tag
+                :type="Number(row.diff) === 0 ? 'success' : 'danger'"
+                size="small"
+              >
+                {{ row.statusDesc || (Number(row.diff) === 0 ? '平衡' : '存在断档差额') }}
+              </el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+    </el-drawer>
+
+    <!-- ==================== 对话框 3: 一键智能修复结果报告 ==================== -->
+    <el-dialog
+      v-model="repairResultDialogVisible"
+      title="总分核对智能修复报告"
+      width="640px"
+      destroy-on-close
+    >
+      <div v-if="repairResult" class="repair-report-box">
+        <el-result
+          :icon="repairResult.success ? 'success' : 'warning'"
+          :title="repairResult.success ? '修复完成' : '修复处理已执行'"
+          :sub-title="repairResult.message"
+        >
+          <template #extra>
+            <div class="repair-kpis">
+              <el-descriptions :column="2" border size="small">
+                <el-descriptions-item label="补全历史断档日">
+                  <span class="mono font-bold">{{ repairResult.repairedDateCount }} 天</span>
+                </el-descriptions-item>
+                <el-descriptions-item label="校准分户账户">
+                  <span class="mono font-bold">{{ repairResult.repairedAccountCount }} 户</span>
+                </el-descriptions-item>
+                <el-descriptions-item label="累计重算结转金额">
+                  <span class="mono font-bold">¥ {{ repairResult.repairedAmount }}</span>
+                </el-descriptions-item>
+                <el-descriptions-item label="修复后剩余差额">
+                  <span class="mono font-bold" :class="Number(repairResult.remainingDiff) === 0 ? 'text-success' : 'text-danger'">
+                    ¥ {{ repairResult.remainingDiff }}
+                  </span>
+                </el-descriptions-item>
+              </el-descriptions>
+            </div>
+          </template>
+        </el-result>
+
+        <div class="repair-logs-card">
+          <div class="log-title">执行流水日志：</div>
+          <div class="log-console">
+            <div v-for="(log, idx) in repairResult.repairLogs" :key="idx" class="log-line mono">
+              {{ log }}
+            </div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button type="primary" @click="handleCloseRepairResult">确定并刷新</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -505,8 +838,13 @@ import {
   ScaleToOriginal,
   SuccessFilled,
   WarningFilled,
-  InfoFilled
+  InfoFilled,
+  Tools,
+  View,
+  Warning,
+  DataAnalysis
 } from '@element-plus/icons-vue'
+import { ElMessageBox } from 'element-plus'
 import { toast } from '@/utils/toast'
 import {
   getEodStatus,
@@ -514,12 +852,19 @@ import {
   getPreCheckResult,
   getTrialBalance,
   executeEod,
+  getGlReconciliation,
+  getGlAccountDiffs,
+  repairGlReconciliation,
   type EodStatusResponse,
   type EodPreCheckResponse,
   type TrialBalanceResponse,
   type EodExecuteResponse,
   type CheckItem,
-  type SubjectDetail
+  type SubjectDetail,
+  type GlReconciliationResponse,
+  type GlDiffDetail,
+  type GlAccountDiffResponse,
+  type GlRepairResponse
 } from '@/api/eod'
 
 // ==================== 响应式状态定义 ====================
@@ -528,6 +873,9 @@ const currentAccountingDate = ref<string>('')
 const loadingStatus = ref<boolean>(false)
 const loadingPreCheck = ref<boolean>(false)
 const loadingTrialBalance = ref<boolean>(false)
+const loadingGlReconciliation = ref<boolean>(false)
+const repairingGl = ref<boolean>(false)
+const loadingAccounts = ref<boolean>(false)
 const switchingDate = ref<boolean>(false)
 const executingEod = ref<boolean>(false)
 
@@ -535,7 +883,15 @@ const executingEod = ref<boolean>(false)
 const eodStatus = ref<EodStatusResponse | null>(null)
 const preCheckData = ref<EodPreCheckResponse | null>(null)
 const trialBalanceData = ref<TrialBalanceResponse | null>(null)
+const glReconciliationData = ref<GlReconciliationResponse | null>(null)
 const eodExecuteResult = ref<EodExecuteResponse | null>(null)
+
+// 分户穿透与修复
+const selectedSubject = ref<GlDiffDetail | null>(null)
+const accountDiffList = ref<GlAccountDiffResponse[]>([])
+const accountDrawerVisible = ref<boolean>(false)
+const repairResultDialogVisible = ref<boolean>(false)
+const repairResult = ref<GlRepairResponse | null>(null)
 
 // 页面表格过滤与检索
 const subjectFilterKeyword = ref<string>('')
@@ -784,17 +1140,133 @@ async function fetchTrialBalance() {
 }
 
 /**
+ * 加载总账分户核对结果
+ */
+async function fetchGlReconciliation() {
+  const queryDate = currentAccountingDate.value || eodStatus.value?.accountingDate
+  if (!queryDate) return
+  loadingGlReconciliation.value = true
+  try {
+    const res = await getGlReconciliation(queryDate)
+    glReconciliationData.value = res
+  } catch (error) {
+    // 拦截器报错
+  } finally {
+    loadingGlReconciliation.value = false
+  }
+}
+
+/**
  * 刷新全部模块数据
  */
 async function fetchAllData() {
   await fetchStatus(currentAccountingDate.value)
-  await Promise.all([fetchPreCheck(), fetchTrialBalance()])
+  await Promise.all([fetchPreCheck(), fetchTrialBalance(), fetchGlReconciliation()])
 }
 
 function handleDateChange(newDate: string) {
   if (newDate) {
     fetchAllData()
   }
+}
+
+/**
+ * 打开分户账户穿透抽屉
+ */
+async function openAccountDrawer(subject: GlDiffDetail) {
+  selectedSubject.value = subject
+  accountDrawerVisible.value = true
+  accountDiffList.value = []
+  loadingAccounts.value = true
+  try {
+    const queryDate = currentAccountingDate.value || eodStatus.value?.accountingDate || ''
+    const res = await getGlAccountDiffs(queryDate, subject.subjectCode)
+    accountDiffList.value = res || []
+  } catch (error) {
+    // 拦截器已处理
+  } finally {
+    loadingAccounts.value = false
+  }
+}
+
+/**
+ * 修复指定科目
+ */
+async function handleRepairSubject(subject: GlDiffDetail) {
+  try {
+    await ElMessageBox.confirm(
+      `确定对科目【${subject.subjectCode} - ${subject.subjectName}】执行智能一键修复？\n系统将自动检测历史断档日期并补全日余额，重新进行总分核对。`,
+      '科目智能修复确认',
+      {
+        confirmButtonText: '立即修复',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+  } catch {
+    return
+  }
+
+  await doRepair(subject.subjectCode)
+}
+
+/**
+ * 全局一键智能修复
+ */
+async function handleRepairAll() {
+  try {
+    await ElMessageBox.confirm(
+      '智能修复将自动扫描历史断档日期（如RocketMQ积压或宕机导致的漏日切），按会计日顺序自动补全日余额快照并校准当前总账。是否立即开始？',
+      '一键智能修复确认',
+      {
+        confirmButtonText: '开始修复',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+  } catch {
+    return
+  }
+
+  await doRepair()
+}
+
+/**
+ * 执行修复接口
+ */
+async function doRepair(subjectCode?: string) {
+  const queryDate = currentAccountingDate.value || eodStatus.value?.accountingDate || ''
+  if (!queryDate) {
+    toast.warning('会计日期不能为空')
+    return
+  }
+
+  repairingGl.value = true
+  try {
+    const res = await repairGlReconciliation({
+      accountingDate: queryDate,
+      subjectCode
+    })
+    repairResult.value = res
+    repairResultDialogVisible.value = true
+    if (res.success) {
+      toast.success(res.message || '总分核对修复成功')
+    } else {
+      toast.warning(res.message || '修复已完成，但仍有部分差额')
+    }
+  } catch (error) {
+    // 拦截器已处理
+  } finally {
+    repairingGl.value = false
+  }
+}
+
+function handleCloseRepairResult() {
+  repairResultDialogVisible.value = false
+  if (accountDrawerVisible.value && selectedSubject.value) {
+    openAccountDrawer(selectedSubject.value)
+  }
+  fetchAllData()
 }
 
 // ==================== 操作逻辑 ====================
@@ -1138,6 +1610,142 @@ onMounted(() => {
     .imbalanced-alert-box {
       margin-top: 10px;
     }
+  }
+
+  /* 总账分户核对卡片样式 */
+  .gl-reconciliation-card {
+    padding: 16px 20px;
+    margin-bottom: 16px;
+
+    .trial-balance-stats {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #f8f9fb;
+      border: 1px solid #e4e7ed;
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-bottom: 16px;
+
+      .stat-box {
+        flex: 1;
+
+        .stat-label {
+          display: block;
+          font-size: 12px;
+          color: #909399;
+          margin-bottom: 6px;
+        }
+
+        .stat-amount {
+          font-size: 18px;
+          font-weight: 700;
+        }
+
+        &.diff-box.is-imbalanced {
+          .stat-amount {
+            color: var(--el-color-danger, #f56c6c);
+          }
+        }
+      }
+
+      .stat-operator {
+        font-size: 20px;
+        font-weight: bold;
+        color: #909399;
+        padding: 0 12px;
+      }
+    }
+
+    .reason-cell {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+
+      .reason-text {
+        color: #e6a23c;
+        font-size: 12px;
+      }
+    }
+  }
+
+  /* 账户穿透抽屉头部汇总 */
+  .drawer-header-summary {
+    display: flex;
+    align-items: center;
+    background: #f8f9fb;
+    border: 1px solid #e4e7ed;
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    gap: 24px;
+    flex-wrap: wrap;
+
+    .summary-item {
+      font-size: 13px;
+
+      .label {
+        color: #909399;
+      }
+
+      .val {
+        font-size: 15px;
+        font-weight: 600;
+      }
+    }
+
+    .action-btn {
+      margin-left: auto;
+    }
+  }
+
+  /* 修复报告弹窗样式 */
+  .repair-report-box {
+    .repair-kpis {
+      margin: 16px 0;
+    }
+
+    .repair-logs-card {
+      margin-top: 16px;
+      background: #1e1e1e;
+      border-radius: 6px;
+      padding: 12px 16px;
+
+      .log-title {
+        color: #9cdcfe;
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
+
+      .log-console {
+        max-height: 220px;
+        overflow-y: auto;
+
+        .log-line {
+          color: #d4d4d4;
+          font-size: 12px;
+          line-height: 1.6;
+          font-family: var(--fin-font-mono, monospace);
+        }
+      }
+    }
+  }
+
+  .text-danger {
+    color: var(--el-color-danger, #f56c6c);
+  }
+
+  .text-warning {
+    color: var(--el-color-warning, #e6a23c);
+  }
+
+  .text-success {
+    color: var(--el-color-success, #67c23a);
+  }
+
+  .font-bold {
+    font-weight: bold;
   }
 
   /* 科目表格卡片 */
