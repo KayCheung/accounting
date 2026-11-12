@@ -89,21 +89,20 @@ public class EodDomainService {
             previousDayMap.put(no, b);
         }
 
-        // 3.5 预加载历史断档日期的凭证发生额（穿透式结转：若账户前序日余额不是前一日，穿透累加中间未日切的凭证）
-        Map<String, List<Map<String, Object>>> gapEntriesByAccount = new HashMap<>();
+        // 3.5 预加载当前会计日之前所有已过账凭证按账户累计借贷发生额（权威历史期初累计源）
+        Map<String, Map<String, Object>> histEntryMap = new HashMap<>();
         try {
-            List<Map<String, Object>> allGapRows = voucherEntryMapper.sumEntriesByAccountDateRange(
-                    LocalDate.of(1970, 1, 1), previousDate);
-            if (allGapRows != null) {
-                for (Map<String, Object> r : allGapRows) {
+            List<Map<String, Object>> histRows = voucherEntryMapper.sumEntriesBeforeDateGroupAccount(accountingDate);
+            if (histRows != null) {
+                for (Map<String, Object> r : histRows) {
                     String acctNo = (String) r.get("account_no");
                     if (acctNo != null) {
-                        gapEntriesByAccount.computeIfAbsent(acctNo, k -> new ArrayList<>()).add(r);
+                        histEntryMap.put(acctNo, r);
                     }
                 }
             }
         } catch (Exception e) {
-            log.warn("[EOD-BALANCE] 预加载历史断档凭证失败，将退化为常规结转: {}", e.getMessage());
+            log.warn("[EOD-BALANCE] 预加载历史凭证发生额失败，将退化为结转余额: {}", e.getMessage());
         }
 
         List<AccountBalancePO> balances = new ArrayList<>();
@@ -139,105 +138,67 @@ public class EodDomainService {
             boolean isBidirectional = subject != null && subject.getDebitCredit() != null && subject.getDebitCredit().isBidirectional();
             boolean isOffBalance = subject != null && subject.getDebitCredit() != null && subject.getDebitCredit().isOffBalance();
 
-            if (previousBalance != null) {
-                BigDecimal begin = previousBalance.getEndBalance();
-                LocalDate prevBalDate = previousBalance.getAccountingDate();
-                BalanceDirectionEnum prevDir = previousBalance.getBalanceDirection() != null
-                        ? previousBalance.getBalanceDirection()
-                        : account.getBalanceDirection();
-
-                // 穿透式期初累加：若前序日余额日期不是前一日（存在跳日/断档），穿透汇总中间所有已过账分录
-                if (prevBalDate != null && prevBalDate.isBefore(previousDate) && !accountNo.isEmpty()) {
-                    List<Map<String, Object>> acctGapList = gapEntriesByAccount.get(accountNo);
-                    if (acctGapList != null) {
-                        BigDecimal gapDebit = BigDecimal.ZERO;
-                        BigDecimal gapCredit = BigDecimal.ZERO;
-                        for (Map<String, Object> gapRow : acctGapList) {
-                            Object dateObj = gapRow.get("accounting_date");
-                            LocalDate rowDate = dateObj instanceof java.sql.Date
-                                    ? ((java.sql.Date) dateObj).toLocalDate()
-                                    : (dateObj instanceof LocalDate ? (LocalDate) dateObj : null);
-                            if (rowDate != null && rowDate.isAfter(prevBalDate) && !rowDate.isAfter(previousDate)) {
-                                gapDebit = gapDebit.add(FinancialAmountUtil.toBigDecimal(gapRow.get("total_debit")));
-                                gapCredit = gapCredit.add(FinancialAmountUtil.toBigDecimal(gapRow.get("total_credit")));
-                            }
-                        }
-                        if (gapDebit.compareTo(BigDecimal.ZERO) > 0 || gapCredit.compareTo(BigDecimal.ZERO) > 0) {
-                            if (isBidirectional) {
-                                BigDecimal signedBegin = (prevDir == BalanceDirectionEnum.DEBIT)
-                                        ? begin
-                                        : (prevDir == BalanceDirectionEnum.CREDIT ? begin.negate() : BigDecimal.ZERO);
-                                BigDecimal signedNet = signedBegin.add(gapDebit).subtract(gapCredit);
-                                if (signedNet.compareTo(BigDecimal.ZERO) > 0) {
-                                    begin = signedNet;
-                                    prevDir = BalanceDirectionEnum.DEBIT;
-                                } else if (signedNet.compareTo(BigDecimal.ZERO) < 0) {
-                                    begin = signedNet.abs();
-                                    prevDir = BalanceDirectionEnum.CREDIT;
-                                } else {
-                                    begin = BigDecimal.ZERO;
-                                    prevDir = BalanceDirectionEnum.FLAT;
-                                }
-                            } else if (isOffBalance || prevDir == BalanceDirectionEnum.DEBIT) {
-                                begin = begin.add(gapDebit).subtract(gapCredit);
-                            } else {
-                                begin = begin.add(gapCredit).subtract(gapDebit);
-                            }
-                            if (begin.compareTo(BigDecimal.ZERO) < 0) {
-                                begin = BigDecimal.ZERO;
-                            }
-                            log.info("[EOD-BALANCE-PENETRATE] accountNo={}, prevBalDate={}, gapDebit={}, gapCredit={}, newBegin={}",
-                                    accountNo, prevBalDate, gapDebit, gapCredit, begin);
-                        }
-                    }
-                }
-
-                balance.setBeginBalance(begin);
-                balance.setBalanceDirection(prevDir);
-            } else {
-                // 首次记账或首日日切，从账户或科目获取方向与期初
-                BalanceDirectionEnum direction = account.getBalanceDirection();
-                if (direction == null) {
-                    if (subject != null && subject.getDebitCredit() != null) {
-                        if (isBidirectional || isOffBalance) {
-                            direction = BalanceDirectionEnum.FLAT;
-                        } else if (subject.getDebitCredit() == com.kltb.accounting.core.domain.enums.SubjectBalanceDirectionEnum.CREDIT) {
-                            direction = BalanceDirectionEnum.CREDIT;
-                        } else {
-                            direction = BalanceDirectionEnum.DEBIT;
-                        }
+            BalanceDirectionEnum direction = account.getBalanceDirection();
+            if (direction == null) {
+                if (subject != null && subject.getDebitCredit() != null) {
+                    if (isBidirectional || isOffBalance) {
+                        direction = BalanceDirectionEnum.FLAT;
+                    } else if (subject.getDebitCredit() == com.kltb.accounting.core.domain.enums.SubjectBalanceDirectionEnum.CREDIT) {
+                        direction = BalanceDirectionEnum.CREDIT;
                     } else {
                         direction = BalanceDirectionEnum.DEBIT;
                     }
-                }
-                balance.setBalanceDirection(direction);
-
-                if (debitAmount.compareTo(BigDecimal.ZERO) == 0 && creditAmount.compareTo(BigDecimal.ZERO) == 0) {
-                    // 当日无交易，期初余额即为账户当前余额
-                    balance.setBeginBalance(account.getBalance() != null ? account.getBalance() : BigDecimal.ZERO);
                 } else {
-                    // 当日有交易，由于分户余额已在过账时更新，反算当日初始期初
-                    BigDecimal currentBalance = account.getBalance() != null ? account.getBalance() : BigDecimal.ZERO;
-                    BigDecimal calcBegin;
-                    if (direction == BalanceDirectionEnum.DEBIT || isOffBalance) {
-                        // 借方科目与表外科目：遵循借增贷减，期初 = 当前余额 - 借方发生 + 贷方发生
-                        calcBegin = currentBalance.subtract(debitAmount).add(creditAmount);
-                    } else if (direction == BalanceDirectionEnum.CREDIT) {
-                        // 贷方科目：遵循贷增借减，期初 = 当前余额 - 贷方发生 + 借方发生
-                        calcBegin = currentBalance.subtract(creditAmount).add(debitAmount);
-                    } else {
-                        // direction == FLAT (双向科目当前轧平，或首日无方向)
-                        calcBegin = account.getOpeningBalance() != null ? account.getOpeningBalance() : BigDecimal.ZERO;
-                    }
-                    if (calcBegin.compareTo(BigDecimal.ZERO) < 0) {
-                        calcBegin = account.getOpeningBalance() != null ? account.getOpeningBalance() : BigDecimal.ZERO;
-                    }
-                    balance.setBeginBalance(calcBegin);
+                    direction = BalanceDirectionEnum.DEBIT;
                 }
             }
 
-            BigDecimal beginBalance = balance.getBeginBalance();
-            BalanceDirectionEnum direction = balance.getBalanceDirection();
+            // 优先依据历史凭证累计发生额核定权威期初余额（彻底解决 MQ 延迟落账或历史跳日导致结转期初失真）
+            Map<String, Object> histRow = histEntryMap.get(accountNo);
+            BigDecimal beginBalance;
+            BalanceDirectionEnum beginDirection = direction;
+
+            if (histRow != null) {
+                BigDecimal histDebit = FinancialAmountUtil.toBigDecimal(histRow.get("total_debit"));
+                BigDecimal histCredit = FinancialAmountUtil.toBigDecimal(histRow.get("total_credit"));
+                if (isBidirectional) {
+                    BigDecimal net = histDebit.subtract(histCredit);
+                    if (net.compareTo(BigDecimal.ZERO) > 0) {
+                        beginBalance = net;
+                        beginDirection = BalanceDirectionEnum.DEBIT;
+                    } else if (net.compareTo(BigDecimal.ZERO) < 0) {
+                        beginBalance = net.abs();
+                        beginDirection = BalanceDirectionEnum.CREDIT;
+                    } else {
+                        beginBalance = BigDecimal.ZERO;
+                        beginDirection = BalanceDirectionEnum.FLAT;
+                    }
+                } else if (isOffBalance || direction == BalanceDirectionEnum.DEBIT) {
+                    beginBalance = histDebit.subtract(histCredit);
+                    if (beginBalance.compareTo(BigDecimal.ZERO) < 0) {
+                        beginBalance = BigDecimal.ZERO;
+                    }
+                } else {
+                    beginBalance = histCredit.subtract(histDebit);
+                    if (beginBalance.compareTo(BigDecimal.ZERO) < 0) {
+                        beginBalance = BigDecimal.ZERO;
+                    }
+                }
+
+                if (previousBalance != null && previousBalance.getEndBalance().compareTo(beginBalance) != 0) {
+                    log.info("[EOD-BALANCE-SYNC] 账户 [{}] 前序结转余额 ({}) 与历史凭证累计期初 ({}) 不一致，已自动采用权威凭证累计期初校准",
+                            accountNo, previousBalance.getEndBalance(), beginBalance);
+                }
+            } else if (previousBalance != null) {
+                beginBalance = previousBalance.getEndBalance();
+                beginDirection = previousBalance.getBalanceDirection() != null ? previousBalance.getBalanceDirection() : direction;
+            } else {
+                beginBalance = account.getOpeningBalance() != null ? account.getOpeningBalance() : BigDecimal.ZERO;
+                beginDirection = direction;
+            }
+
+            balance.setBeginBalance(beginBalance);
+            balance.setBalanceDirection(beginDirection);
 
             BigDecimal endBalance;
             BalanceDirectionEnum endDirection = direction;
@@ -263,7 +224,7 @@ public class EodDomainService {
                 endDirection = BalanceDirectionEnum.FLAT;
             } else {
                 // 单向科目：遵循传统资产/负债方向
-                if (direction == BalanceDirectionEnum.DEBIT) {
+                if (beginDirection == BalanceDirectionEnum.DEBIT) {
                     endBalance = beginBalance.add(debitAmount).subtract(creditAmount);
                 } else {
                     endBalance = beginBalance.add(creditAmount).subtract(debitAmount);
@@ -305,84 +266,67 @@ public class EodDomainService {
             balance.setCreditAmount(creditAmount);
             balance.setTenantId(TenantContext.get() != null ? TenantContext.get() : TenantContext.SYSTEM_TENANT);
 
+            AccountSubjectPO subject = subjectRepository.selectByCode(subjectCode);
+            boolean isBidirectional = subject != null && subject.getDebitCredit() != null && subject.getDebitCredit().isBidirectional();
+            boolean isOffBalance = subject != null && subject.getDebitCredit() != null && subject.getDebitCredit().isOffBalance();
+
+            BalanceDirectionEnum direction = BalanceDirectionEnum.DEBIT;
+            if (subject != null && subject.getDebitCredit() != null) {
+                if (isBidirectional || isOffBalance) {
+                    direction = BalanceDirectionEnum.FLAT;
+                } else if (subject.getDebitCredit() == com.kltb.accounting.core.domain.enums.SubjectBalanceDirectionEnum.CREDIT) {
+                    direction = BalanceDirectionEnum.CREDIT;
+                }
+            }
+
             AccountBalancePO previousDay = previousDayMap.get(key);
             if (previousDay == null && !key.isEmpty()) {
                 previousDay = accountBalanceRepository.selectLatestBalanceBeforeDate(key, accountingDate);
             }
 
-            if (previousDay != null) {
-                BigDecimal begin = previousDay.getEndBalance();
-                LocalDate prevBalDate = previousDay.getAccountingDate();
-                BalanceDirectionEnum prevDir = previousDay.getBalanceDirection();
-                if (prevBalDate != null && prevBalDate.isBefore(previousDate) && !key.isEmpty()) {
-                    List<Map<String, Object>> acctGapList = gapEntriesByAccount.get(key);
-                    if (acctGapList != null) {
-                        BigDecimal gapDebit = BigDecimal.ZERO;
-                        BigDecimal gapCredit = BigDecimal.ZERO;
-                        for (Map<String, Object> gapRow : acctGapList) {
-                            Object dateObj = gapRow.get("accounting_date");
-                            LocalDate rowDate = dateObj instanceof java.sql.Date
-                                    ? ((java.sql.Date) dateObj).toLocalDate()
-                                    : (dateObj instanceof LocalDate ? (LocalDate) dateObj : null);
-                            if (rowDate != null && rowDate.isAfter(prevBalDate) && !rowDate.isAfter(previousDate)) {
-                                gapDebit = gapDebit.add(FinancialAmountUtil.toBigDecimal(gapRow.get("total_debit")));
-                                gapCredit = gapCredit.add(FinancialAmountUtil.toBigDecimal(gapRow.get("total_credit")));
-                            }
-                        }
-                        if (gapDebit.compareTo(BigDecimal.ZERO) > 0 || gapCredit.compareTo(BigDecimal.ZERO) > 0) {
-                            AccountSubjectPO subj = subjectRepository.selectByCode(subjectCode);
-                            boolean isBidir = subj != null && subj.getDebitCredit() != null && subj.getDebitCredit().isBidirectional();
-                            boolean isOff = subj != null && subj.getDebitCredit() != null && subj.getDebitCredit().isOffBalance();
-                            if (isBidir) {
-                                BigDecimal signedBegin = (prevDir == BalanceDirectionEnum.DEBIT)
-                                        ? begin
-                                        : (prevDir == BalanceDirectionEnum.CREDIT ? begin.negate() : BigDecimal.ZERO);
-                                BigDecimal signedNet = signedBegin.add(gapDebit).subtract(gapCredit);
-                                if (signedNet.compareTo(BigDecimal.ZERO) > 0) {
-                                    begin = signedNet;
-                                    prevDir = BalanceDirectionEnum.DEBIT;
-                                } else if (signedNet.compareTo(BigDecimal.ZERO) < 0) {
-                                    begin = signedNet.abs();
-                                    prevDir = BalanceDirectionEnum.CREDIT;
-                                } else {
-                                    begin = BigDecimal.ZERO;
-                                    prevDir = BalanceDirectionEnum.FLAT;
-                                }
-                            } else if (isOff || prevDir == BalanceDirectionEnum.DEBIT) {
-                                begin = begin.add(gapDebit).subtract(gapCredit);
-                            } else {
-                                begin = begin.add(gapCredit).subtract(gapDebit);
-                            }
-                        }
-                    }
-                }
-                balance.setBeginBalance(begin);
-                balance.setBalanceDirection(prevDir);
-            } else {
-                AccountSubjectPO subject = subjectRepository.selectByCode(subjectCode);
-                balance.setBeginBalance(BigDecimal.ZERO);
-                if (subject != null && subject.getDebitCredit() != null) {
-                    if (subject.getDebitCredit().isBidirectional() || subject.getDebitCredit().isOffBalance()) {
-                        balance.setBalanceDirection(BalanceDirectionEnum.FLAT);
-                    } else if (subject.getDebitCredit() == com.kltb.accounting.core.domain.enums.SubjectBalanceDirectionEnum.CREDIT) {
-                        balance.setBalanceDirection(BalanceDirectionEnum.CREDIT);
+            Map<String, Object> histRow = histEntryMap.get(key);
+            BigDecimal beginBalance;
+            BalanceDirectionEnum beginDirection = direction;
+
+            if (histRow != null) {
+                BigDecimal histDebit = FinancialAmountUtil.toBigDecimal(histRow.get("total_debit"));
+                BigDecimal histCredit = FinancialAmountUtil.toBigDecimal(histRow.get("total_credit"));
+                if (isBidirectional) {
+                    BigDecimal net = histDebit.subtract(histCredit);
+                    if (net.compareTo(BigDecimal.ZERO) > 0) {
+                        beginBalance = net;
+                        beginDirection = BalanceDirectionEnum.DEBIT;
+                    } else if (net.compareTo(BigDecimal.ZERO) < 0) {
+                        beginBalance = net.abs();
+                        beginDirection = BalanceDirectionEnum.CREDIT;
                     } else {
-                        balance.setBalanceDirection(BalanceDirectionEnum.DEBIT);
+                        beginBalance = BigDecimal.ZERO;
+                        beginDirection = BalanceDirectionEnum.FLAT;
+                    }
+                } else if (isOffBalance || direction == BalanceDirectionEnum.DEBIT) {
+                    beginBalance = histDebit.subtract(histCredit);
+                    if (beginBalance.compareTo(BigDecimal.ZERO) < 0) {
+                        beginBalance = BigDecimal.ZERO;
                     }
                 } else {
-                    balance.setBalanceDirection(BalanceDirectionEnum.DEBIT);
+                    beginBalance = histCredit.subtract(histDebit);
+                    if (beginBalance.compareTo(BigDecimal.ZERO) < 0) {
+                        beginBalance = BigDecimal.ZERO;
+                    }
                 }
+            } else if (previousDay != null) {
+                beginBalance = previousDay.getEndBalance();
+                beginDirection = previousDay.getBalanceDirection() != null ? previousDay.getBalanceDirection() : direction;
+            } else {
+                beginBalance = BigDecimal.ZERO;
+                beginDirection = direction;
             }
 
-            BigDecimal beginBalance = balance.getBeginBalance();
-            BalanceDirectionEnum direction = balance.getBalanceDirection();
-
-            AccountSubjectPO subject = subjectRepository.selectByCode(subjectCode);
-            boolean isBidirectional = subject != null && subject.getDebitCredit() != null && subject.getDebitCredit().isBidirectional();
-            boolean isOffBalance = subject != null && subject.getDebitCredit() != null && subject.getDebitCredit().isOffBalance();
+            balance.setBeginBalance(beginBalance);
+            balance.setBalanceDirection(beginDirection);
 
             BigDecimal endBalance;
-            BalanceDirectionEnum endDirection = direction;
+            BalanceDirectionEnum endDirection = beginDirection;
             if (isBidirectional) {
                 // 双向科目：跨方向动态轧差与翻转
                 BigDecimal signedBegin = (direction == BalanceDirectionEnum.DEBIT)
@@ -405,7 +349,7 @@ public class EodDomainService {
                 endDirection = BalanceDirectionEnum.FLAT;
             } else {
                 // 单向科目：遵循传统资产/负债方向
-                if (direction == BalanceDirectionEnum.DEBIT) {
+                if (beginDirection == BalanceDirectionEnum.DEBIT) {
                     endBalance = beginBalance.add(debitAmount).subtract(creditAmount);
                 } else {
                     endBalance = beginBalance.add(creditAmount).subtract(debitAmount);

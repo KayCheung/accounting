@@ -44,49 +44,77 @@ public class GlReconciliationRepairDomainService {
         log.info("[GL-REPAIR-START] 开始执行总分核对一键修复: date={}, subjectCode={}", accountingDate, targetSubjectCode);
         List<String> repairLogs = new ArrayList<>();
 
-        // 1. 扫描历史断档日期
+        // 1. 扫描历史异常与断档日期（严格早于 accountingDate）
         List<LocalDate> voucherDates = voucherEntryMapper.selectDistinctDatesWithEntriesBeforeDate(accountingDate);
         List<LocalDate> balanceDates = accountBalanceMapper.selectDistinctDatesBeforeDate(accountingDate);
         Set<LocalDate> balanceDateSet = new HashSet<>(balanceDates != null ? balanceDates : Collections.emptyList());
 
-        List<LocalDate> gapDates = new ArrayList<>();
+        Set<LocalDate> datesToRepair = new TreeSet<>();
         if (voucherDates != null) {
             for (LocalDate d : voucherDates) {
-                if (!balanceDateSet.contains(d) && d.isBefore(accountingDate)) {
-                    gapDates.add(d);
+                if (!d.isBefore(accountingDate)) {
+                    continue;
+                }
+                // 场景 A: 存在已过账凭证但未生成日余额
+                if (!balanceDateSet.contains(d)) {
+                    datesToRepair.add(d);
+                    repairLogs.add("检测到历史日 [" + d + "] 存在已过账凭证但缺失日余额表记录，标记重算");
+                    continue;
+                }
+                // 场景 B: 日余额发生额与凭证发生额不一致（例如 MQ 延迟消费落账导致历史日余额失效）
+                BigDecimal voucherDebit = voucherEntryMapper.sumDailyDebitTotalByDate(d);
+                BigDecimal balanceDebit = accountBalanceMapper.sumDailyDebitTotalByDate(d);
+                if (voucherDebit != null && balanceDebit != null && voucherDebit.compareTo(balanceDebit) != 0) {
+                    datesToRepair.add(d);
+                    repairLogs.add("检测到历史日 [" + d + "] 凭证借方发生额 (¥" + voucherDebit + ") 与日余额表 (¥" + balanceDebit + ") 不一致，标记重算");
+                    log.info("[GL-REPAIR-DIFF-DETECTED] date={}, voucherDebit={}, balanceDebit={}", d, voucherDebit, balanceDebit);
                 }
             }
         }
-        gapDates.sort(Comparator.naturalOrder());
 
         BigDecimal repairedAmount = BigDecimal.ZERO;
         int repairedAccountCount = 0;
+        int repairedDateCount = datesToRepair.size();
 
-        // 2. 逐日按时序自动回补历史断档日期的日余额
-        if (!gapDates.isEmpty()) {
-            repairLogs.add("检测到存在 " + gapDates.size() + " 个历史未日切断档会计日: " + gapDates);
-            for (LocalDate gapDate : gapDates) {
+        // 2. 若检测到历史断档/不一致，从最早异常日按时序自动滚动重算各日余额至 accountingDate 前一日
+        if (!datesToRepair.isEmpty()) {
+            LocalDate earliestDate = datesToRepair.iterator().next();
+            repairLogs.add("检测到存在 " + datesToRepair.size() + " 个历史未同步/断档会计日: " + datesToRepair);
+            repairLogs.add("自最早异常日 [" + earliestDate + "] 起按时序滚动重算并补全日余额...");
+
+            // 收集 earliestDate 到 accountingDate.minusDays(1) 之间的所有需要结转的日期
+            Set<LocalDate> rollDates = new TreeSet<>(datesToRepair);
+            try {
+                List<LocalDate> intermediateDates = accountBalanceMapper.selectDistinctDatesBetweenDates(earliestDate, accountingDate.minusDays(1));
+                if (intermediateDates != null) {
+                    rollDates.addAll(intermediateDates);
+                }
+            } catch (Exception e) {
+                log.warn("[GL-REPAIR] 获取区间历史日期失败: {}", e.getMessage());
+            }
+
+            for (LocalDate rollDate : rollDates) {
                 try {
-                    List<AccountBalancePO> gapBalances = eodDomainService.calculateDailyBalances(gapDate);
-                    eodDomainService.upsertDailyBalances(gapDate, gapBalances);
+                    List<AccountBalancePO> dayBalances = eodDomainService.calculateDailyBalances(rollDate);
+                    eodDomainService.upsertDailyBalances(rollDate, dayBalances);
 
-                    BigDecimal dateSum = gapBalances.stream()
+                    BigDecimal dateDebit = dayBalances.stream()
                             .map(AccountBalancePO::getDebitAmount)
                             .filter(Objects::nonNull)
                             .reduce(BigDecimal.ZERO, BigDecimal::add);
-                    repairedAmount = repairedAmount.add(dateSum);
+                    repairedAmount = repairedAmount.add(dateDebit);
 
-                    repairLogs.add("成功回补历史断档日 [" + gapDate + "] 的日余额结转，结转账户数: "
-                            + gapBalances.size() + "，发生额: ¥" + dateSum);
-                    log.info("[GL-REPAIR-BACKFILL] 回补历史日余额完成: date={}, count={}, amount={}",
-                            gapDate, gapBalances.size(), dateSum);
+                    repairLogs.add("成功回补并校准历史日 [" + rollDate + "] 日余额，结转账户数: "
+                            + dayBalances.size() + "，借方发生额: ¥" + dateDebit);
+                    log.info("[GL-REPAIR-BACKFILL] 历史日重算完成: date={}, count={}, amount={}",
+                            rollDate, dayBalances.size(), dateDebit);
                 } catch (Exception e) {
-                    log.error("[GL-REPAIR-BACKFILL-ERROR] 回补历史日余额异常: date={}, error={}", gapDate, e.getMessage(), e);
-                    repairLogs.add("回补历史日 [" + gapDate + "] 异常: " + e.getMessage());
+                    log.error("[GL-REPAIR-BACKFILL-ERROR] 历史日重算异常: date={}, error={}", rollDate, e.getMessage(), e);
+                    repairLogs.add("重算历史日 [" + rollDate + "] 异常: " + e.getMessage());
                 }
             }
         } else {
-            repairLogs.add("未检测到前序历史未结转断档日");
+            repairLogs.add("历史各日余额发生额与凭证发生额一致，未检测到前序历史未结转断档日");
         }
 
         // 3. 重新计算并刷新当前会计日的日余额表
@@ -109,13 +137,12 @@ public class GlReconciliationRepairDomainService {
         if (passed) {
             repairLogs.add("重新执行总分核对：全部科目总账与分户账核对一致，总分差额已归零 (¥0.00)");
 
-            // 若之前因 GL_RECONCILIATION 处于阻断状态，重置日切状态以便重新执行
+            // 若之前因失败处于阻断状态，重置日切状态以便重新执行
             transactionTemplate.execute(status -> {
                 EodStatusPO eodStatus = eodStatusRepository.findByDate(accountingDate);
-                if (eodStatus != null && com.kltb.accounting.core.domain.enums.EodStatusEnum.FAILED.equals(eodStatus.getEodStatus())
-                        && "GL_RECONCILIATION".equals(eodStatus.getFailedStage())) {
+                if (eodStatus != null && com.kltb.accounting.core.domain.enums.EodStatusEnum.FAILED.equals(eodStatus.getEodStatus())) {
                     eodStatusRepository.resetStatus(accountingDate);
-                    repairLogs.add("已清除会计日 [" + accountingDate + "] 的总分核对失败阻断标记，状态恢复为未开始/可日切");
+                    repairLogs.add("已清除会计日 [" + accountingDate + "] 的日切失败阻断标记，状态恢复为未开始/可日切");
                 }
                 return null;
             });
@@ -124,12 +151,12 @@ public class GlReconciliationRepairDomainService {
         }
 
         String msg = passed
-                ? ("总分核对智能修复成功！已自动回溯补齐 " + gapDates.size() + " 个历史断档日，当前总分差额已清零。")
+                ? ("总分核对智能修复成功！已自动回溯校准 " + repairedDateCount + " 个历史异常会计日，当前总分差额已清零。")
                 : ("智能修复已完成历史结转，但当前会计日仍存在剩余差额 ¥" + remainingDiff + "，请点击查看分户明细核实。");
 
         return GlRepairResponse.builder()
                 .success(passed)
-                .repairedDateCount(gapDates.size())
+                .repairedDateCount(repairedDateCount)
                 .repairedAccountCount(repairedAccountCount)
                 .repairedAmount(repairedAmount)
                 .remainingDiff(remainingDiff)

@@ -65,6 +65,28 @@
           AND is_delete = 0
     </select>
 
+    <!-- 按账户汇总指定会计日期之前（< accountingDate）的所有已过账凭证借贷发生额（用于计算权威期初余额） -->
+    <select id="sumEntriesBeforeDateGroupAccount" resultType="java.util.HashMap">
+        SELECT account_no,
+               SUM(CASE WHEN debit_credit = 1 THEN amount ELSE 0 END) AS total_debit,
+               SUM(CASE WHEN debit_credit = 2 THEN amount ELSE 0 END) AS total_credit,
+               COUNT(*) AS entry_count
+        FROM t_accounting_voucher_entry
+        WHERE accounting_date &lt; #{accountingDate}
+          AND status = 2
+          AND is_delete = 0
+        GROUP BY account_no
+    </select>
+
+    <!-- 查询指定会计日期所有已过账凭证的借方总额 -->
+    <select id="sumDailyDebitTotalByDate" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(CASE WHEN debit_credit = 1 THEN amount ELSE 0 END), 0)
+        FROM t_accounting_voucher_entry
+        WHERE accounting_date = #{accountingDate}
+          AND status = 2
+          AND is_delete = 0
+    </select>
+
     <!-- 批量插入红冲分录（Step 18 P0-6） -->
     <insert id="batchInsert">
         INSERT INTO t_accounting_voucher_entry

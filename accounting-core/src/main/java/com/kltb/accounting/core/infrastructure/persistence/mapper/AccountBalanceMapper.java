@@ -46,4 +46,16 @@ public interface AccountBalanceMapper extends BaseMapper<AccountBalancePO> {
     List<AccountBalancePO> selectBySubjectAndDate(
             @Param("subjectCode") String subjectCode,
             @Param("accountingDate") LocalDate accountingDate);
+
+    /**
+     * 查询指定会计日期日余额表中的借方发生额总和
+     */
+    java.math.BigDecimal sumDailyDebitTotalByDate(@Param("accountingDate") LocalDate accountingDate);
+
+    /**
+     * 查询指定日期区间内已存在日余额的所有不重复会计日（升序）
+     */
+    List<LocalDate> selectDistinctDatesBetweenDates(
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate);
 }

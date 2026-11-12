@@ -56,4 +56,22 @@
         ORDER BY account_no ASC
     </select>
 
+    <!-- 查询指定会计日期日余额表中的借方发生额总和 -->
+    <select id="sumDailyDebitTotalByDate" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(debit_amount), 0)
+        FROM t_account_balance
+        WHERE accounting_date = #{accountingDate}
+          AND is_delete = 0
+    </select>
+
+    <!-- 查询指定日期区间内已存在日余额的所有不重复会计日（升序） -->
+    <select id="selectDistinctDatesBetweenDates" resultType="java.time.LocalDate">
+        SELECT DISTINCT accounting_date
+        FROM t_account_balance
+        WHERE accounting_date &gt;= #{startDate}
+          AND accounting_date &lt;= #{endDate}
+          AND is_delete = 0
+        ORDER BY accounting_date ASC
+    </select>
+
 </mapper>

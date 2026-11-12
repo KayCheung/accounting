@@ -256,9 +256,22 @@ public class TrialBalanceDomainService {
             List<LocalDate> balanceDates = accountBalanceMapper.selectDistinctDatesBeforeDate(accountingDate);
             Set<LocalDate> balanceDateSet = new HashSet<>(balanceDates != null ? balanceDates : List.of());
             if (voucherDates != null) {
-                return voucherDates.stream()
-                        .filter(d -> !balanceDateSet.contains(d) && d.isBefore(accountingDate))
-                        .collect(Collectors.toList());
+                List<LocalDate> diffDates = new ArrayList<>();
+                for (LocalDate d : voucherDates) {
+                    if (!d.isBefore(accountingDate)) {
+                        continue;
+                    }
+                    if (!balanceDateSet.contains(d)) {
+                        diffDates.add(d);
+                    } else {
+                        BigDecimal vDebit = voucherEntryMapper.sumDailyDebitTotalByDate(d);
+                        BigDecimal bDebit = accountBalanceMapper.sumDailyDebitTotalByDate(d);
+                        if (vDebit != null && bDebit != null && vDebit.compareTo(bDebit) != 0) {
+                            diffDates.add(d);
+                        }
+                    }
+                }
+                return diffDates;
             }
         } catch (Exception e) {
             log.warn("[GL-RECONCILIATION] 检查历史断档日期异常: {}", e.getMessage());
