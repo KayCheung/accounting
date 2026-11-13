@@ -1299,8 +1299,11 @@
             - `TrialBalanceDomainService.executeGlReconciliation` 升级：自动扫描历史未日切凭证日期，智能输出诊断原因（如“检测到历史日(2026-11-03)未日切断档，导致总账未累加历史已过账分录”）；
             - 新增 `TrialBalanceDomainService.getGlAccountDiffDetails`，支持按科目下钻到分户账户级对比（`account_no`, `account_name`, `glEndBalance`, `accountBalance`, `diff`, `latestVoucherDate`, `statusDesc`）；
             - `accounting-api` 契约层新增 `GlReconciliationResponse`, `GlDiffDetail`, `GlAccountDiffResponse`, `GlRepairRequest`, `GlRepairResponse`。
-         4. **线上总分核对一键智能修复引擎（GlReconciliationRepairDomainService）**：
-            - 新增 `GlReconciliationRepairDomainService`，支持单科目或全局一键修复：按时间序自动扫描断档会计日并补录生成各日 `t_account_balance`，重算目标日日末余额，实时复核总分核对状态并原子重置日切失败阻断；
+         4. **线上总分核对一键智能修复引擎与双向级联滚动（GlReconciliationRepairDomainService）**：
+            - 新增 `GlReconciliationRepairDomainService`，支持单科目或全局一键修复；
+            - **双向级联滚动机制**：修复历史断档日时，自动向前追溯补全所有前序缺失/异常日余额；修复完成后，自动向后级联滚动重算并同步后续所有会计日日余额表，保证整个期初期末链条连贯；
+            - **历史核对时点切片回滚**：`executeGlReconciliation` 与 `getGlAccountDiffDetails` 引入后续发生额回滚机制。核对历史会计日（如 2026-11-03）时，自动剔除后续日期（如 2026-11-09）的已过账分录变动，彻底消除分户实时表与历史总账日余额之间的时间切片假差额；
+            - **日切中静默自愈机制**：`EodApplicationService.executeEod` 在 Step 5 总分核对不平时，自动静默触发断档自愈与余额链条重算，实现日常日切过程的自愈容错；
             - `EodController` 新增 3 个接口：`GET /eod/gl-reconciliation`、`GET /eod/gl-reconciliation/accounts`、`POST /eod/gl-reconciliation/repair`。
          5. **前端管理端交互增强（accounting-ui）**：
             - `src/api/eod.ts` 完整对接后端核对与修复接口；
