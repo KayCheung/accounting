@@ -93,4 +93,41 @@ class TrialBalanceDomainServiceTest {
         assertThat(result.isPassed()).isTrue();
         assertThat(result.getTotalDiff()).isEqualByComparingTo(BigDecimal.ZERO);
     }
+
+    @Test
+    @DisplayName("executeGlReconciliation: 历史会计日核对时回滚后续凭证发生额消除切片差异")
+    void executeGlReconciliation_withFutureVouchers_shouldRollbackAndPass() {
+        LocalDate histDate = LocalDate.of(2026, 11, 3);
+
+        // 历史日 2026-11-03 总账日余额为 512,865.00
+        Map<String, Object> glRow = new HashMap<>();
+        glRow.put("subject_code", "12010101");
+        glRow.put("total_balance", new BigDecimal("512865.00"));
+        when(accountBalanceMapper.sumBalancesBySubject(histDate)).thenReturn(List.of(glRow));
+
+        // 分户实时余额表（包含 2026-11-09 的后续 61,117.85 发生额，总计 573,982.85）
+        Map<String, Object> acctRow = new HashMap<>();
+        acctRow.put("subject_code", "12010101");
+        acctRow.put("total_balance", new BigDecimal("573982.85"));
+        acctRow.put("account_count", 81);
+        when(accountMapper.sumBalancesBySubject()).thenReturn(List.of(acctRow));
+
+        // 2026-11-03 之后存在后续凭证发生额（借方 61,117.85）
+        Map<String, Object> futureRow = new HashMap<>();
+        futureRow.put("subject_code", "12010101");
+        futureRow.put("total_debit", new BigDecimal("61117.85"));
+        futureRow.put("total_credit", BigDecimal.ZERO);
+        when(voucherEntryMapper.sumEntriesAfterDateGroupSubject(histDate)).thenReturn(List.of(futureRow));
+
+        AccountSubjectPO subject = new AccountSubjectPO();
+        subject.setSubjectCode("12010101");
+        subject.setDebitCredit(com.kltb.accounting.core.domain.enums.SubjectBalanceDirectionEnum.DEBIT);
+        when(subjectRepository.selectByCode("12010101")).thenReturn(subject);
+
+        TrialBalanceDomainService.GlReconciliationResult result = trialBalanceDomainService.executeGlReconciliation(histDate);
+
+        // 经后续发生额回滚（573982.85 - 61117.85 = 512865.00），总分完美平衡！
+        assertThat(result.isPassed()).isTrue();
+        assertThat(result.getTotalDiff()).isEqualByComparingTo(BigDecimal.ZERO);
+    }
 }

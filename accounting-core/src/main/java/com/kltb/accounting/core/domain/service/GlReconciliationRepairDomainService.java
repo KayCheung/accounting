@@ -1,6 +1,7 @@
 package com.kltb.accounting.core.domain.service;
 
 import com.kltb.accounting.api.response.GlRepairResponse;
+import com.kltb.accounting.core.domain.enums.EodStatusEnum;
 import com.kltb.accounting.core.domain.service.TrialBalanceDomainService.GlReconciliationResult;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountBalancePO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.EodStatusPO;
@@ -129,6 +130,33 @@ public class GlReconciliationRepairDomainService {
             repairLogs.add("刷新当前会计日余额异常: " + e.getMessage());
         }
 
+        // 3.5 级联滚动重算并同步当前会计日之后的所有后序会计日（向前级联，保证期初期末链条连贯）
+        try {
+            List<LocalDate> futureDates = voucherEntryMapper.selectDistinctDatesWithEntriesAfterDate(accountingDate);
+            if (futureDates != null && !futureDates.isEmpty()) {
+                repairLogs.add("检测到当前会计日之后存在 " + futureDates.size() + " 个后序已记账会计日: " + futureDates + "，开始向前级联重算...");
+                for (LocalDate fDate : futureDates) {
+                    List<AccountBalancePO> fBalances = eodDomainService.calculateDailyBalances(fDate);
+                    eodDomainService.upsertDailyBalances(fDate, fBalances);
+                    repairLogs.add("成功级联重算并同步后序会计日 [" + fDate + "] 日余额表，生成有效分户日余额数: " + fBalances.size());
+                    log.info("[GL-REPAIR-CASCADE-FORWARD] 级联后序日重算完成: date={}, count={}", fDate, fBalances.size());
+
+                    // 若后序会计日因前序差额导致日切处于失败阻断，重置其失败标记
+                    transactionTemplate.execute(status -> {
+                        EodStatusPO fStatus = eodStatusRepository.findByDate(fDate);
+                        if (fStatus != null && EodStatusEnum.FAILED.equals(fStatus.getEodStatus())) {
+                            eodStatusRepository.resetStatus(fDate);
+                            repairLogs.add("已清除后序会计日 [" + fDate + "] 的日切失败阻断标记，状态恢复为未开始/可日切");
+                        }
+                        return null;
+                    });
+                }
+            }
+        } catch (Exception e) {
+            log.error("[GL-REPAIR-CASCADE-FORWARD-ERROR] 级联后序日余额重算异常: {}", e.getMessage(), e);
+            repairLogs.add("级联后序日余额重算异常: " + e.getMessage());
+        }
+
         // 4. 重新执行总分核对，验证修复效果
         GlReconciliationResult glResult = trialBalanceDomainService.executeGlReconciliation(accountingDate);
         boolean passed = glResult.isPassed();
@@ -140,7 +168,7 @@ public class GlReconciliationRepairDomainService {
             // 若之前因失败处于阻断状态，重置日切状态以便重新执行
             transactionTemplate.execute(status -> {
                 EodStatusPO eodStatus = eodStatusRepository.findByDate(accountingDate);
-                if (eodStatus != null && com.kltb.accounting.core.domain.enums.EodStatusEnum.FAILED.equals(eodStatus.getEodStatus())) {
+                if (eodStatus != null && EodStatusEnum.FAILED.equals(eodStatus.getEodStatus())) {
                     eodStatusRepository.resetStatus(accountingDate);
                     repairLogs.add("已清除会计日 [" + accountingDate + "] 的日切失败阻断标记，状态恢复为未开始/可日切");
                 }

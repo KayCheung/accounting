@@ -161,8 +161,9 @@ public class EodDomainService {
             if (histRow != null) {
                 BigDecimal histDebit = FinancialAmountUtil.toBigDecimal(histRow.get("total_debit"));
                 BigDecimal histCredit = FinancialAmountUtil.toBigDecimal(histRow.get("total_credit"));
+                BigDecimal initBal = account.getOpeningBalance() != null ? account.getOpeningBalance() : BigDecimal.ZERO;
                 if (isBidirectional) {
-                    BigDecimal net = histDebit.subtract(histCredit);
+                    BigDecimal net = initBal.add(histDebit).subtract(histCredit);
                     if (net.compareTo(BigDecimal.ZERO) > 0) {
                         beginBalance = net;
                         beginDirection = BalanceDirectionEnum.DEBIT;
@@ -174,12 +175,12 @@ public class EodDomainService {
                         beginDirection = BalanceDirectionEnum.FLAT;
                     }
                 } else if (isOffBalance || direction == BalanceDirectionEnum.DEBIT) {
-                    beginBalance = histDebit.subtract(histCredit);
+                    beginBalance = initBal.add(histDebit).subtract(histCredit);
                     if (beginBalance.compareTo(BigDecimal.ZERO) < 0) {
                         beginBalance = BigDecimal.ZERO;
                     }
                 } else {
-                    beginBalance = histCredit.subtract(histDebit);
+                    beginBalance = initBal.add(histCredit).subtract(histDebit);
                     if (beginBalance.compareTo(BigDecimal.ZERO) < 0) {
                         beginBalance = BigDecimal.ZERO;
                     }
@@ -204,9 +205,9 @@ public class EodDomainService {
             BalanceDirectionEnum endDirection = direction;
             if (isBidirectional) {
                 // 双向科目：跨方向动态轧差与翻转
-                BigDecimal signedBegin = (direction == BalanceDirectionEnum.DEBIT)
+                BigDecimal signedBegin = (beginDirection == BalanceDirectionEnum.DEBIT)
                         ? beginBalance
-                        : (direction == BalanceDirectionEnum.CREDIT ? beginBalance.negate() : BigDecimal.ZERO);
+                        : (beginDirection == BalanceDirectionEnum.CREDIT ? beginBalance.negate() : BigDecimal.ZERO);
                 BigDecimal signedNet = signedBegin.add(debitAmount).subtract(creditAmount);
                 if (signedNet.compareTo(BigDecimal.ZERO) > 0) {
                     endBalance = signedNet;

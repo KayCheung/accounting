@@ -2,6 +2,8 @@ package com.kltb.accounting.core.domain.service;
 
 import com.kltb.accounting.api.constant.ResultCode;
 import com.kltb.accounting.api.response.GlAccountDiffResponse;
+import com.kltb.accounting.core.domain.enums.BalanceDirectionEnum;
+import com.kltb.accounting.core.domain.enums.SubjectBalanceDirectionEnum;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountBalancePO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountPO;
 import com.kltb.accounting.core.infrastructure.persistence.entity.AccountSubjectPO;
@@ -134,6 +136,45 @@ public class TrialBalanceDomainService {
             accountCountBySubject.put(subjectCode, countObj instanceof Number ? ((Number) countObj).intValue() : 0);
         }
 
+        // 若核对历史会计日且后续会计日存在已过账凭证，需按科目回滚分户余额至指定会计日时点（消除时间切片差异）
+        List<Map<String, Object>> futureRows = voucherEntryMapper.sumEntriesAfterDateGroupSubject(accountingDate);
+        if (futureRows != null && !futureRows.isEmpty()) {
+            Map<String, Map<String, Object>> futureBySubject = new HashMap<>();
+            for (Map<String, Object> r : futureRows) {
+                String sc = (String) r.get("subject_code");
+                if (sc != null) {
+                    futureBySubject.put(sc, r);
+                }
+            }
+
+            totalAccountAll = BigDecimal.ZERO;
+            for (Map.Entry<String, BigDecimal> entry : accountBalanceBySubject.entrySet()) {
+                String subjectCode = entry.getKey();
+                BigDecimal currentBal = entry.getValue();
+                Map<String, Object> fRow = futureBySubject.get(subjectCode);
+                if (fRow != null) {
+                    BigDecimal fDebit = FinancialAmountUtil.toBigDecimal(fRow.get("total_debit"));
+                    BigDecimal fCredit = FinancialAmountUtil.toBigDecimal(fRow.get("total_credit"));
+                    AccountSubjectPO subject = subjectRepository.selectByCode(subjectCode);
+                    boolean isCredit = subject != null && subject.getDebitCredit() == SubjectBalanceDirectionEnum.CREDIT;
+
+                    BigDecimal adjusted;
+                    if (isCredit) {
+                        // 贷方科目：贷增借减。回滚后续变动：减去后续贷方发生额，加回后续借方发生额
+                        adjusted = currentBal.subtract(fCredit).add(fDebit);
+                    } else {
+                        // 借方/表外/双向科目：借增贷减。回滚后续变动：减去后续借方发生额，加回后续贷方发生额
+                        adjusted = currentBal.subtract(fDebit).add(fCredit);
+                    }
+                    if (adjusted.compareTo(BigDecimal.ZERO) < 0) {
+                        adjusted = adjusted.abs();
+                    }
+                    entry.setValue(adjusted);
+                }
+                totalAccountAll = totalAccountAll.add(entry.getValue());
+            }
+        }
+
         // 识别历史断档会计日（凭证存在但日余额缺失的日期）
         List<LocalDate> missingHistoryDates = findMissingHistoryDates(accountingDate);
 
@@ -201,6 +242,18 @@ public class TrialBalanceDomainService {
                 .filter(b -> b.getAccountNo() != null)
                 .collect(Collectors.toMap(AccountBalancePO::getAccountNo, b -> b, (b1, b2) -> b1));
 
+        // 预加载当前会计日之后各账户发生的变动（用于分户余额回滚至目标时点）
+        List<Map<String, Object>> futureAcctRows = voucherEntryMapper.sumEntriesAfterDateGroupAccount(accountingDate);
+        Map<String, Map<String, Object>> futureAcctMap = new HashMap<>();
+        if (futureAcctRows != null) {
+            for (Map<String, Object> r : futureAcctRows) {
+                String ano = (String) r.get("account_no");
+                if (ano != null) {
+                    futureAcctMap.put(ano, r);
+                }
+            }
+        }
+
         List<GlAccountDiffResponse.AccountItem> items = new ArrayList<>();
         Set<String> processedAccountNos = new HashSet<>();
 
@@ -210,6 +263,22 @@ public class TrialBalanceDomainService {
             AccountBalancePO bal = balanceMap.get(no);
             BigDecimal glEnd = bal != null && bal.getEndBalance() != null ? bal.getEndBalance() : BigDecimal.ZERO;
             BigDecimal acctBal = acct.getBalance() != null ? acct.getBalance() : BigDecimal.ZERO;
+
+            Map<String, Object> fRow = futureAcctMap.get(no);
+            if (fRow != null) {
+                BigDecimal fDebit = FinancialAmountUtil.toBigDecimal(fRow.get("total_debit"));
+                BigDecimal fCredit = FinancialAmountUtil.toBigDecimal(fRow.get("total_credit"));
+                boolean isCredit = acct.getBalanceDirection() == BalanceDirectionEnum.CREDIT;
+                if (isCredit) {
+                    acctBal = acctBal.subtract(fCredit).add(fDebit);
+                } else {
+                    acctBal = acctBal.subtract(fDebit).add(fCredit);
+                }
+                if (acctBal.compareTo(BigDecimal.ZERO) < 0) {
+                    acctBal = acctBal.abs();
+                }
+            }
+
             BigDecimal diff = glEnd.subtract(acctBal).abs();
 
             items.add(GlAccountDiffResponse.AccountItem.builder()

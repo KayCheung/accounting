@@ -96,6 +96,18 @@ public class EodApplicationService {
             // Step 5: 总分核对（NEW）
             GlReconciliationResult glResult = trialBalanceDomainService.executeGlReconciliation(accountingDate);
             if (!glResult.isPassed()) {
+                log.info("[EOD-GL-AUTO-HEAL] 检测到总分核对不平，自动尝试追溯历史断档并执行自愈: date={}", accountingDate);
+                try {
+                    GlRepairResponse repairResp = glReconciliationRepairDomainService.repairGlReconciliation(accountingDate, null);
+                    if (repairResp.isSuccess()) {
+                        glResult = trialBalanceDomainService.executeGlReconciliation(accountingDate);
+                        log.info("[EOD-GL-AUTO-HEAL-SUCCESS] 总分核对静默自愈成功，重新核对通过: date={}", accountingDate);
+                    }
+                } catch (Exception e) {
+                    log.warn("[EOD-GL-AUTO-HEAL-FAILED] 总分核对静默自愈异常: {}", e.getMessage());
+                }
+            }
+            if (!glResult.isPassed()) {
                 String failReason = buildGlFailReason(glResult);
                 eodStatusDomainService.markFailed(accountingDate, "GL_RECONCILIATION", failReason);
                 long duration = System.currentTimeMillis() - startTime;

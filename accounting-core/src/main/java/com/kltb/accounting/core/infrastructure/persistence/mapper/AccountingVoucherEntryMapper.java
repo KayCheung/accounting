@@ -107,6 +107,21 @@ public interface AccountingVoucherEntryMapper extends BaseMapper<AccountingVouch
     BigDecimal sumDailyDebitTotalByDate(@Param("accountingDate") LocalDate accountingDate);
 
     /**
+     * 按科目汇总指定会计日期之后（> afterDate）的所有已过账凭证借贷发生额（用于历史总分核对时点回滚）
+     */
+    List<Map<String, Object>> sumEntriesAfterDateGroupSubject(@Param("afterDate") LocalDate afterDate);
+
+    /**
+     * 按账户汇总指定会计日期之后（> afterDate）的所有已过账凭证借贷发生额（用于历史分户明细时点回滚）
+     */
+    List<Map<String, Object>> sumEntriesAfterDateGroupAccount(@Param("afterDate") LocalDate afterDate);
+
+    /**
+     * 查询指定会计日期之后（> startDate）存在已过账分录的所有不重复会计日（升序，用于向前级联修复）
+     */
+    List<LocalDate> selectDistinctDatesWithEntriesAfterDate(@Param("startDate") LocalDate startDate);
+
+    /**
      * 批量插入分录（红冲用）
      */
     int batchInsert(@Param("list") List<AccountingVoucherEntryPO> list);
